@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handball Statistik Tracker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    
+    <header>
+        <div id="game-info">
+            <h2>Aktuelles Spiel: <span id="team-name">Mein Team</span> vs. Gegner</h2>
+            <p>Spielzeit: <span id="game-timer">00:00</span></p>
+        </div>
+        <div id="controls">
+            <button onclick="toggleGameTimer()" id="timer-btn">▶️ Start Spiel</button>
+            <button onclick="toggleEndHalfOrGame()" id="half-end-btn">⏸️ Halbzeit</button>
+            <button onclick="showStats()">📊 Statistik</button>
+            <button onclick="togglePlayerManagement()">👥 Spieler verwalten</button> 
+        </div>
+    </header>
+
+    <div id="app-container">
+        
+        <div id="player-list">
+            <h3>Spieler (Tippen zum Auswählen)</h3>
+        </div>
+
+        <div id="action-panel">
+            <h3>Aktion (Nach Spieler-Wahl)</h3>
+        </div>
+
+    </div>
+
+    <footer>
+        <button onclick="undoLastAction()" class="undo-btn">↩️ Letzte Aktion</button> 
+        <p>Aktionen: <span id="action-count">0</span></p>
+    </footer>
+    
+    <div id="feedback-overlay"></div>
+
+    <div id="player-management-view" class="overlay-view" style="display:none;">
+        <h2>Spielerverwaltung</h2>
+        
+        <div id="add-player-form">
+            <h3>Neuen Spieler hinzufügen</h3>
+            <input type="text" id="input-name" placeholder="Name" required>
+            <input type="number" id="input-number" placeholder="Trikot-Nr." min="1" required>
+            <select id="input-position">
+                <option value="TW">Torwart (TW)</option>
+                <option value="RM">Rechtsaußen (RM)</option>
+                <option value="RR">Rechter Rückraum (RR)</option>
+                <option value="RL">Linker Rückraum (RL)</option>
+                <option value="LA">Linksaußen (LA)</option>
+                <option value="K">Kreis (K)</option>
+                <option value="M">Mitte (M)</option>
+            </select>
+            <button onclick="addPlayer()">Spieler eintragen</button>
+        </div>
+        
+        <hr>
+        
+        <div id="current-roster">
+            <h3>Aktueller Kader (Löschen mit Klick)</h3>
+            <ul id="roster-list">
+                </ul>
+        </div>
+        
+        <button onclick="togglePlayerManagement()" class="back-btn">Zurück zur Erfassung</button>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+body {
+    font-family: sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f9;
+}
+
+header, footer {
+    background-color: #333;
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#app-container {
+    display: flex;
+    /* Nutzt den gesamten verfügbaren Platz zwischen Header und Footer */
+    height: calc(100vh - 120px); 
+}
+
+#player-list {
+    flex: 2; /* Nimmt 2 Teile der Breite ein (z.B. 40%) */
+    padding: 10px;
+    background-color: #fff;
+    overflow-y: auto; /* Scrollbar, falls viele Spieler */
+    border-right: 1px solid #ccc;
+}
+
+#action-panel h3 {
+    width: 100%;
+    margin-top: 0;
+    margin-bottom: 10px; 
+    flex-shrink: 0; /* Verhindert, dass Flexbox versucht, den Titel zu verkleinern */
+}
+
+#action-panel {
+    flex: 3; 
+    padding: 10px;
+    
+    /* DIESE DREI REGELN SIND ENTSCHEIDEND */
+    display: flex;
+    flex-wrap: wrap; 
+    align-content: flex-start;
+    
+    gap: 10px; 
+}
+
+/* Stil für alle Buttons */
+button {
+    padding: 15px 25px;
+    font-size: 1.2em;
+    cursor: pointer;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+}
+
+/* NEU: Stil für den 'Spiel Beenden'-Button in der 2. Halbzeit */
+#half-end-btn.end-game {
+    background-color: #f44336 !important; /* Rot */
+    color: white !important;
+    font-weight: bold;
+}
+
+.undo-btn {
+    background-color: #616161 !important;
+    color: white !important;
+    font-size: 1em !important;
+    padding: 8px 15px !important;
+    margin-right: 15px; 
+}
+
+/* Stil für Spieler-Buttons (ANGEPASST für Live-Statistik) */
+.player-button {
+    width: 100%;
+    margin-bottom: 5px;
+    text-align: left;
+    background-color: #e0f7fa;
+
+    /* NEU: Flexbox verwenden, um Name und Stats zu trennen und auszurichten */
+    display: flex;
+    justify-content: space-between; 
+    align-items: center;
+}
+
+/* NEU: Stil für die Statistik-Anzeige in den Buttons */
+.player-stats {
+    font-weight: bold;
+    color: #00796b; /* Dunkelgrün */
+    white-space: nowrap; /* Verhindert Umbruch */
+    font-size: 0.8em; /* Etwas kleiner als der Name */
+}
+
+
+/* Hervorhebung des ausgewählten Spielers */
+.player-button.selected {
+    border: 4px solid #00796b; 
+    background-color: #b2ebf2;
+    font-weight: bold;
+}
+
+/* Stil für Aktions-Buttons */
+.action-button {
+    flex-basis: calc(50% - 5px); 
+    height: 80px;
+    font-weight: bold;
+    background-color: #ffccbc;
+}
+
+/* Stil für vorgewählte Aktion */
+.action-button.selected-action {
+    border: 4px solid #f44336; 
+    background-color: #ffcdd2;
+    font-weight: bold;
+}
+
+/* Visuelles Feedback Overlay */
+#feedback-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(76, 175, 80, 0.9);
+    color: white;
+    padding: 30px 60px;
+    border-radius: 15px;
+    font-size: 2em;
+    font-weight: bold;
+    z-index: 1000;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+/* --- SPIELERVERWALTUNGS-ANSICHT --- */
+
+.overlay-view {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #f4f4f9;
+    padding: 20px;
+    z-index: 999;
+    overflow-y: auto;
+}
+
+#add-player-form input, #add-player-form select {
+    padding: 10px;
+    margin-right: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    width: 150px;
+}
+
+#add-player-form button {
+    background-color: #00796b;
+    color: white;
+    padding: 10px 20px;
+}
+
+/* Stil für die Kaderliste */
+#roster-list {
+    list-style: none;
+    padding: 0;
+    max-width: 600px;
+    margin: 20px 0;
+}
+#roster-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    margin-bottom: 8px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 1.1em;
+}
+#roster-list button {
+    background-color: #d32f2f;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    cursor: pointer;
+}
+
+.back-btn {
+    margin-top: 20px;
+    padding: 15px 30px !important;
+    background-color: #333 !important;
+    color: white !important;
+}
+
+/* --- FARBDEFINITIONEN (Müssen existieren!) --- */
+.action-button.green {
+    background-color: #e8f5e9; /* Sehr helles Grün */
+    border: 1px solid #4caf50; /* Grüner Rand */
+    color: #388e3c; /* Dunkelgrüne Schrift */
+}
+.action-button.red {
+    background-color: #ffebee; /* Sehr helles Rot */
+    border: 1px solid #f44336; /* Roter Rand */
+    color: #d32f2f; /* Dunkelrote Schrift */
+}
+.action-button.blue {
+    background-color: #e3f2fd; /* Sehr helles Blau */
+    border: 1px solid #2196f3; /* Blauer Rand */
+    color: #1976d2; /* Dunkelblaue Schrift */
+}
+.action-button.yellow {
+    background-color: #fffde7; /* Sehr helles Gelb */
+    border: 1px solid #ffeb3b; /* Gelber Rand */
+    color: #fbc02d; /* Dunkelgelbe Schrift */
+}
