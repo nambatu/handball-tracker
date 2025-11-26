@@ -216,4 +216,18 @@ button {
     background-color: #fffde7; /* Sehr helles Gelb */
     border: 1px solid #ffeb3b; /* Gelber Rand */
     color: #fbc02d; /* Dunkelgelbe Schrift */
+
+}
+
+/* Stil für vorgewählte Aktion (Jetzt mit hohem Kontrast, der nicht von Farbregeln überschrieben wird) */
+.action-button.selected-action {
+    /* Fügen eine dicke, goldgelbe Umrandung hinzu, die gegen alle Farben auffällt */
+    border: 5px solid #FFC107; /* Gelbe Signalfarbe */
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3); /* Optional: Leichter Schatten zur Hervorhebung */
+    
+    /* Text hervorheben */
+    font-weight: bold; 
+    
+    /* Um sicherzugehen, dass es immer sichtbar ist, können wir die Opazität leicht anpassen */
+    opacity: 0.9;
 }
