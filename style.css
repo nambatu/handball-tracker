@@ -1,4 +1,8 @@
 body {
+    display: flex;
+    flex-direction: column; /* Stellt sicher, dass Header, App und Footer vertikal angeordnet sind */
+    min-height: 100vh; /* Mindesthöhe ist der gesamte Bildschirm */
+    margin: 0;
     font-family: sans-serif;
     margin: 0;
     padding: 0;
@@ -16,7 +20,9 @@ header, footer {
 
 #app-container {
     display: flex;
-    /* Nutzt den gesamten verfügbaren Platz zwischen Header und Footer */
+    flex: 1; /* WICHTIG: Erlaubt dem Container, den gesamten verbleibenden vertikalen Platz einzunehmen */
+    padding: 10px;
+    gap: 10px;
     height: calc(100vh - 120px); 
 }
 
