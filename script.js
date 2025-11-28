@@ -7,7 +7,6 @@ let selectedPlayerId = null;
 let selectedPrimaryAction = null; 
 let selectedPrimaryActionCategory = null; 
 let currentSort = 'nummer';
-let isManagementView = false; // Steuert, ob die Verwaltungsansicht angezeigt wird
 
 // Timer-Zustand
 let timerInterval = null;
@@ -29,17 +28,15 @@ const feedbackOverlay = document.getElementById('feedback-overlay');
 const HAUPTAKTIONEN = [
     { typ: "WurfTor", label: "🥅 Wurf mit Tor", category: "Wurf", farbe: "green" },
     { typ: "WurfOhneTor", label: "❌ Wurf ohne Tor", category: "Wurf", farbe: "red" },
-    { typ: "Ballverlust", label: "📉 Ballverlust", category: "Verlust", farbe: "red" },
+    { typ: "Ballverlust", label: "🥀 Ballverlust", category: "Verlust", farbe: "red" },
     { typ: "Parade", label: "🧤 Parade", category: "Parade", farbe: "yellow" },
-    { typ: "TechnischerFehler", label: "⚠️ Techn. Fehler", category: null, farbe: "neutral" },
 ];
 
 const UNTERAKTIONEN = {
     "Wurf": [
         { typ: "Aussen", label: "Außen" },
         { typ: "Kreis", label: "Kreis" },
-        { typ: "Rueckraum9m", label: "Rückraum 9m" },
-        { typ: "Rueckraum6m", label: "Rückraum 6m" },
+        { typ: "Rueckraum", label: "Rückraum" },
         { typ: "Gegenstoss", label: "Gegenstoß" },
         { typ: "ZweiteWelle", label: "2. Welle" },
     ],
@@ -49,6 +46,8 @@ const UNTERAKTIONEN = {
         { typ: "Fuss", label: "Fuß" },
         { typ: "Schrittfehler", label: "Schrittfehler" },
         { typ: "Stuermerfoul", label: "Stürmerfoul" },
+        { typ: "Zeitspiel", label: "Zeitspiel"},
+        { typ: "TechnischerFehler", label: "Technischer Fehler"}
     ],
     "Parade": [
         { typ: "MitBallgewinn", label: "Mit Ballgewinn" },
@@ -74,7 +73,7 @@ function loadPlayers() {
     } else {
         // Initiale Liste
         SPIELER = [
-            { id: 'p1', name: "Max Mustermann", nummer: 10, position: "RM" },
+            { id: 'p1', name: "GEGNER", nummer: 0, position: "Hurensohn" },
             { id: 'p2', name: "Tom Tester", nummer: 22, position: "LA" },
             { id: 'p3', name: "Kai Keeper", nummer: 1, position: "TW" },
         ];
@@ -297,16 +296,33 @@ function exportAsCSV() {
 }
 
 /**
- * Hilfsfunktion, die die detaillierte Statistik-Datenstruktur liefert (aus showStats Logik).
+ * Hilfsfunktion: Sammelt alle Daten für Statistik und Export zentral.
+ * Verhindert doppelten Code.
  */
 function showStats_GetDetailedData() {
     const aktionen = loadActions();
     let stats = {};
     
-    // Alle möglichen Aktionen sammeln (aus allen gespeicherten Aktionen)
-    let allActionTypes = [...new Set(aktionen.map(a => a.typ))].sort();
+    // 1. Alle möglichen Aktionen sammeln (aus Definitionen + tatsächlich gespeicherten)
+    let allActionTypes = [];
+    
+    // Füge alle Hauptaktionen hinzu
+    HAUPTAKTIONEN.forEach(h => {
+        if (h.category === null) {
+            allActionTypes.push(h.typ);
+        } else if (UNTERAKTIONEN[h.category]) {
+            // Füge alle Kombinationen hinzu (Haupt_Unter)
+            UNTERAKTIONEN[h.category].forEach(u => {
+                allActionTypes.push(`${h.typ}_${u.typ}`);
+            });
+        }
+    });
 
-    // Initialisiere Zähler für jeden Spieler und jeden Aktionstyp
+    // Sicherheitshalber auch Typen aus den gespeicherten Aktionen nehmen (falls Konfig geändert wurde)
+    const storedTypes = [...new Set(aktionen.map(a => a.typ))];
+    allActionTypes = [...new Set([...allActionTypes, ...storedTypes])].sort();
+
+    // 2. Initialisiere Zähler
     SPIELER.forEach(s => {
         stats[s.id] = {
             name: s.name,
@@ -318,7 +334,7 @@ function showStats_GetDetailedData() {
         });
     });
 
-    // Aktionen zählen
+    // 3. Aktionen zählen
     aktionen.forEach(action => {
         if (stats[action.spielerId]) {
             stats[action.spielerId].aktionen[action.typ]++;
@@ -326,6 +342,60 @@ function showStats_GetDetailedData() {
     });
 
     return { stats: stats, allActionTypes: allActionTypes };
+}
+
+/**
+ * Öffnet das Statistik-Fenster (Pop-up).
+ */
+function showStats() {
+    // Daten holen
+    const data = showStats_GetDetailedData();
+    const stats = data.stats;
+    const allActionTypes = data.allActionTypes;
+
+    // HTML Bericht bauen
+    let reportHtml = "<h2>Statistikübersicht</h2>";
+    reportHtml += "<table border='1' cellspacing='0' cellpadding='5' width='100%'>";
+    
+    // Header
+    reportHtml += "<thead style='background-color: #f2f2f2;'><tr><th style='text-align:left;'>Spieler</th>";
+    allActionTypes.forEach(typ => {
+        // Versuchen, den Typ lesbar zu machen (optional)
+        // Einfache Variante: Unterstrich durch Leerzeichen ersetzen
+        let readable = typ.replace('_', ' ');
+        reportHtml += `<th style='font-size: 0.8em;'>${readable}</th>`; 
+    });
+    reportHtml += "</tr></thead><tbody>";
+
+    // Body
+    Object.values(stats).forEach(playerStats => {
+        reportHtml += `<tr><td style='font-weight:bold;'>#${playerStats.nummer} ${playerStats.name}</td>`;
+        allActionTypes.forEach(typ => {
+            const count = playerStats.aktionen[typ] || 0;
+            // Nullen grau darstellen, Zahlen fett
+            const style = count > 0 ? "font-weight:bold; color:black;" : "color:#ccc;";
+            reportHtml += `<td style='text-align:center; ${style}'>${count}</td>`;
+        });
+        reportHtml += "</tr>";
+    });
+
+    reportHtml += "</tbody></table>";
+
+    // Fenster öffnen
+    const statsWindow = window.open('', 'Statistik', 'width=1000,height=600');
+    if (statsWindow) {
+        statsWindow.document.write('<html><head><title>Statistik</title>');
+        statsWindow.document.write('<style>body{font-family: sans-serif; padding: 20px;} table { border-collapse: collapse; } td, th { border: 1px solid #ddd; }</style>');
+        statsWindow.document.write('</head><body>');
+        statsWindow.document.write(reportHtml);
+        statsWindow.document.write('<br><div style="margin-top: 20px;">');
+        statsWindow.document.write('<button onclick="window.opener.exportAsCSV()" style="padding: 10px; background-color: #4CAF50; color: white; border: none; cursor: pointer; margin-right: 10px;">Excel/CSV Export</button>');
+        statsWindow.document.write('<button onclick="window.close()" style="padding: 10px; background-color: #f44336; color: white; border: none; cursor: pointer;">Schließen</button>');
+        statsWindow.document.write('</div></body></html>');
+        statsWindow.document.close();
+    } else {
+        alert("Pop-up konnte nicht geöffnet werden. Bitte Pop-up-Blocker prüfen!");
+    }
 }
 
 // ===================================================================
@@ -407,53 +477,44 @@ function updateUI() {
 function renderPlayerList() {
     if (!playerListElement) return;
     
-    // Wenn wir in der normalen Ansicht sind, deselektiere den Spieler, um Konflikte zu vermeiden.
-    if (isManagementView && selectedPlayerId) {
-        selectedPlayerId = null;
-        selectedPrimaryAction = null;
-        selectedPrimaryActionCategory = null;
-    }
-
-    if (isManagementView) {
-        // --- VERWALTUNGSANSICHT RENDERN ---
-        renderManagementPanel();
-    } else {
-        // --- NORMALE SPIELERLISTEN-ANSICHT RENDERN ---
-        playerListElement.innerHTML = `
-            <h3>Spieler (Tippen zum Auswählen)</h3>
+    // NEU: Header-Struktur aufgeräumt
+    // - "Spieler verwalten" entfernt (ist ja im Header)
+    // - Flexbox-Layout vorbereitet: Titel links, Sortierung rechts
+    playerListElement.innerHTML = `
+        <div class="player-list-header">
+            <h3>Spieler</h3>
             <div class="sort-options">
+                <span class="sort-label">Sortieren:</span>
                 <button onclick="toggleSort('nummer')" class="sort-btn ${currentSort === 'nummer' ? 'active-sort' : ''}"># Nr.</button>
                 <button onclick="toggleSort('position')" class="sort-btn ${currentSort === 'position' ? 'active-sort' : ''}">Pos.</button>
-                <button onclick="showPlayerManagement(true)">👤 Spieler Verwalten</button>
+            </div>
+        </div>
+    `;
+    
+    const summaryStats = getPlayerSummaryStats();
+
+    SPIELER.forEach(player => {
+        const stats = summaryStats[player.id] || { tore: 0, fehler: 0, paraden: 0 };
+        const isSelected = selectedPlayerId === player.id;
+
+        const playerButton = document.createElement('div');
+        
+        playerButton.className = `player-button ${isSelected ? 'selected-player' : ''}`;
+        playerButton.onclick = () => selectPlayer(player.id);
+        
+        playerButton.innerHTML = `
+            <div class="player-info">
+                <span class="player-number">#${player.nummer}</span>
+                <span class="player-name">${player.name} (${player.position})</span>
+            </div>
+            <div class="stats">
+                <span class="stat-item green">⚽ ${stats.tore}</span> | 
+                <span class="stat-item red">❌ ${stats.fehler}</span> |
+                <span class="stat-item yellow">🧤 ${stats.paraden}</span>
             </div>
         `;
-
-        const summaryStats = getPlayerSummaryStats();
-
-        SPIELER.forEach(player => {
-            // (Der bestehende Loop zum Erstellen der Spieler-Buttons bleibt hier unverändert)
-            const stats = summaryStats[player.id] || { tore: 0, fehler: 0, paraden: 0 };
-            const isSelected = selectedPlayerId === player.id;
-
-            const playerButton = document.createElement('div');
-            
-            playerButton.className = `player-button ${isSelected ? 'selected-player' : ''}`;
-            playerButton.onclick = () => selectPlayer(player.id);
-            
-            playerButton.innerHTML = `
-                <div class="player-info">
-                    <span class="player-number">#${player.nummer}</span>
-                    <span class="player-name">${player.name} (${player.position})</span>
-                </div>
-                <div class="stats">
-                    <span class="stat-item green">⚽ ${stats.tore}</span> | 
-                    <span class="stat-item red">❌ ${stats.fehler}</span> |
-                    <span class="stat-item yellow">🧤 ${stats.paraden}</span>
-                </div>
-            `;
-            playerListElement.appendChild(playerButton);
-        });
-    }
+        playerListElement.appendChild(playerButton);
+    });
 }
 
 /**
@@ -677,21 +738,61 @@ function endGame() {
     updateUI();
 }
 
-// HINWEIS: Hierfür brauchst du ein Modal- oder Overlay-Element in deiner index.html
+// Diese Funktion steuert das Ein- und Ausblenden des Overlays
+function togglePlayerManagement() {
+    const mainApp = document.getElementById("app-container");
+    const managementView = document.getElementById("player-management-view");
 
-function showPlayerManagement(show = true) {
-    isManagementView = show;
-    updateUI();
+    // Prüfen, ob das Overlay gerade unsichtbar ist
+    if (managementView.style.display === 'none' || managementView.style.display === '') {
+        // -> ÖFFNEN (Verwaltung zeigen)
+        mainApp.style.display = 'none';       
+        managementView.style.display = 'block'; 
+        
+        // WICHTIG: Liste laden, damit man auch wen löschen kann
+        renderRosterList(); 
+    } else {
+        // -> SCHLIESSEN (Zurück zum Spiel)
+        managementView.style.display = 'none'; 
+        mainApp.style.display = 'flex';       
+        
+        // WICHTIG: Hauptansicht aktualisieren (falls Namen geändert wurden)
+        updateUI(); 
+    }
 }
 
-function addPlayer() {
-    // Holen der Werte direkt aus den Elementen im Haupt-DOM
-    const name = document.getElementById('playerName').value;
-    const number = parseInt(document.getElementById('playerNumber').value);
-    const position = document.getElementById('playerPosition').value.toUpperCase();
+// Diese Funktion füllt die Liste im "Spieler verwalten"-Overlay
+function renderRosterList() {
+    const rosterList = document.getElementById("roster-list");
+    if (!rosterList) return;
 
-    if (!name || isNaN(number) || !position) {
-        alert("Bitte alle Felder korrekt ausfüllen.");
+    rosterList.innerHTML = ''; // Liste leeren
+    sortPlayers(); // Sortieren, damit es ordentlich aussieht
+
+    SPIELER.forEach(p => {
+        const li = document.createElement("li");
+        // Styling direkt hier für schnelle Ergebnisse
+        li.style.display = "flex";
+        li.style.justifyContent = "space-between";
+        li.style.padding = "10px";
+        li.style.borderBottom = "1px solid #eee";
+        
+        li.innerHTML = `
+            <span>#${p.nummer} ${p.name} (${p.position})</span>
+            <button onclick="removePlayer('${p.id}')" style="background-color: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Löschen</button>
+        `;
+        rosterList.appendChild(li);
+    });
+}
+
+// Angepasste Add-Funktion für das Overlay
+function addPlayer() {
+    const name = document.getElementById("input-name").value;
+    const number = parseInt(document.getElementById("input-number").value);
+    const position = document.getElementById("input-position").value; // ID im HTML prüfen!
+
+    if (!name || isNaN(number)) {
+        alert("Bitte Name und Nummer angeben.");
         return;
     }
 
@@ -699,35 +800,33 @@ function addPlayer() {
         id: 'p' + Date.now(),
         name: name,
         nummer: number,
-        position: position
+        position: position || "N/A"
     };
 
     SPIELER.push(newPlayer);
-    sortPlayers(); 
     savePlayers();
     
-    // Das Management Panel mit der neuen Liste neu rendern
-    renderManagementPanel(); 
-    // Haupt-UI aktualisieren (falls im Hintergrund notwendig)
-    updateUI(); 
+    // Inputs leeren
+    document.getElementById("input-name").value = "";
+    document.getElementById("input-number").value = "";
+    
+    // Wichtig: Liste im Overlay sofort aktualisieren
+    renderRosterList();
 }
 
+// Angepasste Remove-Funktion für das Overlay
 function removePlayer(playerId) {
-    if (!confirm("Soll dieser Spieler wirklich gelöscht werden? Alle seine Statistiken bleiben im 'aktionen'-Speicher erhalten.")) {
-        return;
-    }
-
-    // Spieler aus der Liste entfernen
-    SPIELER = SPIELER.filter(p => p.id !== playerId);
+    if (!confirm("Spieler wirklich löschen?")) return;
+    
+    // Robuster Vergleich (String vs String)
+    SPIELER = SPIELER.filter(p => String(p.id) !== String(playerId));
     savePlayers();
-
-    // Zustand zurücksetzen, falls der gelöschte Spieler gerade ausgewählt war
-    if (selectedPlayerId === playerId) {
+    
+    // Wenn der gelöschte Spieler gerade im Spiel ausgewählt war, Auswahl aufheben
+    if (selectedPlayerId && String(selectedPlayerId) === String(playerId)) {
         selectedPlayerId = null;
     }
-
-    // Das Management Panel mit der neuen Liste neu rendern
-    renderManagementPanel(); 
-    // Haupt-UI aktualisieren (um ggf. die Stats zu aktualisieren)
-    updateUI();
+    
+    // Wichtig: Liste im Overlay sofort aktualisieren
+    renderRosterList();
 }

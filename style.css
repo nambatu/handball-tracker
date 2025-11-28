@@ -296,3 +296,63 @@ button {
     border: 3px solid #039be5; /* Blauer Rahmen für ausgewählten Spieler */
     background-color: #e1f5fe; /* Sehr heller blauer Hintergrund */
 }
+
+/* --- HEADER DER SPIELERLISTE --- */
+.player-list-header {
+    display: flex;
+    justify-content: space-between; /* Titel links, Sortierung rechts */
+    align-items: center;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #eee;
+    margin-bottom: 10px;
+}
+
+.player-list-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+}
+
+/* --- SORTIER-OPTIONEN (Schlankes Design) --- */
+.sort-options {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.sort-label {
+    font-size: 0.8em;
+    color: #888;
+    margin-right: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Basis-Stil für die kleinen Sortier-Buttons */
+button.sort-btn {
+    padding: 4px 10px;       /* Kleinere Polsterung */
+    font-size: 0.85em;       /* Kleinere Schrift */
+    background-color: transparent;
+    border: 1px solid #ccc;
+    border-radius: 20px;     /* Pillen-Form */
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    /* Überschreibt die globalen Button-Styles, damit sie nicht riesig sind */
+    height: auto; 
+    width: auto;
+    margin: 0;
+}
+
+button.sort-btn:hover {
+    background-color: #eee;
+    border-color: #bbb;
+}
+
+/* Stil für den AKTIVEN Sortier-Button */
+button.sort-btn.active-sort {
+    background-color: #333;  /* Dunkler Hintergrund */
+    color: #fff;             /* Weiße Schrift */
+    border-color: #333;
+    font-weight: bold;
+}
