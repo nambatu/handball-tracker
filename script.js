@@ -36,7 +36,8 @@ const UNTERAKTIONEN = {
     "Wurf": [
         { typ: "Aussen", label: "Außen" },
         { typ: "Kreis", label: "Kreis" },
-        { typ: "Rueckraum", label: "Rückraum" },
+        { typ: "Rueckraum6m", label: "Rückraum (6m)" },
+        { typ: "Rueckraum9m", label: "Rückraum (9m)" },
         { typ: "Gegenstoss", label: "Gegenstoß" },
         { typ: "ZweiteWelle", label: "2. Welle" },
     ],
