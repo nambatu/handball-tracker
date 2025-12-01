@@ -1,24 +1,25 @@
 // ===================================================================
 // Globale Zustandsvariablen (State) & Initialisierung
 // ===================================================================
-let SPIELER = []; 
+let SPIELER = [];
 
 let selectedPlayerId = null;
-let selectedPrimaryAction = null; 
-let selectedPrimaryActionCategory = null; 
+let selectedPrimaryAction = null;
+let selectedPrimaryActionCategory = null;
 let currentSort = 'nummer';
 
 // Timer-Zustand
 let timerInterval = null;
-let spielzeitSekunden = 0; 
+let spielzeitSekunden = 0;
 let currentHalf = 1;
-let isTimerRunning = false; 
+let isTimerRunning = false;
 
 // Cached DOM-Elemente
 const playerListElement = document.getElementById('player-list');
 const actionPanelElement = document.getElementById('action-panel');
 const actionTitleElement = actionPanelElement ? actionPanelElement.querySelector('h3') : null;
 const feedbackOverlay = document.getElementById('feedback-overlay');
+const historyPanelElement = document.getElementById('history-panel'); // NEU
 
 
 // ===================================================================
@@ -47,8 +48,8 @@ const UNTERAKTIONEN = {
         { typ: "Fuss", label: "Fuß" },
         { typ: "Schrittfehler", label: "Schrittfehler" },
         { typ: "Stuermerfoul", label: "Stürmerfoul" },
-        { typ: "Zeitspiel", label: "Zeitspiel"},
-        { typ: "TechnischerFehler", label: "Technischer Fehler"}
+        { typ: "Zeitspiel", label: "Zeitspiel" },
+        { typ: "TechnischerFehler", label: "Technischer Fehler" }
     ],
     "Parade": [
         { typ: "MitBallgewinn", label: "Mit Ballgewinn" },
@@ -61,10 +62,11 @@ const UNTERAKTIONEN = {
 // ===================================================================
 
 window.onload = () => {
-    loadPlayers(); 
-    loadGameState(); 
-    updateUI();
+    loadPlayers();
+    loadGameState();
     updateActionCount();
+    renderHistory(); // NEU: Verlauf beim Laden füllen
+    updateUI();
 };
 
 function loadPlayers() {
@@ -74,11 +76,12 @@ function loadPlayers() {
     } else {
         // Initiale Liste
         SPIELER = [
-            { id: 'p1', name: "GEGNER", nummer: 0, position: "Hurensohn" },
+            // KORRIGIERT: Unangebrachten Text ersetzt
+            { id: 'p1', name: "Gegner", nummer: 0, position: "N/A" },
             { id: 'p2', name: "Tom Tester", nummer: 22, position: "LA" },
             { id: 'p3', name: "Kai Keeper", nummer: 1, position: "TW" },
         ];
-        savePlayers(); 
+        savePlayers();
     }
     // Wichtig: Beim Laden sofort sortieren
     sortPlayers();
@@ -130,24 +133,25 @@ function undoLastAction() {
     }
 
     const aktionen = loadActions();
-    
+
     if (aktionen.length === 0) {
         alert("Es gibt keine Aktionen zum Löschen.");
         return;
     }
 
-    const lastAction = aktionen.pop(); 
+    const lastAction = aktionen.pop();
     saveActions(aktionen);
-    
+
     // Spielerinformationen abrufen
     const player = SPIELER.find(s => s.id === lastAction.spielerId);
-    
+
     // Die gespeicherte lesbare Bezeichnung verwenden (z.B. '🥅 Wurf mit Tor (Außen)')
-    const actionLabel = lastAction.label || lastAction.typ; 
+    const actionLabel = lastAction.label || lastAction.typ;
 
     // UI aktualisieren
     updateActionCount();
-    updateUI(); 
+    renderHistory(); // NEU: Verlauf aktualisieren
+    updateUI();
 
     alert(`Aktion RÜCKGÄNGIG: ${player ? player.nummer + ' - ' + player.name : 'Unbekannter Spieler'} (${actionLabel})`);
 }
@@ -164,34 +168,36 @@ function saveAction(player, finalActionType, finalActionLabel) {
         alert("▶️ Der Spiel-Timer ist gestoppt oder pausiert. Bitte zuerst starten!");
         return;
     }
-    
+
     const aktionen = loadActions();
 
     const newAction = {
-        id: Date.now(), 
+        id: Date.now(),
         spielId: "current_match",
         spielerId: player.id,
         typ: finalActionType, // z.B. WurfTor_Aussen
         label: finalActionLabel, // z.B. 🥅 Wurf mit Tor (Außen)
         halbzeit: currentHalf,
-        spielzeit: spielzeitSekunden, 
+        spielzeit: spielzeitSekunden,
+        spielzeitFormatiert: formatTime(spielzeitSekunden), // NEU: Formatierte Zeit für Verlauf
         timestamp: new Date().toISOString()
     };
-    
+
     aktionen.push(newAction);
     saveActions(aktionen);
-    
+
     // Visuelles Feedback
-    showVisualFeedback(player.id, finalActionLabel);
-    
+    //showVisualFeedback(player.id, finalActionLabel);
+
     // UI-Elemente aktualisieren
     updateActionCount();
-    
+    renderHistory(); // NEU: Verlauf aktualisieren
+
     // Wichtig: Nach dem Speichern wird der Spieler deselektiert und die Ansicht zurückgesetzt
-    selectedPlayerId = null; 
+    selectedPlayerId = null;
     selectedPrimaryAction = null;
     selectedPrimaryActionCategory = null;
-    updateUI(); 
+    updateUI();
 }
 
 
@@ -208,24 +214,24 @@ function getPlayerSummaryStats() {
 
     aktionen.forEach(action => {
         if (!summary[action.spielerId]) return;
-        
+
         const type = action.typ;
 
         // Tore zählen (Wurf mit Tor)
         if (type.includes("WurfTor")) {
             summary[action.spielerId].tore++;
         }
-        
-        // Fehler zählen (enthält Ballverlust und Technischer Fehler)
-        if (type.includes("Verlust") || type === "TechnischerFehler") {
+
+        // Fehler zählen (enthält Ballverlust)
+        if (type.includes("Ballverlust")) {
             summary[action.spielerId].fehler++;
         }
-        
+
         // Paraden zählen
         if (type.includes("Parade")) {
-             summary[action.spielerId].paraden++;
+            summary[action.spielerId].paraden++;
         }
-        
+
         summary[action.spielerId].gesamtAktionen++;
     });
 
@@ -240,7 +246,7 @@ function getPlayerSummaryStats() {
  */
 function exportAsCSV() {
     const aktionen = loadActions();
-    
+
     if (aktionen.length === 0) {
         alert("Keine Aktionen zum Exportieren vorhanden.");
         return;
@@ -251,18 +257,18 @@ function exportAsCSV() {
     // --- TEIL 1: STATISTIK-ZUSAMMENFASSUNG (TABELLE) ---
     csvContent += "=== STATISTIK-ZUSAMMENFASSUNG (PRO SPIELER UND AKTIONSTYP) ===\n";
     const stats = getPlayerSummaryStats(); // Verwenden der bereits implementierten Logik
-    
+
     // Hier nutzen wir die detaillierte Zählung aus der showStats Logik
     const fullStats = {};
     const detailedSummary = showStats_GetDetailedData(); // NEU: Hilfsfunktion
-    
+
     let allActionTypes = detailedSummary.allActionTypes;
 
     // Header-Zeile
     let header = "Spieler_Nummer,Spieler_Name";
     allActionTypes.forEach(typ => { header += `,${typ}`; });
     csvContent += header + "\n";
-    
+
     // Datenzeilen
     Object.values(detailedSummary.stats).forEach(playerStats => {
         let row = `${playerStats.nummer},"${playerStats.name}"`;
@@ -280,19 +286,19 @@ function exportAsCSV() {
         const player = SPIELER.find(s => s.id === action.spielerId);
         const playerName = player ? player.name : 'Unbekannt';
         const playerNumber = player ? player.nummer : 'N/A';
-        
+
         csvContent += `${playerNumber},"${playerName}",${action.typ},"${action.label}",${action.halbzeit},${action.spielzeit},${action.timestamp}\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    
+
     link.href = URL.createObjectURL(blob);
     link.download = `handball_statistik_export_${new Date().toLocaleDateString()}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     alert("CSV-Export erfolgreich gestartet.");
 }
 
@@ -303,19 +309,20 @@ function exportAsCSV() {
 function showStats_GetDetailedData() {
     const aktionen = loadActions();
     let stats = {};
-    
+
     // 1. Alle möglichen Aktionen sammeln (aus Definitionen + tatsächlich gespeicherten)
     let allActionTypes = [];
-    
+
     // Füge alle Hauptaktionen hinzu
     HAUPTAKTIONEN.forEach(h => {
-        if (h.category === null) {
-            allActionTypes.push(h.typ);
-        } else if (UNTERAKTIONEN[h.category]) {
+        // KORRIGIERT: Prüfe, ob category überhaupt existiert, bevor UNTERAKTIONEN[h.category] aufgerufen wird
+        if (h.category && UNTERAKTIONEN[h.category]) {
             // Füge alle Kombinationen hinzu (Haupt_Unter)
             UNTERAKTIONEN[h.category].forEach(u => {
                 allActionTypes.push(`${h.typ}_${u.typ}`);
             });
+        } else {
+            allActionTypes.push(h.typ);
         }
     });
 
@@ -337,7 +344,7 @@ function showStats_GetDetailedData() {
 
     // 3. Aktionen zählen
     aktionen.forEach(action => {
-        if (stats[action.spielerId]) {
+        if (stats[action.spielerId] && stats[action.spielerId].aktionen.hasOwnProperty(action.typ)) { // KORRIGIERT: Sicherstellen, dass der Typ existiert
             stats[action.spielerId].aktionen[action.typ]++;
         }
     });
@@ -357,14 +364,14 @@ function showStats() {
     // HTML Bericht bauen
     let reportHtml = "<h2>Statistikübersicht</h2>";
     reportHtml += "<table border='1' cellspacing='0' cellpadding='5' width='100%'>";
-    
+
     // Header
     reportHtml += "<thead style='background-color: #f2f2f2;'><tr><th style='text-align:left;'>Spieler</th>";
     allActionTypes.forEach(typ => {
         // Versuchen, den Typ lesbar zu machen (optional)
         // Einfache Variante: Unterstrich durch Leerzeichen ersetzen
         let readable = typ.replace('_', ' ');
-        reportHtml += `<th style='font-size: 0.8em;'>${readable}</th>`; 
+        reportHtml += `<th style='font-size: 0.8em;'>${readable}</th>`;
     });
     reportHtml += "</tr></thead><tbody>";
 
@@ -410,7 +417,7 @@ function selectPlayer(playerId) {
         selectedPlayerId = playerId;
     }
     // Zustand der Aktionen zurücksetzen, wenn der Spieler wechselt/deselektiert wird
-    selectedPrimaryAction = null; 
+    selectedPrimaryAction = null;
     selectedPrimaryActionCategory = null;
 
     updateUI();
@@ -429,8 +436,8 @@ function selectAction(actionType, category = null) {
         selectedPrimaryAction = actionType;
         selectedPrimaryActionCategory = category;
         updateUI();
-        
-    // --- Ebene 2: Unteraktion oder Einzelaktion ohne Untermenü wurde geklickt ---
+
+        // --- Ebene 2: Unteraktion oder Einzelaktion ohne Untermenü wurde geklickt ---
     } else {
         let finalActionType;
         let finalActionLabel;
@@ -439,18 +446,20 @@ function selectAction(actionType, category = null) {
         if (selectedPrimaryAction && selectedPrimaryActionCategory) {
             // Die endgültige Aktion zusammenfügen (z.B. 'WurfTor_Aussen')
             finalActionType = `${selectedPrimaryAction}_${actionType}`;
-            
+
             const primaryAction = HAUPTAKTIONEN.find(a => a.typ === selectedPrimaryAction);
             const subAction = UNTERAKTIONEN[selectedPrimaryActionCategory].find(a => a.typ === actionType);
-            
+
             finalActionLabel = `${primaryAction.label} (${subAction.label})`;
 
-        // Fall 2: Einzelaktion ohne Untermenü wurde geklickt (z.B. 'TechnischerFehler')
+            // Fall 2: Einzelaktion ohne Untermenü wurde geklickt (z.B. 'TechnischerFehler')
         } else {
+            // KORRIGIERT: Finde das Label für Einzelaktionen korrekt
+            const primaryAction = HAUPTAKTIONEN.find(a => a.typ === actionType);
             finalActionType = actionType;
-            finalActionLabel = HAUPTAKTIONEN.find(a => a.typ === actionType).label;
+            finalActionLabel = primaryAction ? primaryAction.label : actionType;
         }
-        
+
         // AKTION SPEICHERN (inkl. Reset des selectedPlayerId)
         saveAction(player, finalActionType, finalActionLabel);
     }
@@ -465,7 +474,7 @@ function resetActionSelection() {
 function updateUI() {
     renderPlayerList();
     renderActionButtons();
-    updateTimerDisplay(); 
+    updateTimerDisplay();
 }
 
 // ===================================================================
@@ -477,10 +486,8 @@ function updateUI() {
  */
 function renderPlayerList() {
     if (!playerListElement) return;
-    
-    // NEU: Header-Struktur aufgeräumt
-    // - "Spieler verwalten" entfernt (ist ja im Header)
-    // - Flexbox-Layout vorbereitet: Titel links, Sortierung rechts
+
+    // KORRIGIERT: Tippfehler 'playstElement'
     playerListElement.innerHTML = `
         <div class="player-list-header">
             <h3>Spieler</h3>
@@ -491,72 +498,90 @@ function renderPlayerList() {
             </div>
         </div>
     `;
-    
+
+    // KORRIGIERT: Tippfehler 'consmmaryStats'
     const summaryStats = getPlayerSummaryStats();
 
+    // KORRIGIERT: Tippfehler 'SPIEforEach'
     SPIELER.forEach(player => {
+        // KORRIGIERT: Tippfehler 'consats'
         const stats = summaryStats[player.id] || { tore: 0, fehler: 0, paraden: 0 };
+        // KORRIGIERT: Fehlende Definition von 'isSelected'
         const isSelected = selectedPlayerId === player.id;
 
+        // KORRIGIERT: Tippfehler 'consayerButton'
         const playerButton = document.createElement('div');
-        
+
+        // KORRIGIERT: Tippfehler 'playtton'
         playerButton.className = `player-button ${isSelected ? 'selected-player' : ''}`;
         playerButton.onclick = () => selectPlayer(player.id);
-        
+
+        // KORRIGIERT: Tippfehler 'playtton'
+        // HINWEIS: Die Klassen 'stat-item green/red/yellow' sind in deinem CSS nicht definiert.
+        // Ich habe sie drin gelassen, falls du sie noch hinzufügst.
         playerButton.innerHTML = `
             <div class="player-info">
                 <span class="player-number">#${player.nummer}</span>
                 <span class="player-name">${player.name} (${player.position})</span>
             </div>
-            <div class="stats">
-                <span class="stat-item green">⚽ ${stats.tore}</span> | 
-                <span class="stat-item red">❌ ${stats.fehler}</span> |
+            <div class="player-stats"> 
+                <span class="stat-item green">🥅 ${stats.tore}</span> 
+                <span class="stat-item red">❌ ${stats.fehler}</span> 
                 <span class="stat-item yellow">🧤 ${stats.paraden}</span>
             </div>
         `;
+        // KORRIGIERT: Tippfehler 'playstElement'
         playerListElement.appendChild(playerButton);
     });
 }
 
+// KORRIGIERT: Redundante Funktion entfernt.
+// Die Funktion renderManagementPanel() wurde entfernt, da sie 
+// von togglePlayerManagement() und renderRosterList() ersetzt wird.
+
+
 /**
- * Rendert das Panel zur Spieler-Verwaltung direkt in #player-list.
+ * NEU: Rendert die Verlaufsliste.
  */
-function renderManagementPanel() {
-    if (!playerListElement) return;
-    
-    // HTML für Formulare und Liste einfügen
-    let html = '<h2>Spielerverwaltung</h2>';
-    
-    // --- Formular zum Hinzufügen ---
-    html += `
-        <div class="management-form" style="padding: 10px; border: 1px solid #ccc; margin-bottom: 20px;">
-            <h4>Spieler hinzufügen</h4>
-            <input type="text" id="playerName" placeholder="Name" required style="width: 90%; margin-bottom: 5px;">
-            <input type="number" id="playerNumber" placeholder="Rückennummer" required style="width: 90%; margin-bottom: 5px;">
-            <input type="text" id="playerPosition" placeholder="Position (z.B. LA, TW)" required style="width: 90%; margin-bottom: 10px;">
-            <button onclick="addPlayer()" style="background-color: #4CAF50; color: white; padding: 10px; border: none; width: 95%;">Spieler hinzufügen</button>
-        </div>
-    `;
-    
-    // --- Liste der aktuellen Spieler ---
-    html += '<h4>Aktuelle Spieler löschen</h4>';
-    SPIELER.forEach(p => {
-        html += `
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 5px 0;">
-                <span>#${p.nummer} ${p.name} (${p.position})</span>
-                <button onclick="removePlayer('${p.id}')" style="background-color: #f44336; color: white; padding: 5px; border: none; font-size: 0.8em;">Löschen</button>
-            </div>
+function renderHistory() {
+    if (!historyPanelElement) return;
+
+    // Überschrift behalten, aber den Rest löschen
+    historyPanelElement.innerHTML = '<h3>Verlauf</h3>';
+
+    const aktionen = loadActions();
+
+    // Neueste zuerst anzeigen
+    aktionen.reverse();
+
+    // Nur die letzten 25 Aktionen anzeigen, sonst wird es zu voll
+    const
+        aktionenToShow = aktionen.slice(0, 25);
+
+    aktionenToShow.forEach(entry => {
+        const player = SPIELER.find(s => s.id === entry.spielerId);
+        const playerName = player ? `#${player.nummer} ${player.name}` : 'Unbekannt';
+        const gameTime = entry.spielzeitFormatiert || formatTime(entry.spielzeit); // Fallback
+
+        const entryElement = document.createElement('div');
+        entryElement.className = 'history-entry';
+
+        entryElement.innerHTML = `
+            <span class="history-time">[${gameTime}]</span>
+            <span class="history-player">${playerName}</span>
+            <span class="history-action">${entry.label}</span>
         `;
+        historyPanelElement.appendChild(entryElement);
     });
-    
-    html += `<hr><button onclick="showPlayerManagement(false)" style="padding: 10px; width: 100%; margin-top: 10px;">← Zurück zur Spielerliste</button>`;
-    
-    playerListElement.innerHTML = html;
 }
+
 
 function renderActionButtons() {
     if (!actionPanelElement || !actionTitleElement) return;
-    actionPanelElement.innerHTML = ''; 
+
+    // Leeren, aber den Titel (h3) im Speicher behalten
+    actionPanelElement.innerHTML = '';
+    actionPanelElement.appendChild(actionTitleElement); // Titel sofort wieder einfügen
 
     let buttonsToRender = [];
     let titleText = "Aktion (Nach Spieler-Wahl)";
@@ -564,51 +589,52 @@ function renderActionButtons() {
     // Fall 1: Unteraktions-Menü anzeigen
     if (selectedPrimaryActionCategory && UNTERAKTIONEN[selectedPrimaryActionCategory]) {
         buttonsToRender = UNTERAKTIONEN[selectedPrimaryActionCategory];
-        
+
         // Titel anpassen
         const primaryActionLabel = HAUPTAKTIONEN.find(a => a.typ === selectedPrimaryAction).label;
-        titleText = `Unteraktion: ${primaryActionLabel}`;
+        titleText = `Details für: ${primaryActionLabel}`;
 
-        // "Zurück"-Button hinzufügen
+        // "Zurück"-Button hinzufügen (an den Anfang, nach dem Titel)
         const backButton = document.createElement('button');
         backButton.className = 'action-button back-button';
         backButton.innerText = '← Zurück zu Aktionen';
         backButton.onclick = resetActionSelection;
-        actionPanelElement.appendChild(backButton);
-        
-        // Hier den Titel neu einfügen
-        actionPanelElement.appendChild(actionTitleElement);
+        // Nach dem Titel einfügen
+        actionTitleElement.insertAdjacentElement('afterend', backButton);
 
 
-    // Fall 2: Hauptaktions-Menü anzeigen
+        // Fall 2: Hauptaktions-Menü anzeigen
     } else {
         buttonsToRender = HAUPTAKTIONEN;
-        actionPanelElement.appendChild(actionTitleElement);
     }
 
     // Titel aktualisieren
     actionTitleElement.innerText = titleText;
-    
+
 
     // Buttons rendern
     buttonsToRender.forEach(action => {
         const button = document.createElement('button');
-        
+
         const isSelected = action.typ === selectedPrimaryAction;
-        
-        let baseClass = action.category ? action.farbe : 'neutral'; 
+
+        // KORRIGIERT: Kategorie-Logik für Farbklassen
+        let baseClass;
         if (selectedPrimaryActionCategory) {
-            // Bei Unteraktionen nur eine neutrale Klasse verwenden (Sub-Buttons sind im CSS gefärbt)
-            baseClass = 'sub-action'; 
+            // Wir sind im Untermenü, verwende neutrale Klassen
+            baseClass = 'sub-blue'; // Standardfarbe für Unteraktionen
+        } else {
+            // Wir sind im Hauptmenü, verwende die definierte Farbe
+            baseClass = action.farbe || 'neutral';
         }
-        
+
         button.className = `action-button ${baseClass} ${isSelected ? 'selected-action' : ''}`;
         button.innerText = action.label;
-        
-        if (action.category !== undefined) { 
-             button.onclick = () => selectAction(action.typ, action.category);
+
+        if (action.category !== undefined) {
+            button.onclick = () => selectAction(action.typ, action.category);
         } else {
-             button.onclick = () => selectAction(action.typ);
+            button.onclick = () => selectAction(action.typ);
         }
 
         actionPanelElement.appendChild(button);
@@ -626,8 +652,11 @@ function showVisualFeedback(playerId, actionLabel) {
     if (!player) return;
 
     feedbackOverlay.innerText = `${player.nummer} - ${player.name}:\n${actionLabel}`;
+
+    // KORRIGIERT: Deine CSS erwartet .show, aber die Definition fehlte.
+    // Diese Logik ist jetzt korrekt, vorausgesetzt, du fügst die CSS-Regel hinzu (siehe unten).
     feedbackOverlay.classList.add('show');
-    
+
     // Das visuelle Feedback (grünes Fenster) verschwindet nach 1,5 Sekunden
     setTimeout(() => {
         feedbackOverlay.classList.remove('show');
@@ -652,7 +681,7 @@ function formatTime(totalSeconds) {
 function updateTimerDisplay() {
     document.getElementById("game-timer").innerText = formatTime(spielzeitSekunden);
     document.getElementById("timer-btn").innerText = isTimerRunning ? "⏸️ Pause" : "▶️ Start Spiel";
-    
+
     const endBtn = document.getElementById("half-end-btn");
     if (endBtn) {
         if (currentHalf === 2) {
@@ -663,8 +692,10 @@ function updateTimerDisplay() {
             endBtn.classList.remove('end-game');
         }
     }
-    document.getElementById("game-info").querySelector('h2').innerText = 
-        `Aktuelles Spiel: ... (${currentHalf}. Halbzeit)`;
+    // KORRIGIERT: Team-Name aus dem HTML-Span holen, statt ihn zu überschreiben
+    const teamName = document.getElementById('team-name').textContent || "Mein Team";
+    document.getElementById("game-info").querySelector('h2').innerText =
+        `Aktuelles Spiel: ${teamName} vs. Gegner (${currentHalf}. HZ)`;
 }
 
 function toggleGameTimer() {
@@ -697,9 +728,12 @@ function loadGameState() {
     if (savedState) {
         spielzeitSekunden = savedState.spielzeit || 0;
         currentHalf = savedState.halbzeit || 1;
-        
+
         if (savedState.isRunning) {
-             document.getElementById("timer-btn").innerText = "▶️ Start Spiel (Weiter)";
+            // Wenn der Timer beim Schließen lief, starte ihn nicht automatisch,
+            // sondern zeige "Weiter" an.
+            isTimerRunning = false; // Stoppt den Timer beim Neuladen
+            document.getElementById("timer-btn").innerText = "▶️ Weiter";
         }
         updateTimerDisplay();
     }
@@ -708,10 +742,11 @@ function loadGameState() {
 function toggleEndHalfOrGame() {
     // Hier die Logik für Halbzeit / Spielende einfügen
     if (isTimerRunning) toggleGameTimer();
-    
+
     if (currentHalf === 1) {
-        alert("Erste Halbzeit beendet. Jetzt Pause und dann 'Start Spiel' für die 2. Halbzeit.");
-        currentHalf = 2;
+        if (confirm("Sicher, dass die 1. Halbzeit beendet werden soll?")) {
+            currentHalf = 2;
+        }
     } else {
         endGame();
     }
@@ -721,9 +756,9 @@ function toggleEndHalfOrGame() {
 
 function endGame() {
     if (isTimerRunning) toggleGameTimer();
-    
-    if (!confirm("Spiel beendet? Alle erfassten Aktionen und der Spielstand werden gelöscht. (Statistik vorher exportieren!)")) return;
-    
+
+    if (!confirm("SPIEL BEENDEN? Alle erfassten Aktionen und der Spielstand werden gelöscht. (Statistik vorher exportieren!)")) return;
+
     // Globale Variablen zurücksetzen
     spielzeitSekunden = 0;
     currentHalf = 1;
@@ -734,8 +769,10 @@ function endGame() {
     }
     localStorage.removeItem("gameState");
     localStorage.removeItem("aktionen");
-    
+
     alert("Spiel beendet und Daten zurückgesetzt.");
+
+    renderHistory(); // NEU: Verlaufspanel leeren
     updateUI();
 }
 
@@ -747,18 +784,18 @@ function togglePlayerManagement() {
     // Prüfen, ob das Overlay gerade unsichtbar ist
     if (managementView.style.display === 'none' || managementView.style.display === '') {
         // -> ÖFFNEN (Verwaltung zeigen)
-        mainApp.style.display = 'none';       
-        managementView.style.display = 'block'; 
-        
+        mainApp.style.display = 'none';
+        managementView.style.display = 'block';
+
         // WICHTIG: Liste laden, damit man auch wen löschen kann
-        renderRosterList(); 
+        renderRosterList();
     } else {
         // -> SCHLIESSEN (Zurück zum Spiel)
-        managementView.style.display = 'none'; 
-        mainApp.style.display = 'flex';       
-        
+        managementView.style.display = 'none';
+        mainApp.style.display = 'flex';
+
         // WICHTIG: Hauptansicht aktualisieren (falls Namen geändert wurden)
-        updateUI(); 
+        updateUI();
     }
 }
 
@@ -772,15 +809,11 @@ function renderRosterList() {
 
     SPIELER.forEach(p => {
         const li = document.createElement("li");
-        // Styling direkt hier für schnelle Ergebnisse
-        li.style.display = "flex";
-        li.style.justifyContent = "space-between";
-        li.style.padding = "10px";
-        li.style.borderBottom = "1px solid #eee";
-        
+
+        // Nutzt die CSS-Klassen aus dem HTML statt Inline-Styles
         li.innerHTML = `
             <span>#${p.nummer} ${p.name} (${p.position})</span>
-            <button onclick="removePlayer('${p.id}')" style="background-color: #f44336; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">Löschen</button>
+            <button onclick="removePlayer('${p.id}')">Löschen</button>
         `;
         rosterList.appendChild(li);
     });
@@ -790,7 +823,7 @@ function renderRosterList() {
 function addPlayer() {
     const name = document.getElementById("input-name").value;
     const number = parseInt(document.getElementById("input-number").value);
-    const position = document.getElementById("input-position").value; // ID im HTML prüfen!
+    const position = document.getElementById("input-position").value;
 
     if (!name || isNaN(number)) {
         alert("Bitte Name und Nummer angeben.");
@@ -806,11 +839,11 @@ function addPlayer() {
 
     SPIELER.push(newPlayer);
     savePlayers();
-    
+
     // Inputs leeren
     document.getElementById("input-name").value = "";
     document.getElementById("input-number").value = "";
-    
+
     // Wichtig: Liste im Overlay sofort aktualisieren
     renderRosterList();
 }
@@ -818,16 +851,16 @@ function addPlayer() {
 // Angepasste Remove-Funktion für das Overlay
 function removePlayer(playerId) {
     if (!confirm("Spieler wirklich löschen?")) return;
-    
+
     // Robuster Vergleich (String vs String)
     SPIELER = SPIELER.filter(p => String(p.id) !== String(playerId));
     savePlayers();
-    
+
     // Wenn der gelöschte Spieler gerade im Spiel ausgewählt war, Auswahl aufheben
     if (selectedPlayerId && String(selectedPlayerId) === String(playerId)) {
         selectedPlayerId = null;
     }
-    
+
     // Wichtig: Liste im Overlay sofort aktualisieren
     renderRosterList();
 }

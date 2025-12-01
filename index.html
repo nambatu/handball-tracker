@@ -9,7 +9,7 @@
 </head>
 
 <body>
-    
+
     <header>
         <div id="game-info">
             <h2>Aktuelles Spiel: <span id="team-name">Mein Team</span> vs. Gegner</h2>
@@ -19,32 +19,39 @@
             <button onclick="toggleGameTimer()" id="timer-btn">▶️ Start Spiel</button>
             <button onclick="toggleEndHalfOrGame()" id="half-end-btn">⏸️ Halbzeit</button>
             <button onclick="showStats()">📊 Statistik</button>
-            <button onclick="togglePlayerManagement()">👥 Spieler verwalten</button> 
+            <button onclick="togglePlayerManagement()">👥 Spieler verwalten</button>
         </div>
     </header>
 
-    <div id="app-container">
-        
-        <div id="player-list">
+    <main id="app-container">
+
+        <section id="player-list">
             <h3>Spieler (Tippen zum Auswählen)</h3>
-        </div>
+        </section>
 
-        <div id="action-panel">
+        <section id="action-panel">
             <h3>Aktion (Nach Spieler-Wahl)</h3>
-        </div>
+        </section>
 
-    </div>
+        <section id="history-panel">
+            <h3>Verlauf</h3>
+            <div id="history">
+                <button onclick="undoLastAction()" class="undo-btn">↩️ Letzte Aktion</button>
+            </div>
+        </section>
+
+    </main>
 
     <footer>
-        <button onclick="undoLastAction()" class="undo-btn">↩️ Letzte Aktion</button> 
+        <button onclick="undoLastAction()" class="undo-btn">↩️ Letzte Aktion</button>
         <p>Aktionen: <span id="action-count">0</span></p>
     </footer>
-    
+
     <div id="feedback-overlay"></div>
 
     <div id="player-management-view" class="overlay-view" style="display:none;">
         <h2>Spielerverwaltung</h2>
-        
+
         <div id="add-player-form">
             <h3>Neuen Spieler hinzufügen</h3>
             <input type="text" id="input-name" placeholder="Name" required>
@@ -61,18 +68,19 @@
             </select>
             <button onclick="addPlayer()">Spieler eintragen</button>
         </div>
-        
+
         <hr>
-        
+
         <div id="current-roster">
             <h3>Aktueller Kader (Löschen mit Klick)</h3>
             <ul id="roster-list">
-                </ul>
+            </ul>
         </div>
-        
+
         <button onclick="togglePlayerManagement()" class="back-btn">Zurück zur Erfassung</button>
     </div>
 
     <script src="script.js"></script>
 </body>
+
 </html>
