@@ -27,10 +27,10 @@ const historyPanelElement = document.getElementById('history-panel'); // NEU
 // ===================================================================
 
 const HAUPTAKTIONEN = [
-    { typ: "WurfTor", label: "🥅 Wurf mit Tor", category: "Wurf", farbe: "green" },
+    { typ: "WurfTor", label: "🤾🏻‍♀️ Wurf mit Tor", category: "Wurf", farbe: "green" },
     { typ: "WurfOhneTor", label: "❌ Wurf ohne Tor", category: "Wurf", farbe: "red" },
     { typ: "Ballverlust", label: "🥀 Ballverlust", category: "Verlust", farbe: "red" },
-    { typ: "Parade", label: "🧤 Parade", category: "Parade", farbe: "yellow" },
+    { typ: "Parade", label: "🧤 Parade", category: "Wurf", farbe: "yellow" },
 ];
 
 const UNTERAKTIONEN = {
@@ -41,6 +41,7 @@ const UNTERAKTIONEN = {
         { typ: "Rueckraum9m", label: "Rückraum (9m)" },
         { typ: "Gegenstoss", label: "Gegenstoß" },
         { typ: "ZweiteWelle", label: "2. Welle" },
+        { typ: "7Meter", label: "7 Meter"}
     ],
     "Verlust": [
         { typ: "Fehlpass", label: "Fehlpass" },
