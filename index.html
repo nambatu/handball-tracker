@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Handball Statistik Tracker</title>
+    <title>Handball Ticker & Statistik</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -12,72 +12,98 @@
 
     <header>
         <div id="game-info">
-            <h2>Aktuelles Spiel: <span id="team-name">Mein Team</span> vs. Gegner</h2>
-            <p>Spielzeit: <span id="game-timer">00:00</span></p>
+            <div class="scoreboard">
+                <span id="team-name">HEIM</span>
+                <div class="score-container">
+                    <span id="score-home" class="score-number">0</span>
+                    <span class="score-divider">:</span>
+                    <span id="score-guest" class="score-number">0</span>
+                </div>
+                <span id="guest-name">GAST</span>
+            </div>
+            <div class="timer-display">
+                Spielzeit: <span id="game-timer">00:00</span>
+            </div>
         </div>
+
         <div id="controls">
-            <button onclick="toggleGameTimer()" id="timer-btn">▶️ Start Spiel</button>
-            <button onclick="toggleEndHalfOrGame()" id="half-end-btn">⏸️ Halbzeit</button>
-            <button onclick="showStats()">📊 Statistik</button>
-            <button onclick="togglePlayerManagement()">👥 Spieler verwalten</button>
+            <button onclick="toggleGameTimer()" id="timer-btn" class="control-btn">▶️ Start</button>
+            <button onclick="toggleEndHalfOrGame()" id="half-end-btn" class="control-btn">⏸️ Halbzeit</button>
+            <button onclick="showStats()" class="control-btn">📊 Statistik</button>
+            <button onclick="togglePlayerManagement()" class="control-btn">👥 Spieler</button>
         </div>
     </header>
 
     <main id="app-container">
 
         <section id="player-list">
-            <h3>Spieler (Tippen zum Auswählen)</h3>
+            <h3>Lade Spieler...</h3>
         </section>
 
         <section id="action-panel">
             <h3>Aktion (Nach Spieler-Wahl)</h3>
-        </section>
+            </section>
 
         <section id="history-panel">
             <h3>Verlauf</h3>
-            <div id="history">
-                <button onclick="undoLastAction()" class="undo-btn">↩️ Letzte Aktion</button>
-            </div>
+            <div id="history-content">
+                </div>
         </section>
 
     </main>
 
     <footer>
-        <button onclick="undoLastAction()" class="undo-btn">↩️ Letzte Aktion</button>
-        <p>Aktionen: <span id="action-count">0</span></p>
+        <button onclick="undoLastAction()" class="undo-btn">↩️ Letzte Aktion rückgängig</button>
+        <p>Gesamt Aktionen: <span id="action-count">0</span></p>
     </footer>
 
     <div id="feedback-overlay"></div>
 
+    <div id="assist-overlay" class="overlay-view" style="display:none;">
+        <div class="overlay-content">
+            <h2>Wer hat den Pass gegeben?</h2>
+            <div id="assist-list" class="player-grid">
+                </div>
+            <div class="overlay-actions">
+                <button onclick="confirmAssist(null)" class="cancel-btn">Kein Assist / Einzelaktion</button>
+                <button onclick="closeAssistOverlay()" class="close-btn">Abbrechen</button>
+            </div>
+        </div>
+    </div>
+
     <div id="player-management-view" class="overlay-view" style="display:none;">
-        <h2>Spielerverwaltung</h2>
+        <div class="overlay-content management-content">
+            <h2>Spielerverwaltung</h2>
 
-        <div id="add-player-form">
-            <h3>Neuen Spieler hinzufügen</h3>
-            <input type="text" id="input-name" placeholder="Name" required>
-            <input type="number" id="input-number" placeholder="Trikot-Nr." min="1" required>
-            <select id="input-position">
-                <option value="TW">Torwart (TW)</option>
-                <option value="RM">Rechtsaußen (RM)</option>
-                <option value="RR">Rechter Rückraum (RR)</option>
-                <option value="RL">Linker Rückraum (LR)</option>
-                <option value="LA">Linksaußen (LA)</option>
-                <option value="K">Kreis (K)</option>
-                <option value="M">Mitte (M)</option>
-                <option value="N/A">N/A</option>
-            </select>
-            <button onclick="addPlayer()">Spieler eintragen</button>
+            <div id="add-player-form">
+                <h3>Neuen Spieler hinzufügen</h3>
+                <div class="form-row">
+                    <input type="text" id="input-name" placeholder="Name" required>
+                    <input type="number" id="input-number" placeholder="Nr." min="1" required>
+                    <select id="input-position">
+                        <option value="TW">Torwart (TW)</option>
+                        <option value="LA">Linksaußen (LA)</option>
+                        <option value="RL">Rückraum Links (RL)</option>
+                        <option value="M">Mitte (RM)</option>
+                        <option value="RR">Rückraum Rechts (RR)</option>
+                        <option value="RA">Rechtsaußen (RA)</option>
+                        <option value="K">Kreis (K)</option>
+                        <option value="N/A">N/A</option>
+                    </select>
+                    <button onclick="addPlayer()" class="add-btn">Hinzufügen</button>
+                </div>
+            </div>
+
+            <hr>
+
+            <div id="current-roster">
+                <h3>Aktueller Kader</h3>
+                <ul id="roster-list">
+                    </ul>
+            </div>
+
+            <button onclick="togglePlayerManagement()" class="back-btn">Zurück zum Spiel</button>
         </div>
-
-        <hr>
-
-        <div id="current-roster">
-            <h3>Aktueller Kader (Löschen mit Klick)</h3>
-            <ul id="roster-list">
-            </ul>
-        </div>
-
-        <button onclick="togglePlayerManagement()" class="back-btn">Zurück zur Erfassung</button>
     </div>
 
     <script src="script.js"></script>

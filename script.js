@@ -1,29 +1,5 @@
 // ===================================================================
-// Globale Zustandsvariablen (State) & Initialisierung
-// ===================================================================
-let SPIELER = [];
-
-let selectedPlayerId = null;
-let selectedPrimaryAction = null;
-let selectedPrimaryActionCategory = null;
-let currentSort = 'nummer';
-
-// Timer-Zustand
-let timerInterval = null;
-let spielzeitSekunden = 0;
-let currentHalf = 1;
-let isTimerRunning = false;
-
-// Cached DOM-Elemente
-const playerListElement = document.getElementById('player-list');
-const actionPanelElement = document.getElementById('action-panel');
-const actionTitleElement = actionPanelElement ? actionPanelElement.querySelector('h3') : null;
-const feedbackOverlay = document.getElementById('feedback-overlay');
-const historyPanelElement = document.getElementById('history-panel'); // NEU
-
-
-// ===================================================================
-// Datenstruktur für Aktionen (Zwei-Ebenen-Modell)
+// 1. KONFIGURATION & DATENSTRUKTUREN
 // ===================================================================
 
 const HAUPTAKTIONEN = [
@@ -59,14 +35,41 @@ const UNTERAKTIONEN = {
 };
 
 // ===================================================================
-// Initialisierung & Load/Save
+// 2. GLOBALE VARIABLES (STATE)
+// ===================================================================
+
+let SPIELER = [];
+let selectedPlayerId = null;
+let selectedPrimaryAction = null;
+let selectedPrimaryActionCategory = null;
+let currentSort = 'nummer';
+
+// Timer-Zustand
+let timerInterval = null;
+let spielzeitSekunden = 0;
+let currentHalf = 1;
+let isTimerRunning = false;
+
+// Zwischenspeicher für Assist-Logik
+let tempActionData = null; 
+
+// Cached DOM-Elemente
+const playerListElement = document.getElementById('player-list');
+const actionPanelElement = document.getElementById('action-panel');
+const actionTitleElement = actionPanelElement ? actionPanelElement.querySelector('h3') : null;
+const feedbackOverlay = document.getElementById('feedback-overlay');
+const historyPanelElement = document.getElementById('history-panel'); 
+
+
+// ===================================================================
+// 3. INITIALISIERUNG & SPEICHER (LOAD/SAVE)
 // ===================================================================
 
 window.onload = () => {
     loadPlayers();
     loadGameState();
     updateActionCount();
-    renderHistory(); // NEU: Verlauf beim Laden füllen
+    renderHistory();
     updateUI();
 };
 
@@ -75,16 +78,13 @@ function loadPlayers() {
     if (savedPlayers && savedPlayers.length > 0) {
         SPIELER = savedPlayers;
     } else {
-        // Initiale Liste
         SPIELER = [
-            // KORRIGIERT: Unangebrachten Text ersetzt
             { id: 'p1', name: "Gegner", nummer: 0, position: "N/A" },
             { id: 'p2', name: "Tom Tester", nummer: 22, position: "LA" },
             { id: 'p3', name: "Kai Keeper", nummer: 1, position: "TW" },
         ];
         savePlayers();
     }
-    // Wichtig: Beim Laden sofort sortieren
     sortPlayers();
 }
 
@@ -92,9 +92,14 @@ function savePlayers() {
     localStorage.setItem("spieler", JSON.stringify(SPIELER));
 }
 
-/**
- * Sortiert die Spielerliste nach der aktuellen Sortiermethode.
- */
+function loadActions() {
+    return JSON.parse(localStorage.getItem("aktionen")) || [];
+}
+
+function saveActions(aktionen) {
+    localStorage.setItem("aktionen", JSON.stringify(aktionen));
+}
+
 function sortPlayers() {
     SPIELER.sort((a, b) => {
         if (currentSort === 'nummer') {
@@ -108,7 +113,6 @@ function sortPlayers() {
 
 function toggleSort(criteria) {
     if (currentSort === criteria) {
-        // Bei gleichem Kriterium einfach umkehren (z.B. nach Nummer aufsteigend/absteigend)
         SPIELER.reverse();
     } else {
         currentSort = criteria;
@@ -117,360 +121,161 @@ function toggleSort(criteria) {
     updateUI();
 }
 
-function loadActions() {
-    return JSON.parse(localStorage.getItem("aktionen")) || [];
-}
-
-function saveActions(aktionen) {
-    localStorage.setItem("aktionen", JSON.stringify(aktionen));
-}
-
-/**
- * Macht die letzte gespeicherte Aktion rückgängig.
- */
-function undoLastAction() {
-    if (!confirm("Sicher, dass die letzte Aktion rückgängig gemacht werden soll? Dies kann nicht rückgängig gemacht werden.")) {
-        return;
-    }
-
-    const aktionen = loadActions();
-
-    if (aktionen.length === 0) {
-        alert("Es gibt keine Aktionen zum Löschen.");
-        return;
-    }
-
-    const lastAction = aktionen.pop();
-    saveActions(aktionen);
-
-    // Spielerinformationen abrufen
-    const player = SPIELER.find(s => s.id === lastAction.spielerId);
-
-    // Die gespeicherte lesbare Bezeichnung verwenden (z.B. '🥅 Wurf mit Tor (Außen)')
-    const actionLabel = lastAction.label || lastAction.typ;
-
-    // UI aktualisieren
-    updateActionCount();
-    renderHistory(); // NEU: Verlauf aktualisieren
-    updateUI();
-
-    alert(`Aktion RÜCKGÄNGIG: ${player ? player.nummer + ' - ' + player.name : 'Unbekannter Spieler'} (${actionLabel})`);
+// Helper: Ist es ein Gegner?
+function isGuestTeam(name) {
+    if (!name) return false;
+    const lowerName = name.toLowerCase().trim();
+    return lowerName === 'gegner' || lowerName === 'enemy' || lowerName === 'gast';
 }
 
 // ===================================================================
-// === DATENLOGIK: AKTION SPEICHERN & ZÄHLEN ===
+// 4. AKTIONSLOGIK (SPEICHERN & UNDO)
 // ===================================================================
 
 /**
- * Speichert die fertige Aktion und aktualisiert die UI.
+ * SCHRITT 1: Entscheidung - Speichern oder nach Assist fragen?
  */
-function saveAction(player, finalActionType, finalActionLabel) {
+function saveAction(player, finalActionType, finalActionLabel, category) {
     if (!isTimerRunning) {
         alert("▶️ Der Spiel-Timer ist gestoppt oder pausiert. Bitte zuerst starten!");
         return;
     }
 
+    const isGoal = finalActionType.includes('WurfTor');
+    const isEnemy = isGuestTeam(player.name); 
+
+    if (isGoal && !isEnemy) {
+        // Fall A: Tor (Eigenes Team) -> Overlay öffnen
+        tempActionData = {
+            player: player,
+            typ: finalActionType,
+            label: finalActionLabel,
+            category: category
+        };
+        showAssistOverlay(); 
+    } else {
+        // Fall B: Kein Tor oder Gegner -> Sofort speichern
+        executeSaveAction(player, finalActionType, finalActionLabel, category, null);
+    }
+}
+
+/**
+ * SCHRITT 2: Tatsächliches Speichern in die Datenbank
+ */
+function executeSaveAction(player, actionType, actionLabel, category, assistId) {
     const aktionen = loadActions();
 
     const newAction = {
         id: Date.now(),
         spielId: "current_match",
         spielerId: player.id,
-        typ: finalActionType, // z.B. WurfTor_Aussen
-        label: finalActionLabel, // z.B. 🥅 Wurf mit Tor (Außen)
+        assistId: assistId,
+        typ: actionType,
+        label: actionLabel,
+        category: category || "Unbekannt", // Fallback, falls immer noch was fehlt
         halbzeit: currentHalf,
-        spielzeit: spielzeitSekunden,
-        spielzeitFormatiert: formatTime(spielzeitSekunden), // NEU: Formatierte Zeit für Verlauf
-        timestamp: new Date().toISOString()
+        
+        // FIX: Wir speichern die echten Sekunden (Integer), nicht den Text!
+        // Der CSV Export formatiert das dann später wieder schön zu mm:ss
+        spielzeit: spielzeitSekunden, 
+        
+        timestamp: Date.now()
     };
 
     aktionen.push(newAction);
     saveActions(aktionen);
 
-    // Visuelles Feedback
-    //showVisualFeedback(player.id, finalActionLabel);
-
-    // UI-Elemente aktualisieren
+    // UI Updates
+    showVisualFeedback(player.id, actionLabel);
     updateActionCount();
-    renderHistory(); // NEU: Verlauf aktualisieren
+    renderHistory();
+    updateScoreboard();
 
-    // Wichtig: Nach dem Speichern wird der Spieler deselektiert und die Ansicht zurückgesetzt
+    // Reset Selection
     selectedPlayerId = null;
     selectedPrimaryAction = null;
     selectedPrimaryActionCategory = null;
     updateUI();
 }
 
+function undoLastAction() {
+    if (!confirm("Letzte Aktion rückgängig machen?")) return;
 
-/**
- * Zählt alle Aktionen aus dem LocalStorage und erstellt eine Statistik-Zusammenfassung.
- */
-function getPlayerSummaryStats() {
     const aktionen = loadActions();
-    let summary = {};
-
-    SPIELER.forEach(s => {
-        summary[s.id] = { tore: 0, fehler: 0, paraden: 0, gesamtAktionen: 0 };
-    });
-
-    aktionen.forEach(action => {
-        if (!summary[action.spielerId]) return;
-
-        const type = action.typ;
-
-        // Tore zählen (Wurf mit Tor)
-        if (type.includes("WurfTor")) {
-            summary[action.spielerId].tore++;
-        }
-
-        // Fehler zählen (enthält Ballverlust)
-        if (type.includes("Ballverlust")) {
-            summary[action.spielerId].fehler++;
-        }
-
-        // Paraden zählen
-        if (type.includes("Parade")) {
-            summary[action.spielerId].paraden++;
-        }
-
-        summary[action.spielerId].gesamtAktionen++;
-    });
-
-    return summary;
-}
-
-/**
- * Exportiert die gesamten Rohdaten der Aktionen als CSV-Datei.
- */
-/**
- * Exportiert die gesamten Rohdaten und die Statistik-Tabelle als CSV-Datei.
- */
-function exportAsCSV() {
-    const aktionen = loadActions();
-
     if (aktionen.length === 0) {
-        alert("Keine Aktionen zum Exportieren vorhanden.");
+        alert("Keine Aktionen zum Löschen.");
         return;
     }
 
-    let csvContent = "";
+    const lastAction = aktionen.pop();
+    saveActions(aktionen);
 
-    // --- TEIL 1: STATISTIK-ZUSAMMENFASSUNG (TABELLE) ---
-    csvContent += "=== STATISTIK-ZUSAMMENFASSUNG (PRO SPIELER UND AKTIONSTYP) ===\n";
-    const stats = getPlayerSummaryStats(); // Verwenden der bereits implementierten Logik
+    const player = SPIELER.find(s => s.id === lastAction.spielerId);
+    const actionLabel = lastAction.label || lastAction.typ;
 
-    // Hier nutzen wir die detaillierte Zählung aus der showStats Logik
-    const fullStats = {};
-    const detailedSummary = showStats_GetDetailedData(); // NEU: Hilfsfunktion
-
-    let allActionTypes = detailedSummary.allActionTypes;
-
-    // Header-Zeile
-    let header = "Spieler_Nummer,Spieler_Name";
-    allActionTypes.forEach(typ => { header += `,${typ}`; });
-    csvContent += header + "\n";
-
-    // Datenzeilen
-    Object.values(detailedSummary.stats).forEach(playerStats => {
-        let row = `${playerStats.nummer},"${playerStats.name}"`;
-        allActionTypes.forEach(typ => {
-            row += `,${playerStats.aktionen[typ] || 0}`;
-        });
-        csvContent += row + "\n";
-    });
-
-    // --- TEIL 2: ROHDATEN-EXPORT ---
-    csvContent += "\n\n=== ROHDATEN (ALLE AKTIONEN CHRONOLOGISCH) ===\n";
-    csvContent += "Spieler_Nummer,Spieler_Name,Aktionstyp_Technisch,Aktionstyp_Lesbar,Halbzeit,Spielzeit_Sekunden,Zeitstempel\n";
-
-    aktionen.forEach(action => {
-        const player = SPIELER.find(s => s.id === action.spielerId);
-        const playerName = player ? player.name : 'Unbekannt';
-        const playerNumber = player ? player.nummer : 'N/A';
-
-        csvContent += `${playerNumber},"${playerName}",${action.typ},"${action.label}",${action.halbzeit},${action.spielzeit},${action.timestamp}\n`;
-    });
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-
-    link.href = URL.createObjectURL(blob);
-    link.download = `handball_statistik_export_${new Date().toLocaleDateString()}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    alert("CSV-Export erfolgreich gestartet.");
-}
-
-/**
- * Hilfsfunktion: Sammelt alle Daten für Statistik und Export zentral.
- * Verhindert doppelten Code.
- */
-function showStats_GetDetailedData() {
-    const aktionen = loadActions();
-    let stats = {};
-
-    // 1. Alle möglichen Aktionen sammeln (aus Definitionen + tatsächlich gespeicherten)
-    let allActionTypes = [];
-
-    // Füge alle Hauptaktionen hinzu
-    HAUPTAKTIONEN.forEach(h => {
-        // KORRIGIERT: Prüfe, ob category überhaupt existiert, bevor UNTERAKTIONEN[h.category] aufgerufen wird
-        if (h.category && UNTERAKTIONEN[h.category]) {
-            // Füge alle Kombinationen hinzu (Haupt_Unter)
-            UNTERAKTIONEN[h.category].forEach(u => {
-                allActionTypes.push(`${h.typ}_${u.typ}`);
-            });
-        } else {
-            allActionTypes.push(h.typ);
-        }
-    });
-
-    // Sicherheitshalber auch Typen aus den gespeicherten Aktionen nehmen (falls Konfig geändert wurde)
-    const storedTypes = [...new Set(aktionen.map(a => a.typ))];
-    allActionTypes = [...new Set([...allActionTypes, ...storedTypes])].sort();
-
-    // 2. Initialisiere Zähler
-    SPIELER.forEach(s => {
-        stats[s.id] = {
-            name: s.name,
-            nummer: s.nummer,
-            aktionen: {}
-        };
-        allActionTypes.forEach(typ => {
-            stats[s.id].aktionen[typ] = 0;
-        });
-    });
-
-    // 3. Aktionen zählen
-    aktionen.forEach(action => {
-        if (stats[action.spielerId] && stats[action.spielerId].aktionen.hasOwnProperty(action.typ)) { // KORRIGIERT: Sicherstellen, dass der Typ existiert
-            stats[action.spielerId].aktionen[action.typ]++;
-        }
-    });
-
-    return { stats: stats, allActionTypes: allActionTypes };
-}
-
-/**
- * Öffnet das Statistik-Fenster (Pop-up).
- */
-function showStats() {
-    // Daten holen
-    const data = showStats_GetDetailedData();
-    const stats = data.stats;
-    const allActionTypes = data.allActionTypes;
-
-    // HTML Bericht bauen
-    let reportHtml = "<h2>Statistikübersicht</h2>";
-    reportHtml += "<table border='1' cellspacing='0' cellpadding='5' width='100%'>";
-
-    // Header
-    reportHtml += "<thead style='background-color: #f2f2f2;'><tr><th style='text-align:left;'>Spieler</th>";
-    allActionTypes.forEach(typ => {
-        // Versuchen, den Typ lesbar zu machen (optional)
-        // Einfache Variante: Unterstrich durch Leerzeichen ersetzen
-        let readable = typ.replace('_', ' ');
-        reportHtml += `<th style='font-size: 0.8em;'>${readable}</th>`;
-    });
-    reportHtml += "</tr></thead><tbody>";
-
-    // Body
-    Object.values(stats).forEach(playerStats => {
-        reportHtml += `<tr><td style='font-weight:bold;'>#${playerStats.nummer} ${playerStats.name}</td>`;
-        allActionTypes.forEach(typ => {
-            const count = playerStats.aktionen[typ] || 0;
-            // Nullen grau darstellen, Zahlen fett
-            const style = count > 0 ? "font-weight:bold; color:black;" : "color:#ccc;";
-            reportHtml += `<td style='text-align:center; ${style}'>${count}</td>`;
-        });
-        reportHtml += "</tr>";
-    });
-
-    reportHtml += "</tbody></table>";
-
-    // Fenster öffnen
-    const statsWindow = window.open('', 'Statistik', 'width=1000,height=600');
-    if (statsWindow) {
-        statsWindow.document.write('<html><head><title>Statistik</title>');
-        statsWindow.document.write('<style>body{font-family: sans-serif; padding: 20px;} table { border-collapse: collapse; } td, th { border: 1px solid #ddd; }</style>');
-        statsWindow.document.write('</head><body>');
-        statsWindow.document.write(reportHtml);
-        statsWindow.document.write('<br><div style="margin-top: 20px;">');
-        statsWindow.document.write('<button onclick="window.opener.exportAsCSV()" style="padding: 10px; background-color: #4CAF50; color: white; border: none; cursor: pointer; margin-right: 10px;">Excel/CSV Export</button>');
-        statsWindow.document.write('<button onclick="window.close()" style="padding: 10px; background-color: #f44336; color: white; border: none; cursor: pointer;">Schließen</button>');
-        statsWindow.document.write('</div></body></html>');
-        statsWindow.document.close();
-    } else {
-        alert("Pop-up konnte nicht geöffnet werden. Bitte Pop-up-Blocker prüfen!");
-    }
-}
-
-// ===================================================================
-// === AKTIONSLOGIK: SELECT & RENDER ===
-// ===================================================================
-
-function selectPlayer(playerId) {
-    if (selectedPlayerId === playerId) {
-        selectedPlayerId = null; // Deselektieren
-    } else {
-        selectedPlayerId = playerId;
-    }
-    // Zustand der Aktionen zurücksetzen, wenn der Spieler wechselt/deselektiert wird
-    selectedPrimaryAction = null;
-    selectedPrimaryActionCategory = null;
-
+    updateActionCount();
+    renderHistory();
+    updateScoreboard(); // Wichtig: Spielstand korrigieren
     updateUI();
+
+    alert(`RÜCKGÄNGIG: ${player ? player.nummer : '?'} (${actionLabel})`);
 }
 
-function selectAction(actionType, category = null) {
-    if (!selectedPlayerId) {
-        alert("Bitte zuerst einen Spieler auswählen!");
+// ===================================================================
+// 5. ASSIST OVERLAY LOGIK
+// ===================================================================
+
+function showAssistOverlay() {
+    const overlay = document.getElementById('assist-overlay');
+    const list = document.getElementById('assist-list');
+    
+    if (!overlay || !list) {
+        console.error("Overlay Elemente fehlen in index.html");
         return;
     }
-    const player = SPIELER.find(p => p.id === selectedPlayerId);
 
-    // --- Ebene 1: Hauptaktion wurde geklickt ---
-    if (category !== null && UNTERAKTIONEN[category]) {
-        // Hauptaktion merken und zur Unteraktions-Auswahl wechseln
-        selectedPrimaryAction = actionType;
-        selectedPrimaryActionCategory = category;
-        updateUI();
-
-        // --- Ebene 2: Unteraktion oder Einzelaktion ohne Untermenü wurde geklickt ---
-    } else {
-        let finalActionType;
-        let finalActionLabel;
-
-        // Fall 1: Unteraktion wurde geklickt (Wir haben eine vorgemerkte Hauptaktion)
-        if (selectedPrimaryAction && selectedPrimaryActionCategory) {
-            // Die endgültige Aktion zusammenfügen (z.B. 'WurfTor_Aussen')
-            finalActionType = `${selectedPrimaryAction}_${actionType}`;
-
-            const primaryAction = HAUPTAKTIONEN.find(a => a.typ === selectedPrimaryAction);
-            const subAction = UNTERAKTIONEN[selectedPrimaryActionCategory].find(a => a.typ === actionType);
-
-            finalActionLabel = `${primaryAction.label} (${subAction.label})`;
-
-            // Fall 2: Einzelaktion ohne Untermenü wurde geklickt (z.B. 'TechnischerFehler')
-        } else {
-            // KORRIGIERT: Finde das Label für Einzelaktionen korrekt
-            const primaryAction = HAUPTAKTIONEN.find(a => a.typ === actionType);
-            finalActionType = actionType;
-            finalActionLabel = primaryAction ? primaryAction.label : actionType;
+    list.innerHTML = ''; // Liste leeren
+    
+    SPIELER.forEach(p => {
+        // Nicht man selbst und kein Gegner
+        const isEnemy = isGuestTeam(p.name);
+        if (p.id !== selectedPlayerId && !isEnemy) {
+            const btn = document.createElement('button');
+            btn.innerHTML = `<strong>${p.nummer}</strong><br>${p.name}`;
+            // Optional: CSS Klasse hinzufügen falls gewünscht
+            btn.style.margin = "5px"; 
+            btn.style.padding = "10px";
+            btn.onclick = () => confirmAssist(p.id);
+            list.appendChild(btn);
         }
+    });
 
-        // AKTION SPEICHERN (inkl. Reset des selectedPlayerId)
-        saveAction(player, finalActionType, finalActionLabel);
-    }
+    overlay.style.display = 'flex';
 }
 
-function resetActionSelection() {
-    selectedPrimaryAction = null;
-    selectedPrimaryActionCategory = null;
-    updateUI();
+function closeAssistOverlay() {
+    const overlay = document.getElementById('assist-overlay');
+    if (overlay) overlay.style.display = 'none';
+    tempActionData = null;
 }
+
+function confirmAssist(assistPlayerId) {
+    if (!tempActionData) return;
+
+    executeSaveAction(
+        tempActionData.player,
+        tempActionData.typ,
+        tempActionData.label,
+        tempActionData.category,
+        assistPlayerId
+    );
+
+    closeAssistOverlay();
+}
+
+// ===================================================================
+// 6. UI RENDERING (SPIELER, AKTIONEN, VERLAUF)
+// ===================================================================
 
 function updateUI() {
     renderPlayerList();
@@ -478,17 +283,9 @@ function updateUI() {
     updateTimerDisplay();
 }
 
-// ===================================================================
-// === RENDERING UI ===
-// ===================================================================
-
-/**
- * Rendert entweder die Spielerliste oder die Verwaltungsansicht.
- */
 function renderPlayerList() {
     if (!playerListElement) return;
 
-    // KORRIGIERT: Tippfehler 'playstElement'
     playerListElement.innerHTML = `
         <div class="player-list-header">
             <h3>Spieler</h3>
@@ -500,26 +297,16 @@ function renderPlayerList() {
         </div>
     `;
 
-    // KORRIGIERT: Tippfehler 'consmmaryStats'
     const summaryStats = getPlayerSummaryStats();
 
-    // KORRIGIERT: Tippfehler 'SPIEforEach'
     SPIELER.forEach(player => {
-        // KORRIGIERT: Tippfehler 'consats'
         const stats = summaryStats[player.id] || { tore: 0, fehler: 0, paraden: 0 };
-        // KORRIGIERT: Fehlende Definition von 'isSelected'
         const isSelected = selectedPlayerId === player.id;
-
-        // KORRIGIERT: Tippfehler 'consayerButton'
         const playerButton = document.createElement('div');
 
-        // KORRIGIERT: Tippfehler 'playtton'
         playerButton.className = `player-button ${isSelected ? 'selected-player' : ''}`;
         playerButton.onclick = () => selectPlayer(player.id);
 
-        // KORRIGIERT: Tippfehler 'playtton'
-        // HINWEIS: Die Klassen 'stat-item green/red/yellow' sind in deinem CSS nicht definiert.
-        // Ich habe sie drin gelassen, falls du sie noch hinzufügst.
         playerButton.innerHTML = `
             <div class="player-info">
                 <span class="player-number">#${player.nummer}</span>
@@ -531,107 +318,88 @@ function renderPlayerList() {
                 <span class="stat-item yellow">🧤 ${stats.paraden}</span>
             </div>
         `;
-        // KORRIGIERT: Tippfehler 'playstElement'
         playerListElement.appendChild(playerButton);
     });
 }
 
-// KORRIGIERT: Redundante Funktion entfernt.
-// Die Funktion renderManagementPanel() wurde entfernt, da sie 
-// von togglePlayerManagement() und renderRosterList() ersetzt wird.
-
-
-/**
- * NEU: Rendert die Verlaufsliste.
- */
 function renderHistory() {
     if (!historyPanelElement) return;
 
-    // Überschrift behalten, aber den Rest löschen
     historyPanelElement.innerHTML = '<h3>Verlauf</h3>';
-
     const aktionen = loadActions();
+    aktionen.reverse(); // Neueste oben
 
-    // Neueste zuerst anzeigen
-    aktionen.reverse();
-
-    // Nur die letzten 25 Aktionen anzeigen, sonst wird es zu voll
-    const
-        aktionenToShow = aktionen.slice(0, 25);
+    const aktionenToShow = aktionen.slice(0, 25);
 
     aktionenToShow.forEach(entry => {
         const player = SPIELER.find(s => s.id === entry.spielerId);
-        const playerName = player ? `#${player.nummer} ${player.name}` : 'Unbekannt';
-        const gameTime = entry.spielzeitFormatiert || formatTime(entry.spielzeit); // Fallback
-
+        const playerNumber = player ? player.nummer : '?'; // Fix: Variable definiert
+        const playerName = player ? player.name : 'Unbekannt';
+        
+        const assistPlayer = entry.assistId ? SPIELER.find(p => p.id === entry.assistId) : null;
+        const assistText = assistPlayer ? `<br><small style="color:#666">🅰️ Assist: ${assistPlayer.name}</small>` : '';
+        
         const entryElement = document.createElement('div');
         entryElement.className = 'history-entry';
 
+        // Fix: entryElement statt div benutzt
         entryElement.innerHTML = `
-            <span class="history-time">[${gameTime}]</span>
-            <span class="history-player">${playerName}</span>
+            <span class="history-time">${entry.spielzeit}</span>
+            <span class="history-player">
+                <strong>${playerNumber} ${playerName}</strong>
+                ${assistText}
+            </span>
             <span class="history-action">${entry.label}</span>
         `;
         historyPanelElement.appendChild(entryElement);
     });
-}
 
+    updateScoreboard();
+}
 
 function renderActionButtons() {
     if (!actionPanelElement || !actionTitleElement) return;
 
-    // Leeren, aber den Titel (h3) im Speicher behalten
     actionPanelElement.innerHTML = '';
-    actionPanelElement.appendChild(actionTitleElement); // Titel sofort wieder einfügen
+    actionPanelElement.appendChild(actionTitleElement);
 
     let buttonsToRender = [];
     let titleText = "Aktion (Nach Spieler-Wahl)";
 
-    // Fall 1: Unteraktions-Menü anzeigen
+    // Untermenü
     if (selectedPrimaryActionCategory && UNTERAKTIONEN[selectedPrimaryActionCategory]) {
         buttonsToRender = UNTERAKTIONEN[selectedPrimaryActionCategory];
-
-        // Titel anpassen
         const primaryActionLabel = HAUPTAKTIONEN.find(a => a.typ === selectedPrimaryAction).label;
         titleText = `Details für: ${primaryActionLabel}`;
 
-        // "Zurück"-Button hinzufügen (an den Anfang, nach dem Titel)
         const backButton = document.createElement('button');
         backButton.className = 'action-button back-button';
         backButton.innerText = '← Zurück zu Aktionen';
         backButton.onclick = resetActionSelection;
-        // Nach dem Titel einfügen
         actionTitleElement.insertAdjacentElement('afterend', backButton);
 
-
-        // Fall 2: Hauptaktions-Menü anzeigen
     } else {
+        // Hauptmenü
         buttonsToRender = HAUPTAKTIONEN;
     }
 
-    // Titel aktualisieren
     actionTitleElement.innerText = titleText;
 
-
-    // Buttons rendern
     buttonsToRender.forEach(action => {
         const button = document.createElement('button');
-
         const isSelected = action.typ === selectedPrimaryAction;
 
-        // KORRIGIERT: Kategorie-Logik für Farbklassen
         let baseClass;
         if (selectedPrimaryActionCategory) {
-            // Wir sind im Untermenü, verwende neutrale Klassen
-            baseClass = 'sub-blue'; // Standardfarbe für Unteraktionen
+            baseClass = 'sub-blue';
         } else {
-            // Wir sind im Hauptmenü, verwende die definierte Farbe
             baseClass = action.farbe || 'neutral';
         }
 
         button.className = `action-button ${baseClass} ${isSelected ? 'selected-action' : ''}`;
         button.innerText = action.label;
 
+        // WICHTIG: Kategorie immer mitgeben
         if (action.category !== undefined) {
             button.onclick = () => selectAction(action.typ, action.category);
         } else {
@@ -642,35 +410,89 @@ function renderActionButtons() {
     });
 }
 
-// ===================================================================
-// === VISUELLES FEEDBACK & ZÄHLER ===
-// ===================================================================
+function selectPlayer(playerId) {
+    if (selectedPlayerId === playerId) {
+        selectedPlayerId = null;
+    } else {
+        selectedPlayerId = playerId;
+    }
+    selectedPrimaryAction = null;
+    selectedPrimaryActionCategory = null;
+    updateUI();
+}
+
+function selectAction(actionType, category = null) {
+    if (!selectedPlayerId) {
+        alert("Bitte zuerst einen Spieler auswählen!");
+        return;
+    }
+    const player = SPIELER.find(p => p.id === selectedPlayerId);
+
+    // Ebene 1: Hauptaktion geklickt -> ins Untermenü
+    if (category !== null && UNTERAKTIONEN[category]) {
+        selectedPrimaryAction = actionType;
+        selectedPrimaryActionCategory = category;
+        updateUI();
+
+    // Ebene 2: Fertige Aktion (oder Hauptaktion ohne Untermenü)
+    } else {
+        let finalActionType;
+        let finalActionLabel;
+        let finalCategory = category; // Startwert
+
+        // Fall: Wir kommen aus einem Untermenü
+        if (selectedPrimaryAction && selectedPrimaryActionCategory) {
+            finalActionType = `${selectedPrimaryAction}_${actionType}`;
+            
+            const primaryAction = HAUPTAKTIONEN.find(a => a.typ === selectedPrimaryAction);
+            const subAction = UNTERAKTIONEN[selectedPrimaryActionCategory].find(a => a.typ === actionType);
+            
+            finalActionLabel = `${primaryAction.label} (${subAction.label})`;
+            finalCategory = selectedPrimaryActionCategory; // Kategorie sicherstellen
+
+        // Fall: Einzelaktion ohne Untermenü (Direktklick)
+        } else {
+            const primaryAction = HAUPTAKTIONEN.find(a => a.typ === actionType);
+            finalActionType = actionType;
+            finalActionLabel = primaryAction ? primaryAction.label : actionType;
+            
+            // FIX: Wenn category null ist, holen wir sie aus der Config
+            if (!finalCategory && primaryAction) {
+                finalCategory = primaryAction.category;
+            }
+        }
+
+        // Speichern aufrufen
+        saveAction(player, finalActionType, finalActionLabel, finalCategory);
+    }
+}
+
+function resetActionSelection() {
+    selectedPrimaryAction = null;
+    selectedPrimaryActionCategory = null;
+    updateUI();
+}
+
+function updateActionCount() {
+    const aktionen = loadActions();
+    const el = document.getElementById("action-count");
+    if(el) el.innerText = aktionen.length;
+}
 
 function showVisualFeedback(playerId, actionLabel) {
     if (!feedbackOverlay) return;
     const player = SPIELER.find(p => p.id === playerId);
-
     if (!player) return;
 
     feedbackOverlay.innerText = `${player.nummer} - ${player.name}:\n${actionLabel}`;
-
-    // KORRIGIERT: Deine CSS erwartet .show, aber die Definition fehlte.
-    // Diese Logik ist jetzt korrekt, vorausgesetzt, du fügst die CSS-Regel hinzu (siehe unten).
     feedbackOverlay.classList.add('show');
-
-    // Das visuelle Feedback (grünes Fenster) verschwindet nach 1,5 Sekunden
     setTimeout(() => {
         feedbackOverlay.classList.remove('show');
     }, 1500);
 }
 
-function updateActionCount() {
-    const aktionen = loadActions();
-    document.getElementById("action-count").innerText = aktionen.length;
-}
-
 // ===================================================================
-// === TIMER & SPIELZUSTAND LOGIK ===
+// 7. TIMER & SPIELZUSTAND LOGIK
 // ===================================================================
 
 function formatTime(totalSeconds) {
@@ -680,8 +502,12 @@ function formatTime(totalSeconds) {
 }
 
 function updateTimerDisplay() {
-    document.getElementById("game-timer").innerText = formatTime(spielzeitSekunden);
-    document.getElementById("timer-btn").innerText = isTimerRunning ? "⏸️ Pause" : "▶️ Start Spiel";
+    // FIX: Element direkt abrufen
+    const timerEl = document.getElementById("game-timer");
+    if (timerEl) timerEl.innerText = formatTime(spielzeitSekunden);
+
+    const btn = document.getElementById("timer-btn");
+    if (btn) btn.innerText = isTimerRunning ? "⏸️ Pause" : "▶️ Start Spiel";
 
     const endBtn = document.getElementById("half-end-btn");
     if (endBtn) {
@@ -693,10 +519,15 @@ function updateTimerDisplay() {
             endBtn.classList.remove('end-game');
         }
     }
-    // KORRIGIERT: Team-Name aus dem HTML-Span holen, statt ihn zu überschreiben
-    const teamName = document.getElementById('team-name').textContent || "Mein Team";
-    document.getElementById("game-info").querySelector('h2').innerText =
-        `Aktuelles Spiel: ${teamName} vs. Gegner (${currentHalf}. HZ)`;
+
+    const infoHeader = document.getElementById("game-info");
+    const teamNameEl = document.getElementById('team-name');
+    if (infoHeader && teamNameEl) {
+        // Wir suchen NICHT h2, da der Header jetzt anders aufgebaut ist (Scoreboard),
+        // aber die Spielzeit ist separat. Das hier ist nur noch für den Debug oder Titel.
+        // Falls du einen Titel aktualisieren willst:
+        // infoHeader.querySelector('h2').innerText = ... (Vorsicht, h2 enthält jetzt spans)
+    }
 }
 
 function toggleGameTimer() {
@@ -729,23 +560,20 @@ function loadGameState() {
     if (savedState) {
         spielzeitSekunden = savedState.spielzeit || 0;
         currentHalf = savedState.halbzeit || 1;
-
         if (savedState.isRunning) {
-            // Wenn der Timer beim Schließen lief, starte ihn nicht automatisch,
-            // sondern zeige "Weiter" an.
-            isTimerRunning = false; // Stoppt den Timer beim Neuladen
-            document.getElementById("timer-btn").innerText = "▶️ Weiter";
+            isTimerRunning = false;
+            const btn = document.getElementById("timer-btn");
+            if(btn) btn.innerText = "▶️ Weiter";
         }
         updateTimerDisplay();
     }
 }
 
 function toggleEndHalfOrGame() {
-    // Hier die Logik für Halbzeit / Spielende einfügen
     if (isTimerRunning) toggleGameTimer();
 
     if (currentHalf === 1) {
-        if (confirm("Sicher, dass die 1. Halbzeit beendet werden soll?")) {
+        if (confirm("1. Halbzeit beenden?")) {
             currentHalf = 2;
         }
     } else {
@@ -756,62 +584,49 @@ function toggleEndHalfOrGame() {
 }
 
 function endGame() {
-    if (isTimerRunning) toggleGameTimer();
-
-    if (!confirm("SPIEL BEENDEN? Alle erfassten Aktionen und der Spielstand werden gelöscht. (Statistik vorher exportieren!)")) return;
-
-    // Globale Variablen zurücksetzen
+    if (!confirm("SPIEL BEENDEN? Alle Daten werden gelöscht!")) return;
+    
     spielzeitSekunden = 0;
     currentHalf = 1;
     isTimerRunning = false;
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-    }
+    clearInterval(timerInterval);
+    
     localStorage.removeItem("gameState");
     localStorage.removeItem("aktionen");
-
-    alert("Spiel beendet und Daten zurückgesetzt.");
-
-    renderHistory(); // NEU: Verlaufspanel leeren
+    
+    alert("Spiel beendet. Reset.");
+    renderHistory();
     updateUI();
+    updateScoreboard(); // Reset Score
 }
 
-// Diese Funktion steuert das Ein- und Ausblenden des Overlays
+// ===================================================================
+// 8. SPIELER-VERWALTUNG (MANAGEMENT)
+// ===================================================================
+
 function togglePlayerManagement() {
     const mainApp = document.getElementById("app-container");
     const managementView = document.getElementById("player-management-view");
 
-    // Prüfen, ob das Overlay gerade unsichtbar ist
     if (managementView.style.display === 'none' || managementView.style.display === '') {
-        // -> ÖFFNEN (Verwaltung zeigen)
         mainApp.style.display = 'none';
         managementView.style.display = 'block';
-
-        // WICHTIG: Liste laden, damit man auch wen löschen kann
         renderRosterList();
     } else {
-        // -> SCHLIESSEN (Zurück zum Spiel)
         managementView.style.display = 'none';
         mainApp.style.display = 'flex';
-
-        // WICHTIG: Hauptansicht aktualisieren (falls Namen geändert wurden)
         updateUI();
     }
 }
 
-// Diese Funktion füllt die Liste im "Spieler verwalten"-Overlay
 function renderRosterList() {
     const rosterList = document.getElementById("roster-list");
     if (!rosterList) return;
-
-    rosterList.innerHTML = ''; // Liste leeren
-    sortPlayers(); // Sortieren, damit es ordentlich aussieht
+    rosterList.innerHTML = '';
+    sortPlayers();
 
     SPIELER.forEach(p => {
         const li = document.createElement("li");
-
-        // Nutzt die CSS-Klassen aus dem HTML statt Inline-Styles
         li.innerHTML = `
             <span>#${p.nummer} ${p.name} (${p.position})</span>
             <button onclick="removePlayer('${p.id}')">Löschen</button>
@@ -820,48 +635,312 @@ function renderRosterList() {
     });
 }
 
-// Angepasste Add-Funktion für das Overlay
 function addPlayer() {
-    const name = document.getElementById("input-name").value;
-    const number = parseInt(document.getElementById("input-number").value);
-    const position = document.getElementById("input-position").value;
+    const nameEl = document.getElementById("input-name");
+    const numEl = document.getElementById("input-number");
+    const posEl = document.getElementById("input-position");
+    
+    const name = nameEl.value;
+    const number = parseInt(numEl.value);
 
     if (!name || isNaN(number)) {
         alert("Bitte Name und Nummer angeben.");
         return;
     }
 
-    const newPlayer = {
+    SPIELER.push({
         id: 'p' + Date.now(),
         name: name,
         nummer: number,
-        position: position || "N/A"
-    };
-
-    SPIELER.push(newPlayer);
+        position: posEl.value || "N/A"
+    });
     savePlayers();
 
-    // Inputs leeren
-    document.getElementById("input-name").value = "";
-    document.getElementById("input-number").value = "";
-
-    // Wichtig: Liste im Overlay sofort aktualisieren
+    nameEl.value = "";
+    numEl.value = "";
     renderRosterList();
 }
 
-// Angepasste Remove-Funktion für das Overlay
 function removePlayer(playerId) {
-    if (!confirm("Spieler wirklich löschen?")) return;
-
-    // Robuster Vergleich (String vs String)
+    if (!confirm("Wirklich löschen?")) return;
     SPIELER = SPIELER.filter(p => String(p.id) !== String(playerId));
     savePlayers();
-
-    // Wenn der gelöschte Spieler gerade im Spiel ausgewählt war, Auswahl aufheben
     if (selectedPlayerId && String(selectedPlayerId) === String(playerId)) {
         selectedPlayerId = null;
     }
-
-    // Wichtig: Liste im Overlay sofort aktualisieren
     renderRosterList();
+}
+
+// ===================================================================
+// 9. STATISTIK & CSV EXPORT
+// ===================================================================
+
+function updateScoreboard() {
+    const aktionen = loadActions();
+    let homeGoals = 0;
+    let guestGoals = 0;
+
+    aktionen.forEach(action => {
+        if (action.typ && action.typ.includes('WurfTor')) {
+            const player = SPIELER.find(p => p.id === action.spielerId);
+            if (player) {
+                if (isGuestTeam(player.name)) {
+                    guestGoals++;
+                } else {
+                    homeGoals++;
+                }
+            }
+        }
+    });
+
+    const homeEl = document.getElementById('score-home');
+    const guestEl = document.getElementById('score-guest');
+    if (homeEl && guestEl) {
+        homeEl.innerText = homeGoals;
+        guestEl.innerText = guestGoals;
+    }
+}
+
+function getPlayerSummaryStats() {
+    const aktionen = loadActions();
+    let summary = {};
+
+    SPIELER.forEach(s => {
+        summary[s.id] = { tore: 0, fehler: 0, paraden: 0, gesamtAktionen: 0 };
+    });
+
+    aktionen.forEach(action => {
+        if (!summary[action.spielerId]) return;
+        const type = action.typ;
+        if (type.includes("WurfTor")) summary[action.spielerId].tore++;
+        if (type.includes("Ballverlust")) summary[action.spielerId].fehler++;
+        if (type.includes("Parade")) summary[action.spielerId].paraden++;
+        summary[action.spielerId].gesamtAktionen++;
+    });
+
+    return summary;
+}
+
+function showStats_GetDetailedData() {
+    const aktionen = loadActions();
+    let stats = {};
+    let allActionTypes = [];
+
+    // Alle möglichen Kombinationen sammeln
+    HAUPTAKTIONEN.forEach(h => {
+        if (h.category && UNTERAKTIONEN[h.category]) {
+            UNTERAKTIONEN[h.category].forEach(u => {
+                allActionTypes.push(`${h.typ}_${u.typ}`);
+            });
+        } else {
+            allActionTypes.push(h.typ);
+        }
+    });
+    // + gespeicherte
+    const storedTypes = [...new Set(aktionen.map(a => a.typ))];
+    allActionTypes = [...new Set([...allActionTypes, ...storedTypes])].sort();
+
+    // Init
+    SPIELER.forEach(s => {
+        stats[s.id] = { name: s.name, nummer: s.nummer, aktionen: {} };
+        allActionTypes.forEach(typ => stats[s.id].aktionen[typ] = 0);
+    });
+
+    // Count
+    aktionen.forEach(action => {
+        if (stats[action.spielerId] && stats[action.spielerId].aktionen.hasOwnProperty(action.typ)) {
+            stats[action.spielerId].aktionen[action.typ]++;
+        }
+    });
+
+    return { stats: stats, allActionTypes: allActionTypes };
+}
+
+function showStats() {
+    const data = showStats_GetDetailedData();
+    const stats = data.stats;
+    const allActionTypes = data.allActionTypes;
+
+    let html = "<h2>Statistikübersicht</h2>";
+    html += "<table border='1' cellspacing='0' cellpadding='5' width='100%'>";
+    html += "<thead style='background:#f2f2f2;'><tr><th style='text-align:left;'>Spieler</th>";
+    
+    allActionTypes.forEach(typ => {
+        html += `<th style='font-size:0.8em;'>${typ.replace('_', ' ')}</th>`;
+    });
+    html += "</tr></thead><tbody>";
+
+    Object.values(stats).forEach(p => {
+        html += `<tr><td style='font-weight:bold;'>#${p.nummer} ${p.name}</td>`;
+        allActionTypes.forEach(typ => {
+            const count = p.aktionen[typ] || 0;
+            const style = count > 0 ? "font-weight:bold;" : "color:#ccc;";
+            html += `<td style='text-align:center;${style}'>${count}</td>`;
+        });
+        html += "</tr>";
+    });
+    html += "</tbody></table>";
+
+    const win = window.open('', 'Statistik', 'width=1000,height=600');
+    if (win) {
+        win.document.write(`<html><head><title>Stats</title><style>body{font-family:sans-serif;padding:20px;}table{border-collapse:collapse;}td,th{border:1px solid #ddd;}</style></head><body>${html}<br><button onclick="window.opener.exportAsCSV()">CSV Export</button></body></html>`);
+        win.document.close();
+    }
+}
+
+/**
+ * Berechnet eine vereinfachte Zusammenfassung für den Header der CSV.
+ * Zählt Tore, Fehlwürfe, Assists, Techn. Fehler und Paraden.
+ */
+function getHighLevelStats() {
+    const aktionen = loadActions();
+    let stats = {};
+
+    // 1. Grundstruktur für alle Spieler
+    SPIELER.forEach(s => {
+        stats[s.id] = { 
+            name: s.name, 
+            nummer: s.nummer, 
+            tore: 0, 
+            fehlwuerfe: 0, 
+            assists: 0, 
+            fehler: 0, 
+            paraden: 0 
+        };
+    });
+
+    // 2. Aktionen durchgehen
+    aktionen.forEach(a => {
+        // Falls Spieler gelöscht wurde, ignorieren
+        if (!stats[a.spielerId]) return;
+
+        const typ = a.typ;
+
+        // Tore
+        if (typ.includes("WurfTor")) {
+            stats[a.spielerId].tore++;
+        }
+        // Fehlwürfe (Wurf ohne Tor)
+        else if (typ.includes("WurfOhneTor")) {
+            stats[a.spielerId].fehlwuerfe++;
+        }
+        // Technische Fehler / Ballverlust
+        else if (typ.includes("Ballverlust")) {
+            stats[a.spielerId].fehler++;
+        }
+        // Paraden
+        else if (typ.includes("Parade")) {
+            stats[a.spielerId].paraden++;
+        }
+
+        // Assists zählen (Achtung: Assist-ID steht im Datensatz, nicht als eigene Aktion)
+        if (a.assistId && stats[a.assistId]) {
+            stats[a.assistId].assists++;
+        }
+    });
+
+    return stats;
+}
+
+/**
+ * Der neue, benutzerfreundliche CSV Export
+ */
+function exportAsCSV() {
+    const aktionen = loadActions();
+
+    if (aktionen.length === 0) {
+        alert("Keine Daten zum Exportieren.");
+        return;
+    }
+
+    // CSV BOM für Excel (damit Umlaute richtig angezeigt werden)
+    let csv = "\uFEFF"; 
+
+    // ==========================================
+    // TEIL 1: MANNSCHAFTS-ÜBERSICHT (SUMMARY)
+    // ==========================================
+    csv += "=== SPIELER STATISTIK ===\n";
+    csv += "Nr.,Name,Tore,Assists,Fehlwürfe,Tech. Fehler,Paraden\n";
+
+    const summary = getHighLevelStats();
+
+    // Sortieren nach Toren (absteigend) für bessere Übersicht
+    const sortedPlayerIds = Object.keys(summary).sort((a, b) => {
+        return summary[b].tore - summary[a].tore; 
+    });
+
+    sortedPlayerIds.forEach(id => {
+        const s = summary[id];
+        // CSV-Zeile bauen
+        csv += `${s.nummer},"${s.name}",${s.tore},${s.assists},${s.fehlwuerfe},${s.fehler},${s.paraden}\n`;
+    });
+
+    csv += "\n"; // Leerzeile zur Trennung
+
+    // ==========================================
+    // TEIL 2: SPIELVERLAUF (LOG)
+    // ==========================================
+    csv += "=== SPIELVERLAUF ===\n";
+    csv += "Halbzeit,Spielzeit,Spielstand,Nr.,Name,Aktion,Detail,Assist\n";
+
+    // Chronologisch sortieren (Alt -> Neu)
+    const sortedActions = [...aktionen].sort((a, b) => a.timestamp - b.timestamp);
+
+    let homeGoals = 0;
+    let guestGoals = 0;
+
+    sortedActions.forEach(a => {
+        // 1. Spielstand berechnen (Laufender Score)
+        const player = SPIELER.find(p => p.id === a.spielerId);
+        const pName = player ? player.name : "Unbekannt";
+        const pNum = player ? player.nummer : "?";
+        
+        let isGoal = false;
+
+        if (a.typ && a.typ.includes("WurfTor")) {
+            isGoal = true;
+            if (isGuestTeam(pName)) {
+                guestGoals++;
+            } else {
+                homeGoals++;
+            }
+        }
+
+        // 2. Zeit formatieren (mm:ss)
+        // Wir nutzen deine bestehende formatTime Funktion, falls verfügbar, sonst Berechnung
+        let timeString = "00:00";
+        if (typeof formatTime === "function") {
+            // Wir müssen sicherstellen, dass a.spielzeit eine Zahl ist
+            timeString = formatTime(parseInt(a.spielzeit));
+        }
+
+        // 3. Assist Name holen
+        const assistPlayer = a.assistId ? SPIELER.find(p => p.id === a.assistId) : null;
+        const assistName = assistPlayer ? assistPlayer.name : "";
+
+        // 4. Label bereinigen (Emoji entfernen für Excel?) 
+        // Optional: Wir lassen die Emojis drin, Excel kann das meistens. 
+        // Falls du sie weg haben willst: a.label.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '').trim();
+        const cleanLabel = a.label; 
+
+        // 5. Kategorie extrahieren (z.B. "Tor" statt "WurfTor_Aussen")
+        // Wir nehmen einfach den Label-Text, der ist meist am besten lesbar.
+        
+        // Zeile schreiben
+        // Format: HZ, Zeit, Score, Nr, Name, Aktion, Detail, Assist
+        csv += `${a.halbzeit},${timeString},"${homeGoals}:${guestGoals}",${pNum},"${pName}","${a.category}","${cleanLabel}","${assistName}"\n`;
+    });
+
+    // ==========================================
+    // DOWNLOAD STARTEN
+    // ==========================================
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `handball_match_report_${new Date().toISOString().slice(0,10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
