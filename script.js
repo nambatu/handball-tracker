@@ -186,7 +186,7 @@ function executeSaveAction(player, actionType, actionLabel, category, assistId) 
     saveActions(aktionen);
 
     // UI Updates
-    showVisualFeedback(player.id, actionLabel);
+    //showVisualFeedback(player.id, actionLabel);
     updateActionCount();
     renderHistory();
     updateScoreboard();
