@@ -30,7 +30,8 @@ function initializeWhatsAppClient() {
     waClient = new Client({
         authStrategy: new LocalAuth(),
         puppeteer: {
-            executablePath: '/usr/bin/chromium-browser',
+            headless: true,
+            executablePath: '/usr/bin/chromium',
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         }
     });
