@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handball Ticker & Statistik</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <header>
+        <div id="game-info">
+            <div class="scoreboard">
+                <span id="team-name">HEIM</span>
+                <div class="score-container">
+                    <span id="score-home" class="score-number">0</span>
+                    <span class="score-divider">:</span>
+                    <span id="score-guest" class="score-number">0</span>
+                </div>
+                <span id="guest-name">GAST</span>
+            </div>
+            <div class="timer-display">
+                Spielzeit: <span id="game-timer">00:00</span>
+            </div>
+        </div>
+
+        <div id="controls">
+            <button onclick="window.Timer.toggleGameTimer()" id="timer-btn" class="control-btn">▶️ Start</button>
+            <button onclick="window.Timer.toggleEndHalfOrGame()" id="half-end-btn" class="control-btn">⏸️
+                Halbzeit</button>
+            <button onclick="window.Stats.showStats()" class="control-btn">📊 Statistik</button>
+            <button onclick="window.UI.togglePlayerManagement()" class="control-btn">👥 Spieler</button>
+            <button onclick="openWhatsAppModal()" class="control-btn" id="wa-connect-btn">💬 WA Connect</button>
+        </div>
+    </header>
+
+    <main id="app-container">
+
+        <section id="player-list">
+            <h3>Lade Spieler...</h3>
+        </section>
+
+        <section id="action-panel">
+            <h3>Aktion (Nach Spieler-Wahl)</h3>
+        </section>
+
+        <section id="history-panel">
+            <h3>Verlauf</h3>
+            <div id="history-content">
+            </div>
+        </section>
+
+    </main>
+
+    <footer>
+        <button onclick="window.UI.undoLastAction()" class="undo-btn">↩️ Letzte Aktion rückgängig</button>
+        <p>Gesamt Aktionen: <span id="action-count">0</span></p>
+    </footer>
+
+    <div id="feedback-overlay"></div>
+
+    <div id="assist-overlay" class="overlay-view" style="display:none;">
+        <div class="overlay-content">
+            <h2>Wer hat den Pass gegeben?</h2>
+            <div id="assist-list" class="player-grid">
+            </div>
+            <div class="overlay-actions">
+                <button onclick="window.UI.confirmAssist(null)" class="cancel-btn">Kein Assist / Einzelaktion</button>
+                <button onclick="window.UI.closeAssistOverlay()" class="close-btn">Abbrechen</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="player-management-view" class="overlay-view" style="display:none;">
+        <div class="overlay-content management-content">
+            <h2>Spielerverwaltung</h2>
+
+            <div id="add-player-form">
+                <h3>Neuen Spieler hinzufügen</h3>
+                <div class="form-row">
+                    <input type="text" id="input-name" placeholder="Name" required>
+                    <input type="number" id="input-number" placeholder="Nr." min="1" required>
+                    <select id="input-position">
+                        <option value="TW">Torwart (TW)</option>
+                        <option value="LA">Linksaußen (LA)</option>
+                        <option value="RL">Rückraum Links (RL)</option>
+                        <option value="M">Mitte (RM)</option>
+                        <option value="RR">Rückraum Rechts (RR)</option>
+                        <option value="RA">Rechtsaußen (RA)</option>
+                        <option value="K">Kreis (K)</option>
+                        <option value="N/A">N/A</option>
+                    </select>
+                    <button onclick="window.UI.addPlayer()" class="add-btn">Hinzufügen</button>
+                </div>
+            </div>
+
+            <hr>
+
+            <div id="current-roster">
+                <h3>Aktueller Kader</h3>
+                <ul id="roster-list">
+                </ul>
+            </div>
+
+            <button onclick="window.UI.togglePlayerManagement()" class="back-btn">Zurück zum Spiel</button>
+        </div>
+    </div>
+
+    <!-- WhatsApp Setup Modal -->
+    <div id="wa-setup-view" class="overlay-view" style="display:none;">
+        <div class="overlay-content management-content">
+            <h2>WhatsApp Bot Status</h2>
+            <div id="wa-status-box"
+                style="padding: 15px; margin-bottom: 20px; text-align: center; border: 1px solid #ccc; border-radius: 8px;">
+                <p>Status: <strong id="wa-status-text">Prüfe Verbindung...</strong></p>
+                <p id="wa-help-text" style="font-size: 0.9em; color: #666; margin-top: 10px;">
+                    Der WhatsApp Bot läuft im Hintergrund. Authentifizierung und Gruppenauswahl erfolgen über den Server
+                    Administrator.
+                </p>
+            </div>
+
+            <div id="wa-start-form" style="display:none; text-align: center; margin-bottom: 20px;">
+                <p>Bot ist aktuell gestoppt. Bitte Authentifizieren um den Bot zu starten:</p>
+                <input type="password" id="wa-admin-password" placeholder="Admin Passwort"
+                    style="padding: 10px; margin-bottom: 10px; width: 80%;">
+                <br>
+                <button onclick="startWhatsAppBot()" class="add-btn">Bot Starten</button>
+                <p id="wa-start-msg" style="color: red; margin-top: 10px;"></p>
+            </div>
+
+            <button onclick="closeWhatsAppModal()" class="back-btn" style="margin-top:20px;">Schließen</button>
+        </div>
+    </div>
+
+    <!-- Modulare Scripts laden. Reihenfolge beachten! -->
+    <script src="js/store.js"></script>
+    <script src="js/timer.js"></script>
+    <script src="js/stats.js"></script>
+    <script src="js/whatsapp.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+
+    <!-- Modal Logik Inline -->
+    <script>
+        function openWhatsAppModal() {
+            document.getElementById('wa-setup-view').style.display = 'flex';
+            checkBackendWhatsAppStatus();
+        }
+
+        function closeWhatsAppModal() {
+            document.getElementById('wa-setup-view').style.display = 'none';
+        }
+
+        async function checkBackendWhatsAppStatus() {
+            const statusText = document.getElementById('wa-status-text');
+            const waBtn = document.getElementById('wa-connect-btn');
+            const startForm = document.getElementById('wa-start-form');
+
+            try {
+                // Returns { authenticated: true/false, running: true/false }
+                const status = await window.WhatsAppMod.checkStatus();
+                // To keep backward compatibility with existing checkStatus returning boolean
+                // we'll fetch the full object again, but for now let's just use the boolean. 
+                // Wait, checkStatus needs returning the full object to know if it's running but not authenticated.
+                // Let's assume we update checkStatus below or in whatsapp.js... 
+            } catch (e) { }
+            // Actually, let's fetch directly here for complete status info
+            try {
+                const res = await fetch('/api/whatsapp/status');
+                const data = await res.json();
+
+                if (data.authenticated) {
+                    statusText.innerText = "🟢 Verbunden & Online";
+                    statusText.style.color = "green";
+                    waBtn.innerText = "🟢 WA Bot Online";
+                    startForm.style.display = "none";
+                    if (window.qrPollInterval) clearInterval(window.qrPollInterval);
+                } else if (data.running) {
+                    statusText.innerText = "🟡 Startet / QR Scan benötigt (Siehe Server Console)";
+                    statusText.style.color = "orange";
+                    waBtn.innerText = "🟡 WA Bot Startet...";
+                    startForm.style.display = "none";
+                    if (!window.qrPollInterval) {
+                        window.qrPollInterval = setInterval(checkBackendWhatsAppStatus, 3000);
+                    }
+                } else {
+                    statusText.innerText = "🔴 Gestoppt";
+                    statusText.style.color = "red";
+                    waBtn.innerText = "🔴 WA Bot Offline";
+                    startForm.style.display = "block";
+                    if (window.qrPollInterval) clearInterval(window.qrPollInterval);
+                }
+            } catch (e) {
+                statusText.innerText = "Backend Server nicht erreichbar!";
+                statusText.style.color = "red";
+                console.error(e);
+            }
+        }
+
+        async function startWhatsAppBot() {
+            const pwd = document.getElementById('wa-admin-password').value;
+            const msgEl = document.getElementById('wa-start-msg');
+            msgEl.innerText = "Starte...";
+            msgEl.style.color = "black";
+
+            const result = await window.WhatsAppMod.startBot(pwd);
+            if (result.success) {
+                msgEl.innerText = "Bot wird gestartet...";
+                msgEl.style.color = "green";
+                document.getElementById('wa-admin-password').value = "";
+                checkBackendWhatsAppStatus(); // Will trigger the 🟡 starting state and polling
+            } else {
+                msgEl.style.color = "red";
+                msgEl.innerText = result.message || "Fehler beim Starten";
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,505 @@
+/* =========================================
+   1. GRUNDEINSTELLUNGEN & VARIABLEN
+   ========================================= */
+:root {
+    --bg-color: #f4f4f9;
+    --header-bg: #222;
+    --text-color: #333;
+    --accent-color: #00796b;  /* Teal */
+    --highlight-color: #ffc107; /* Gelb/Gold für Auswahl */
+    --danger-color: #d32f2f;
+    --success-color: #388e3c;
+    
+    /* Button Farben */
+    --btn-neutral: #f5f5f5;
+    --btn-blue: #e3f2fd;
+    --btn-green: #e8f5e9;
+    --btn-red: #ffebee;
+}
+
+* {
+    box-sizing: border-box; /* WICHTIG: Padding vergrößert Elemente nicht ungewollt */
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+}
+
+/* =========================================
+   2. HEADER & SCOREBOARD
+   ========================================= */
+header, footer {
+    background-color: var(--header-bg);
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; /* Damit es auf Handy umbricht */
+    gap: 10px;
+}
+
+#game-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.scoreboard {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: rgba(255,255,255,0.1);
+    padding: 5px 15px;
+    border-radius: 8px;
+    margin-bottom: 5px;
+}
+
+#team-name, #guest-name {
+    font-weight: bold;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+}
+
+#guest-name { color: #aaa; }
+
+.score-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.score-number {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #4CAF50; /* Score Grün */
+    background: #000;
+    padding: 2px 12px;
+    border-radius: 4px;
+    min-width: 45px;
+    text-align: center;
+    font-family: monospace;
+}
+
+.timer-display {
+    font-size: 0.9rem;
+    color: #ccc;
+}
+
+/* Header Buttons */
+#controls {
+    display: flex;
+    gap: 8px;
+}
+
+.control-btn {
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    background: #444;
+    color: white;
+    border: 1px solid #666;
+    border-radius: 4px;
+}
+
+.control-btn:hover { background: #555; }
+
+/* =========================================
+   3. HAUPTLAYOUT (3 SPALTEN)
+   ========================================= */
+#app-container {
+    display: flex;
+    flex: 1; /* Füllt den Rest der Höhe */
+    padding: 10px;
+    gap: 10px;
+    height: calc(100vh - 140px); /* Höhe minus Header/Footer */
+    overflow: hidden; /* Scrollen passiert in den Sections */
+}
+
+section {
+    background-color: #fff;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Wichtig für intermes Scrollen */
+}
+
+section h3 {
+    margin: 0;
+    padding: 10px;
+    background: #eee;
+    font-size: 1rem;
+    border-bottom: 1px solid #ccc;
+    text-align: center;
+}
+
+/* Spalte 1: Spieler */
+#player-list {
+    flex: 1.2; /* Breite Gewichtung */
+    overflow-y: auto;
+}
+
+/* Spalte 2: Aktionen (Der wichtigste Teil) */
+#action-panel {
+    flex: 2.5; /* Breiter als der Rest */
+    padding: 10px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 10px;
+    overflow-y: auto;
+}
+
+/* Spalte 3: Verlauf */
+#history-panel {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* =========================================
+   4. BUTTONS & UI ELEMENTE
+   ========================================= */
+
+/* Spieler Buttons */
+.player-button {
+    padding: 12px 10px;
+    margin: 5px 10px;
+    background-color: var(--btn-blue);
+    border: 1px solid #b3e5fc;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+}
+
+.player-button:hover { background-color: #b3e5fc; }
+
+.player-button.selected-player {
+    background-color: #e1f5fe;
+    border: 2px solid #0288d1;
+    box-shadow: 0 0 5px rgba(2, 136, 209, 0.3);
+}
+
+.player-info { font-weight: bold; }
+.player-number { display: inline-block; width: 30px; color: #555; }
+
+/* Stats Mini-Icons im Spielerbutton */
+.player-stats span { font-size: 0.85em; margin-left: 5px; font-weight: bold; }
+.stat-item.green { color: var(--success-color); }
+.stat-item.red { color: var(--danger-color); }
+.stat-item.yellow { color: #f9a825; }
+
+/* Aktions Buttons */
+.action-button {
+    flex: 1 0 45%; /* 2 Spalten Layout */
+    min-height: 80px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.action-button:active { transform: scale(0.98); }
+
+/* Aktions-Farben */
+.action-button.neutral { background: var(--btn-neutral); color: #333; }
+.action-button.green { background: var(--btn-green); color: #2e7d32; border-color: #a5d6a7; }
+.action-button.red { background: var(--btn-red); color: #c62828; border-color: #ef9a9a; }
+.action-button.yellow { background: #fffde7; color: #f9a825; border-color: #fff59d; }
+.action-button.sub-blue { background: var(--btn-blue); color: #1565c0; border-color: #90caf9; }
+
+/* Ausgewählte Aktion (Stark hervorgehoben) */
+.action-button.selected-action {
+    border: 4px solid var(--highlight-color);
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    transform: scale(1.02);
+    z-index: 10;
+}
+
+/* Zurück Button */
+.action-button.back-button {
+    flex-basis: 100%; /* Volle Breite */
+    background: #ddd;
+    color: #333;
+    min-height: 50px;
+    margin-bottom: 10px;
+}
+
+/* =========================================
+   5. VERLAUF (HISTORY)
+   ========================================= */
+.history-entry {
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    font-size: 0.9rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.history-time { font-size: 0.8em; color: #888; margin-bottom: 2px; }
+.history-player { font-weight: bold; color: var(--accent-color); }
+.history-action { color: #444; }
+
+/* =========================================
+   6. OVERLAYS & MODALS
+   ========================================= */
+.overlay-view {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.85);
+    z-index: 2000;
+    display: flex; /* Flexbox fürs Zentrieren */
+    justify-content: center;
+    align-items: center;
+}
+
+.overlay-content {
+    background: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    color: #333;
+    text-align: center;
+}
+
+.management-content {
+    text-align: left;
+}
+
+/* Assist Grid */
+.player-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.player-grid button {
+    padding: 15px;
+    min-width: 80px;
+    border: 1px solid #ccc;
+    background: #f5f5f5;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.player-grid button:hover {
+    background: var(--accent-color);
+    color: white;
+}
+
+/* Formulare (Spieler hinzufügen) */
+.form-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+input, select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.add-btn { background: var(--accent-color); color: white; border: none; cursor: pointer; padding: 8px 15px; border-radius: 4px; }
+.cancel-btn { background: var(--danger-color); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+.close-btn { background: #777; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+
+/* Liste Löschen Buttons */
+#roster-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+}
+#roster-list button {
+    background: var(--danger-color);
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Visuelles Feedback (Flash) */
+#feedback-overlay {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 150, 0, 0.9);
+    color: white;
+    padding: 30px 50px;
+    border-radius: 15px;
+    font-size: 2rem;
+    font-weight: bold;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 3000;
+}
+#feedback-overlay.show { opacity: 1; }
+
+/* =========================================
+   7. UTILITIES
+   ========================================= */
+.sort-options {
+    padding: 0 10px;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+.sort-btn {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    background: transparent;
+    cursor: pointer;
+}
+.active-sort { background: #333; color: white; border-color: #333; }
+
+.undo-btn {
+    background: #555;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.end-game {
+    background-color: var(--danger-color) !important;
+    border-color: var(--danger-color) !important;
+}
+
+/* =========================================
+   8. MOBILE & TABLET OPTIMIERUNG
+   ========================================= */
+
+/* TABLETS (Hochformat) & KLEINE LAPTOPS (bis 1024px) */
+@media (max-width: 1024px) {
+    /* Layout wird 2-spaltig: Verlauf rutscht nach unten */
+    #app-container {
+        flex-wrap: wrap; 
+        overflow-y: auto; /* Container darf scrollen */
+    }
+
+    #player-list {
+        flex: 1 1 40%; /* Spieler links */
+        height: 50vh; /* Feste Höhe */
+    }
+
+    #action-panel {
+        flex: 1 1 55%; /* Aktionen rechts */
+        height: 50vh;
+    }
+
+    #history-panel {
+        flex: 1 1 100%; /* Verlauf nimmt volle Breite unten ein */
+        height: 300px;
+        order: 3; /* Erzwingt Position ganz unten */
+    }
+}
+
+/* SMARTPHONES (bis 768px) */
+@media (max-width: 768px) {
+    
+    /* 1. Generelles Layout: Alles untereinander (Stapel) */
+    #app-container {
+        flex-direction: column;
+        height: auto; /* Höhe automatisch an Inhalt anpassen */
+        overflow-y: visible; /* Scrollen auf der Seite erlaubt */
+    }
+
+    /* 2. Header kompakter machen */
+    header {
+        flex-direction: column; /* Elemente untereinander */
+        gap: 5px;
+        padding: 5px;
+    }
+
+    .scoreboard {
+        width: 100%;
+        justify-content: center;
+        margin-bottom: 0;
+    }
+
+    #controls {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .control-btn {
+        flex: 1; /* Buttons teilen sich den Platz */
+        padding: 10px 5px;
+        font-size: 0.8rem;
+    }
+
+    /* 3. Spieler-Bereich: Oben fixiert, scrollbar */
+    #player-list {
+        flex: none; /* Keine flexible Höhe */
+        height: 250px; /* Feste Höhe, damit man noch Actions sieht */
+        width: 100%;
+        order: 1;
+        border-bottom: 2px solid #ccc;
+    }
+    
+    /* Spieler-Buttons kompakter und als Grid */
+    .player-button {
+        padding: 8px;
+        margin: 4px 0;
+    }
+
+    /* 4. Aktions-Bereich: Groß und griffbereit */
+    #action-panel {
+        flex: none;
+        width: 100%;
+        order: 2;
+        padding-bottom: 50px; /* Platz zum Scrollen */
+    }
+
+    .action-button {
+        min-height: 60px; /* Etwas flacher auf Handy */
+        font-size: 1rem;
+    }
+
+    /* 5. Verlauf auf Handy ausblenden (oder ganz nach unten) */
+    /* Wir verstecken ihn standardmäßig, um Platz zu sparen. 
+       Man kann ihn über den "Statistik"-Button eh sehen. */
+    #history-panel {
+        display: none; 
+    }
+
+    /* 6. Overlays (Assist/Verwaltung) Fullscreen */
+    .overlay-content {
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        max-height: 100vh;
+    }
+    
+    /* Buttons im Assist-Overlay größer */
+    #assist-list button {
+        width: 45%; /* 2 pro Reihe */
+        padding: 20px;
+    }
+}
