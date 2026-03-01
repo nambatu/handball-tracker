@@ -30,7 +30,7 @@ function initializeWhatsAppClient() {
     waClient = new Client({
         authStrategy: new LocalAuth(),
         puppeteer: {
-            executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+            executablePath: '/usr/bin/chromium-browser',
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         }
     });
