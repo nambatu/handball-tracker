@@ -32,7 +32,15 @@ function initializeWhatsAppClient() {
         puppeteer: {
             headless: true,
             executablePath: '/usr/bin/chromium',
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage', // Helps with Pi memory issues
+                '--disable-gpu',
+                '--no-zygote',
+                '--single-process'
+            ],
+            timeout: 60000 // Give the Pi 60 seconds to boot the browser instead of the default 30
         }
     });
 
