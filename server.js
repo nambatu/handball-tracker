@@ -105,35 +105,35 @@ function initializeWhatsAppClient() {
 // API ENDPOINTS
 // ==========================================
 
-// 1. Get Authentication Status
-app.get('/api/whatsapp/status', (req, res) => {
+// Middleware for password protection
+function requireAdminPassword(req, res, next) {
+    const authHeader = req.headers.authorization;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (!adminPassword) {
+        return res.status(500).json({ error: 'Server misconfiguration: ADMIN_PASSWORD not set' });
+    }
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
+    }
+
+    const providedPassword = authHeader.split(' ')[1];
+
+    if (providedPassword !== adminPassword) {
+        return res.status(401).json({ error: 'Unauthorized: Incorrect password' });
+    }
+
+    next();
+}
+
+// 1. Get Authentication Status (Protected)
+app.get('/api/whatsapp/status', requireAdminPassword, (req, res) => {
     res.json({ authenticated: isAuthenticated, running: !!waClient });
 });
 
-// 1b. Start WhatsApp Client
-app.post('/api/whatsapp/start', (req, res) => {
-    const { password } = req.body;
-    const adminPassword = process.env.ADMIN_PASSWORD;
-
-    if (!adminPassword || password !== adminPassword) {
-        return res.status(401).json({ error: 'Invalid password' });
-    }
-
-    if (waClient || isInitializing) {
-        return res.json({ success: true, message: 'Bot is already running or starting' });
-    }
-
-    try {
-        initializeWhatsAppClient();
-        res.json({ success: true, message: 'Bot initialization started' });
-    } catch (err) {
-        console.error('Error starting bot:', err);
-        res.status(500).json({ error: 'Failed to start bot' });
-    }
-});
-
-// 2. Send Message to the Hardcoded Bot Group
-app.post('/api/whatsapp/send', async (req, res) => {
+// 2. Send Message to the Hardcoded Bot Group (Protected)
+app.post('/api/whatsapp/send', requireAdminPassword, async (req, res) => {
     if (!isAuthenticated || !waClient) {
         return res.status(401).json({ error: 'WhatsApp client is not authenticated' });
     }
@@ -163,6 +163,9 @@ app.post('/api/whatsapp/send', async (req, res) => {
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+// Start the headless bot immediately on boot
+initializeWhatsAppClient();
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

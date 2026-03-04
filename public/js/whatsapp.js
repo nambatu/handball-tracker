@@ -4,34 +4,15 @@
 
 const API_BASE = '/api/whatsapp';
 
-async function checkStatus() {
-    try {
-        const res = await fetch(`${API_BASE}/status`);
-        const data = await res.json();
-        return data.authenticated;
-    } catch (err) {
-        console.error("Error checking WhatsApp status:", err);
-        return false;
-    }
-}
-
-async function startBot(password) {
-    try {
-        const res = await fetch(`${API_BASE}/start`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password })
-        });
-        const data = await res.json();
-        return { success: res.ok, message: data.message || data.error };
-    } catch (err) {
-        console.error("Error starting bot:", err);
-        return { success: false, message: "Network error" };
-    }
+function getAuthHeader() {
+    const pwd = sessionStorage.getItem('wa_admin_password');
+    return pwd ? `Bearer ${pwd}` : null;
 }
 
 // Function that handles broadcasting an event to WhatsApp via backend
 async function broadcastEvent(action, player, assistId, scoreString) {
+    const authHeader = getAuthHeader();
+    if (!authHeader) return; // Silent return if not logged in
 
     let timerStr = window.Timer ? window.Timer.formatTime(action.spielzeit) : "";
     let messageStr = "";
@@ -62,7 +43,10 @@ async function broadcastEvent(action, player, assistId, scoreString) {
     try {
         const res = await fetch(`${API_BASE}/send`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': authHeader
+            },
             body: JSON.stringify({
                 message: messageStr
             })
@@ -77,7 +61,6 @@ async function broadcastEvent(action, player, assistId, scoreString) {
 }
 
 window.WhatsAppMod = {
-    checkStatus,
-    startBot,
-    broadcastEvent
+    broadcastEvent,
+    getAuthHeader
 };
