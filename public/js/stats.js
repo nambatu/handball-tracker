@@ -201,9 +201,125 @@ function exportAsCSV() {
     document.body.removeChild(link);
 }
 
+async function openArchiveModal() {
+    document.getElementById('archive-view').style.display = 'flex';
+    const list = document.getElementById('archive-list');
+    list.innerHTML = '<li><div style="padding: 15px; text-align: center;">Lade Archive...</div></li>';
+    try {
+        const res = await fetch('/api/archives');
+        const archives = await res.json();
+        if (archives.length === 0) {
+            list.innerHTML = '<li><div style="padding: 15px; text-align: center;">Keine archivierten Spiele gefunden.</div></li>';
+            return;
+        }
+        list.innerHTML = '';
+        archives.forEach(a => {
+            const li = document.createElement('li');
+            li.style.display = 'flex';
+            li.style.justifyContent = 'space-between';
+            li.style.alignItems = 'center';
+            li.style.padding = '12px 15px';
+            li.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+            li.style.background = 'rgba(0,0,0,0.2)';
+            li.style.marginBottom = '5px';
+            li.style.borderRadius = '8px';
+            
+            const d = new Date(a.date);
+            const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            li.innerHTML = `
+                <div>
+                    <strong style="font-size: 1.1rem;">${dateStr}</strong>
+                    <div style="font-size: 0.85em; color: var(--text-muted);">${a.filename}</div>
+                </div>
+                <button class="add-btn" onclick="window.Stats.downloadArchive('${a.filename}')">CSV Export</button>
+            `;
+            list.appendChild(li);
+        });
+    } catch(e) {
+        list.innerHTML = '<li>Fehler beim Laden.</li>';
+    }
+}
+
+async function downloadArchive(filename) {
+    try {
+        const res = await fetch('/api/archive/' + filename);
+        const data = await res.json();
+        const archSpieler = data.spieler || [];
+        const archAktionen = data.aktionen || [];
+
+        let csv = "\uFEFF";
+        csv += "=== SPIELER STATISTIK ===\n";
+        csv += "Nr.,Name,Tore,Assists,Fehlwürfe,Tech. Fehler,Paraden\n";
+
+        let stats = {};
+        archSpieler.forEach(s => {
+            stats[s.id] = { name: s.name, nummer: s.nummer, tore: 0, fehlwuerfe: 0, assists: 0, fehler: 0, paraden: 0 };
+        });
+
+        archAktionen.forEach(a => {
+            if (!stats[a.spielerId]) return;
+            const typ = a.typ || "";
+            if (typ.includes("WurfTor")) stats[a.spielerId].tore++;
+            else if (typ.includes("WurfOhneTor")) stats[a.spielerId].fehlwuerfe++;
+            else if (typ.includes("Ballverlust")) stats[a.spielerId].fehler++;
+            else if (typ.includes("Parade")) stats[a.spielerId].paraden++;
+            if (a.assistId && stats[a.assistId]) stats[a.assistId].assists++;
+        });
+
+        const sortedPlayerIds = Object.keys(stats).sort((a, b) => stats[b].tore - stats[a].tore);
+        sortedPlayerIds.forEach(id => {
+            const s = stats[id];
+            csv += `${s.nummer},"${s.name}",${s.tore},${s.assists},${s.fehlwuerfe},${s.fehler},${s.paraden}\n`;
+        });
+
+        csv += "\n=== SPIELVERLAUF ===\n";
+        csv += "Halbzeit,Spielzeit,Spielstand,Nr.,Name,Aktion,Detail,Assist\n";
+
+        const sortedActions = [...archAktionen].sort((a, b) => a.timestamp - b.timestamp);
+        let homeGoals = 0, guestGoals = 0;
+
+        sortedActions.forEach(a => {
+            const player = archSpieler.find(p => p.id === a.spielerId);
+            const pName = player ? player.name : "Unbekannt";
+            const pNum = player ? player.nummer : "?";
+
+            if (a.typ && a.typ.includes("WurfTor")) {
+                if (window.Store.isGuestTeam(pName)) guestGoals++;
+                else homeGoals++;
+            }
+
+            let timeString = "00:00";
+            if (window.Timer && typeof window.Timer.formatTime === "function") {
+                timeString = window.Timer.formatTime(parseInt(a.spielzeit));
+            }
+
+            const assistPlayer = a.assistId ? archSpieler.find(p => p.id === a.assistId) : null;
+            const assistName = assistPlayer ? assistPlayer.name : "";
+
+            csv += `${a.halbzeit},${timeString},"${homeGoals}:${guestGoals}",${pNum},"${pName}","${a.category}","${a.label}","${assistName}"\n`;
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `${filename.replace('.json', '.csv')}`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch(e) {
+        alert("Fehler beim Herunterladen des Archivs.");
+    }
+}
+
 window.Stats = {
     getPlayerSummaryStats,
     showStats,
     exportAsCSV,
-    getHighLevelStats
+    getHighLevelStats,
+    downloadArchive
 };
+
+window.openArchiveModal = openArchiveModal;

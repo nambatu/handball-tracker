@@ -87,9 +87,37 @@ function toggleEndHalfOrGame() {
     if (window.UI) window.UI.updateUI();
 }
 
-function endGame() {
-    if (!confirm("SPIEL BEENDEN? Alle Daten werden gelöscht!")) return;
+async function endGame() {
+    if (!confirm("SPIEL BEENDEN? Das aktuelle Spiel wird ins Archiv verschoben und hier zurückgesetzt.")) return;
 
+    try {
+        const spieler = window.Store.getSPIELER();
+        const aktionen = window.Store.loadActions();
+        
+        await fetch('/api/archive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ spieler, aktionen })
+        });
+
+        window.Store.saveActions([]); // Leeres Array speichern
+        window.UI.renderHistory();
+
+        const homeScoreEl = document.getElementById("score-home");
+        const guestScoreEl = document.getElementById("score-guest");
+        if (homeScoreEl) homeScoreEl.innerText = "0";
+        if (guestScoreEl) guestScoreEl.innerText = "0";
+
+        alert("Spiel erfolgreich ins Archiv verschoben und zurückgesetzt.");
+        
+        if (window.UI && typeof window.UI.renderHistory === "function") {
+            window.UI.renderHistory();
+        }
+    } catch(e) {
+        console.error("Failed to archive game", e);
+        alert("Fehler beim Archivieren!");
+    }
+    
     spielzeitSekunden = 0;
     currentHalf = 1;
     isTimerRunning = false;
@@ -97,11 +125,8 @@ function endGame() {
 
     localStorage.removeItem("gameState");
     localStorage.removeItem("aktionen");
-    localStorage.removeItem("whatsapp_group"); // Also clear group selection if implemented
+    localStorage.removeItem("whatsapp_group"); 
 
-    alert("Spiel beendet. Reset.");
-
-    // Will need to notify UI module to update
     if (window.UI) {
         window.UI.renderHistory();
         window.UI.updateUI();

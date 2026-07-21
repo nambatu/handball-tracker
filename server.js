@@ -7,8 +7,12 @@ const fs = require('fs');
 const QRCode = require('qrcode');
 
 const STATE_FILE = path.join(__dirname, 'data', 'state.json');
+const ARCHIVE_DIR = path.join(__dirname, 'data', 'archives');
 if (!fs.existsSync(path.join(__dirname, 'data'))) {
     fs.mkdirSync(path.join(__dirname, 'data'));
+}
+if (!fs.existsSync(ARCHIVE_DIR)) {
+    fs.mkdirSync(ARCHIVE_DIR);
 }
 
 
@@ -202,6 +206,53 @@ app.post('/api/state', (req, res) => {
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Failed to write state' });
+    }
+});
+
+// ==========================================
+// ARCHIVE API
+// ==========================================
+
+app.get('/api/archives', (req, res) => {
+    try {
+        if (!fs.existsSync(ARCHIVE_DIR)) {
+            return res.json([]);
+        }
+        const files = fs.readdirSync(ARCHIVE_DIR);
+        const archives = files.filter(f => f.endsWith('.json')).map(f => {
+            const stat = fs.statSync(path.join(ARCHIVE_DIR, f));
+            return { filename: f, date: stat.mtime };
+        });
+        archives.sort((a,b) => b.date - a.date);
+        res.json(archives);
+    } catch(e) {
+        res.status(500).json({ error: 'Failed to list archives' });
+    }
+});
+
+app.post('/api/archive', (req, res) => {
+    try {
+        const { spieler, aktionen } = req.body;
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `game-${timestamp}.json`;
+        fs.writeFileSync(path.join(ARCHIVE_DIR, filename), JSON.stringify({ spieler, aktionen }, null, 2));
+        res.json({ success: true, filename });
+    } catch(e) {
+        res.status(500).json({ error: 'Failed to archive game' });
+    }
+});
+
+app.get('/api/archive/:filename', (req, res) => {
+    try {
+        const filepath = path.join(ARCHIVE_DIR, req.params.filename);
+        if (fs.existsSync(filepath)) {
+            const data = fs.readFileSync(filepath, 'utf8');
+            res.json(JSON.parse(data));
+        } else {
+            res.status(404).json({ error: 'Archive not found' });
+        }
+    } catch(e) {
+        res.status(500).json({ error: 'Failed to read archive' });
     }
 });
 
