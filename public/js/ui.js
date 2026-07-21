@@ -530,6 +530,32 @@ async function saveCurrentRosterAsTeam() {
     await populateTeamsDropdown();
 }
 
+async function updateSelectedTeam() {
+    const select = document.getElementById('team-select');
+    const teamId = select.value;
+    if (!teamId) {
+        alert("Bitte zuerst ein Team aus dem Dropdown auswählen.");
+        return;
+    }
+    
+    const teams = await window.Store.getTeams();
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+
+    const players = window.Store.getSPIELER();
+    if (players.length === 0) {
+        alert("Der aktuelle Kader ist leer!");
+        return;
+    }
+
+    if (!confirm(`Möchtest du das gespeicherte Team "${team.name}" wirklich mit dem aktuellen Kader überschreiben?`)) {
+        return;
+    }
+
+    await window.Store.saveTeam({ id: team.id, name: team.name, players });
+    alert(`Team "${team.name}" erfolgreich aktualisiert!`);
+}
+
 async function loadTeam() {
     const select = document.getElementById('team-select');
     const teamId = select.value;
@@ -817,6 +843,7 @@ window.UI = {
     removePlayer,
     populateTeamsDropdown,
     saveCurrentRosterAsTeam,
+    updateSelectedTeam,
     loadTeam,
     deleteSelectedTeam,
     clearAllPlayers
