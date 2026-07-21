@@ -476,16 +476,75 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .layout-court #dynamic-view-container {
     flex-direction: column;
     position: relative;
+    background: transparent;
+    border: none;
+    overflow: hidden;
+}
+
+.court-opponent-area {
+    padding: 10px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: center;
+}
+
+.court-opponent-btn {
+    width: 100%;
+    max-width: 300px;
+    padding: 15px;
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid var(--danger-color);
+    color: white;
+    border-radius: 8px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+}
+
+.court-active-area {
+    flex: 1;
+    position: relative;
     background: var(--panel-bg);
     border-radius: 12px;
     border: 1px solid var(--border-color);
     overflow: hidden;
-    /* Court background simulation */
     background-image: radial-gradient(circle at 50% 100%, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.03) 40%, transparent 40%);
+    min-height: 400px;
+}
+
+.court-drop-zone {
+    position: absolute;
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    border: 2px dashed rgba(255,255,255,0.1);
+    transform: translate(-50%, -50%);
+    z-index: 1;
+    transition: background 0.2s;
+}
+.court-drop-zone.drag-over {
+    background: rgba(255,255,255,0.1);
+    border-color: white;
+}
+
+.court-bench-area {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 8px;
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    min-height: 85px;
+}
+.court-bench-area.drag-over {
+    background: rgba(255,255,255,0.1);
 }
 
 .court-player-node {
-    position: absolute;
     width: 60px;
     height: 60px;
     background: var(--bg-color);
@@ -496,12 +555,13 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     align-items: center;
     font-size: 1.2rem;
     font-weight: 700;
-    cursor: pointer;
+    cursor: grab;
     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-    transition: all 0.2s ease;
-    transform: translate(-50%, -50%);
+    transition: border-color 0.2s;
     flex-direction: column;
+    z-index: 2;
 }
+.court-player-node:active { cursor: grabbing; }
 .court-player-node span.name {
     font-size: 0.6rem;
     color: var(--text-muted);
@@ -510,19 +570,26 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .court-player-node:hover, .court-player-node.selected {
     border-color: var(--accent-color);
     box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
-    transform: translate(-50%, -50%) scale(1.1);
 }
+.court-player-node.dragging { opacity: 0.5; }
 
-/* Approximate absolute positions for the court */
-.pos-TW { bottom: 5%; left: 50%; }
-.pos-LA { bottom: 20%; left: 10%; }
-.pos-RA { bottom: 20%; left: 90%; }
-.pos-RL { bottom: 45%; left: 25%; }
-.pos-RR { bottom: 45%; left: 75%; }
-.pos-M  { bottom: 55%; left: 50%; }
-.pos-K  { bottom: 25%; left: 50%; }
-.pos-Bank { bottom: 5%; left: 10%; background: rgba(255,255,255,0.1); }
-.pos-Gast { bottom: 90%; left: 50%; border-color: var(--danger-color); }
+/* Court Absolute Positions */
+.pos-TW { position: absolute; bottom: 5%; left: 50%; transform: translate(-50%, -50%); }
+.pos-LA { position: absolute; bottom: 20%; left: 10%; transform: translate(-50%, -50%); }
+.pos-RA { position: absolute; bottom: 20%; left: 90%; transform: translate(-50%, -50%); }
+.pos-RL { position: absolute; bottom: 45%; left: 25%; transform: translate(-50%, -50%); }
+.pos-RR { position: absolute; bottom: 45%; left: 75%; transform: translate(-50%, -50%); }
+.pos-RM { position: absolute; bottom: 55%; left: 50%; transform: translate(-50%, -50%); }
+.pos-M  { position: absolute; bottom: 55%; left: 50%; transform: translate(-50%, -50%); }
+.pos-K  { position: absolute; bottom: 25%; left: 50%; transform: translate(-50%, -50%); }
+.pos-KM { position: absolute; bottom: 25%; left: 50%; transform: translate(-50%, -50%); }
+
+/* Bench nodes */
+.court-bench-area .court-player-node {
+    position: static;
+    transform: none;
+    flex-shrink: 0;
+}
 
 .court-action-menu {
     position: absolute;

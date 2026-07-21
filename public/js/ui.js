@@ -637,51 +637,149 @@ function renderThumbView(container) {
     container.appendChild(gridArea);
 }
 
+function handleDragStart(e, playerId) {
+    e.dataTransfer.setData('text/plain', playerId);
+    e.target.classList.add('dragging');
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function handleDrop(e, newPosition) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    const draggedPlayerId = e.dataTransfer.getData('text/plain');
+    if (!draggedPlayerId) return;
+
+    if (newPosition !== 'Bank' && newPosition !== 'Gast' && newPosition !== 'N/A') {
+        const currentOccupant = window.Store.getSPIELER().find(p => p.position === newPosition || (newPosition === 'RM' && p.position === 'M') || (newPosition === 'KM' && p.position === 'K'));
+        if (currentOccupant && currentOccupant.id !== draggedPlayerId) {
+            window.Store.updatePlayerPosition(currentOccupant.id, 'Bank');
+        }
+    }
+    
+    window.Store.updatePlayerPosition(draggedPlayerId, newPosition);
+    updateUI();
+}
+
 function renderCourtView(container) {
     container.innerHTML = '';
     const spieler = window.Store.getSPIELER();
     
+    // 1. Opponent Area
+    const opponentArea = document.createElement('div');
+    opponentArea.className = 'court-opponent-area';
+    const guestPlayer = spieler.find(p => window.Store.isGuestTeam(p.name));
+    if (guestPlayer) {
+        const oppBtn = document.createElement('button');
+        oppBtn.className = 'court-opponent-btn';
+        oppBtn.innerText = 'Gast / Gegner (' + guestPlayer.nummer + ')';
+        oppBtn.onclick = (e) => {
+            e.stopPropagation();
+            if(selectedPlayerId === guestPlayer.id) selectPlayer(guestPlayer.id);
+            else selectPlayer(guestPlayer.id);
+        };
+        if(selectedPlayerId === guestPlayer.id) oppBtn.style.borderColor = 'white';
+        opponentArea.appendChild(oppBtn);
+        
+        if (selectedPlayerId === guestPlayer.id) {
+             const menu = document.createElement('div');
+             menu.className = 'court-action-menu';
+             menu.style.position = 'static';
+             menu.style.marginLeft = '10px';
+             window.Store.HAUPTAKTIONEN.forEach(a => {
+                 const btn = document.createElement('button');
+                 btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
+                 btn.innerText = a.label;
+                 btn.onclick = (e) => { e.stopPropagation(); selectAction(a.typ); };
+                 menu.appendChild(btn);
+             });
+             opponentArea.appendChild(menu);
+        }
+    }
+    container.appendChild(opponentArea);
+
+    // 2. Active Court Area
+    const courtArea = document.createElement('div');
+    courtArea.className = 'court-active-area';
+    courtArea.onclick = () => { if(selectedPlayerId) selectPlayer(selectedPlayerId); };
+    
+    // Create Drop Zones for Court
+    const positions = ['TW', 'LA', 'RL', 'RM', 'RR', 'RA', 'KM'];
+    positions.forEach(pos => {
+        const dropZone = document.createElement('div');
+        dropZone.className = `court-drop-zone pos-${pos}`;
+        dropZone.addEventListener('dragover', handleDragOver);
+        dropZone.addEventListener('dragleave', handleDragLeave);
+        dropZone.addEventListener('drop', (e) => handleDrop(e, pos));
+        courtArea.appendChild(dropZone);
+    });
+
+    // 3. Bench Area
+    const benchArea = document.createElement('div');
+    benchArea.className = 'court-bench-area';
+    benchArea.addEventListener('dragover', handleDragOver);
+    benchArea.addEventListener('dragleave', handleDragLeave);
+    benchArea.addEventListener('drop', (e) => handleDrop(e, 'Bank'));
+
+    // Render Players
     spieler.forEach(p => {
+        if (window.Store.isGuestTeam(p.name)) return; 
+        
         const node = document.createElement('div');
-        node.className = `court-player-node pos-${p.position}`;
+        let posClass = p.position;
+        if(posClass === 'M') posClass = 'RM';
+        if(posClass === 'K') posClass = 'KM';
+        
+        node.className = `court-player-node pos-${posClass}`;
         if(selectedPlayerId === p.id) node.classList.add('selected');
         
         node.innerHTML = `${p.nummer}<span class="name">${p.name.split(' ')[0]}</span>`;
+        node.draggable = true;
+        node.addEventListener('dragstart', (e) => handleDragStart(e, p.id));
+        node.addEventListener('dragend', handleDragEnd);
+        
         node.onclick = (e) => {
             e.stopPropagation();
-            if(selectedPlayerId === p.id) {
-                selectPlayer(p.id); 
-            } else {
-                selectPlayer(p.id);
-            }
+            if(selectedPlayerId === p.id) selectPlayer(p.id); 
+            else selectPlayer(p.id);
         };
-        container.appendChild(node);
         
-        if (selectedPlayerId === p.id) {
+        if (p.position === 'Bank' || p.position === 'N/A') {
+            benchArea.appendChild(node);
+        } else {
+            courtArea.appendChild(node);
+        }
+        
+        if (selectedPlayerId === p.id && p.position !== 'Bank' && p.position !== 'N/A') {
             const menu = document.createElement('div');
-            menu.className = 'court-action-menu';
-            const rect = node.getBoundingClientRect();
-            menu.style.bottom = node.style.bottom;
-            menu.style.left = `calc(${node.style.left} + 40px)`;
+            menu.className = `court-action-menu pos-${posClass}`;
+            menu.style.marginBottom = '80px'; 
             
             const actions = window.Store.HAUPTAKTIONEN;
             actions.forEach(a => {
                 const btn = document.createElement('button');
                 btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
                 btn.innerText = a.label;
-                btn.onclick = (e) => {
-                    e.stopPropagation();
-                    selectAction(a.typ);
-                };
+                btn.onclick = (e) => { e.stopPropagation(); selectAction(a.typ); };
                 menu.appendChild(btn);
             });
-            container.appendChild(menu);
+            courtArea.appendChild(menu);
         }
     });
     
-    container.onclick = () => {
-        if(selectedPlayerId) selectPlayer(selectedPlayerId); 
-    };
+    container.appendChild(courtArea);
+    container.appendChild(benchArea);
 }
 
 window.UI = {
