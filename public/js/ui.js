@@ -9,17 +9,60 @@ let currentSort = 'nummer';
 
 let tempActionData = null;
 
-const playerListElement = document.getElementById('player-list');
-const actionPanelElement = document.getElementById('action-panel');
-const actionTitleElement = actionPanelElement ? actionPanelElement.querySelector('h3') : null;
 const feedbackOverlay = document.getElementById('feedback-overlay');
 const historyPanelElement = document.getElementById('history-panel');
 
+window.UI_MODE = localStorage.getItem('UI_MODE') || 'classic';
+
+function switchUIMode(mode) {
+    window.UI_MODE = mode;
+    localStorage.setItem('UI_MODE', mode);
+    
+    document.querySelectorAll('.view-toggle-container .control-btn').forEach(btn => btn.classList.remove('active-mode'));
+    const btn = document.getElementById('btn-mode-' + mode);
+    if(btn) btn.classList.add('active-mode');
+    
+    const container = document.getElementById('app-container');
+    if(container) container.className = 'layout-' + mode;
+    
+    selectedPlayerId = null;
+    selectedPrimaryAction = null;
+    selectedPrimaryActionCategory = null;
+    
+    updateUI();
+}
+
 function updateUI() {
-    renderPlayerList();
-    renderActionButtons();
+    renderDynamicView();
     if (window.Timer) window.Timer.updateTimerDisplay();
 }
+
+function renderDynamicView() {
+    const container = document.getElementById('dynamic-view-container');
+    if (!container) return;
+    
+    if (window.UI_MODE === 'classic') {
+        container.innerHTML = `
+            <section id="player-list"></section>
+            <section id="action-panel"></section>
+        `;
+        renderPlayerList();
+        renderActionButtons();
+    } else if (window.UI_MODE === 'thumb') {
+        container.innerHTML = '';
+        renderThumbView(container);
+    } else if (window.UI_MODE === 'court') {
+        container.innerHTML = '';
+        renderCourtView(container);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const container = document.getElementById('app-container');
+    if(container) container.className = 'layout-' + window.UI_MODE;
+    const btn = document.getElementById('btn-mode-' + window.UI_MODE);
+    if(btn) btn.classList.add('active-mode');
+});
 
 function toggleSort(criteria) {
     if (currentSort === criteria) {
@@ -44,6 +87,7 @@ function sortPlayers() {
 }
 
 function renderPlayerList() {
+    const playerListElement = document.getElementById('player-list');
     if (!playerListElement) return;
 
     playerListElement.innerHTML = `
@@ -79,7 +123,7 @@ function renderPlayerList() {
                 <span class="stat-item yellow">🧤 ${stats.paraden}</span>
             </div>
         `;
-        playerListElement.appendChild(playerButton);
+        document.getElementById('player-list').appendChild(playerButton);
     });
 }
 
@@ -148,10 +192,11 @@ function updateScoreboard() {
 }
 
 function renderActionButtons() {
-    if (!actionPanelElement || !actionTitleElement) return;
+    const actionPanelElement = document.getElementById('action-panel');
+    if (!actionPanelElement) return;
 
-    actionPanelElement.innerHTML = '';
-    actionPanelElement.appendChild(actionTitleElement);
+    actionPanelElement.innerHTML = '<h3>Aktion</h3>';
+    const actionTitleElement = actionPanelElement.querySelector('h3');
 
     let buttonsToRender = [];
     let titleText = "Aktion (Nach Spieler-Wahl)";
@@ -193,7 +238,7 @@ function renderActionButtons() {
             button.onclick = () => selectAction(action.typ);
         }
 
-        actionPanelElement.appendChild(button);
+        document.getElementById('action-panel').appendChild(button);
     });
 }
 
@@ -548,8 +593,100 @@ function clearAllPlayers() {
     renderRosterList();
 }
 
+function renderThumbView(container) {
+    let topArea = document.createElement('div');
+    topArea.className = 'thumb-top-area';
+    let gridArea = document.createElement('div');
+    gridArea.className = 'thumb-grid-area';
+    
+    const spieler = window.Store.getSPIELER();
+    
+    if (!selectedPlayerId) {
+        topArea.innerHTML = '<h3 style="text-align:center; color: var(--accent-color); margin-top:20px;">Wähle einen Spieler...</h3>';
+    } else {
+        const p = spieler.find(s => s.id === selectedPlayerId);
+        topArea.innerHTML = `
+            <div style="text-align:center;">
+                <h2 style="margin:0; color:var(--text-color);">#${p.nummer} ${p.name}</h2>
+                <div style="color:var(--text-muted);">${p.position}</div>
+                <button onclick="window.UI.selectPlayer('${p.id}')" style="margin-top:10px; background:transparent; border:1px solid var(--border-color); color:white; padding:5px 10px; border-radius:4px; cursor:pointer;">Abbrechen</button>
+            </div>
+        `;
+    }
+    
+    if (!selectedPlayerId) {
+        spieler.forEach(p => {
+            const btn = document.createElement('div');
+            btn.className = 'thumb-btn';
+            btn.innerHTML = `${p.nummer}<span class="name">${p.name.split(' ')[0]}</span>`;
+            btn.onclick = () => selectPlayer(p.id);
+            gridArea.appendChild(btn);
+        });
+    } else {
+        const actions = window.Store.HAUPTAKTIONEN;
+        actions.forEach(a => {
+            const btn = document.createElement('div');
+            btn.className = `thumb-btn thumb-action-btn ${a.farbe || 'neutral'}`;
+            btn.innerText = a.label;
+            btn.onclick = () => selectAction(a.typ);
+            gridArea.appendChild(btn);
+        });
+    }
+    
+    container.appendChild(topArea);
+    container.appendChild(gridArea);
+}
+
+function renderCourtView(container) {
+    container.innerHTML = '';
+    const spieler = window.Store.getSPIELER();
+    
+    spieler.forEach(p => {
+        const node = document.createElement('div');
+        node.className = `court-player-node pos-${p.position}`;
+        if(selectedPlayerId === p.id) node.classList.add('selected');
+        
+        node.innerHTML = `${p.nummer}<span class="name">${p.name.split(' ')[0]}</span>`;
+        node.onclick = (e) => {
+            e.stopPropagation();
+            if(selectedPlayerId === p.id) {
+                selectPlayer(p.id); 
+            } else {
+                selectPlayer(p.id);
+            }
+        };
+        container.appendChild(node);
+        
+        if (selectedPlayerId === p.id) {
+            const menu = document.createElement('div');
+            menu.className = 'court-action-menu';
+            const rect = node.getBoundingClientRect();
+            menu.style.bottom = node.style.bottom;
+            menu.style.left = `calc(${node.style.left} + 40px)`;
+            
+            const actions = window.Store.HAUPTAKTIONEN;
+            actions.forEach(a => {
+                const btn = document.createElement('button');
+                btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
+                btn.innerText = a.label;
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    selectAction(a.typ);
+                };
+                menu.appendChild(btn);
+            });
+            container.appendChild(menu);
+        }
+    });
+    
+    container.onclick = () => {
+        if(selectedPlayerId) selectPlayer(selectedPlayerId); 
+    };
+}
+
 window.UI = {
     updateUI,
+    switchUIMode,
     renderHistory,
     updateScoreboard,
     undoLastAction,

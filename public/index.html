@@ -31,24 +31,31 @@
 
         <div id="controls">
             <button onclick="window.Timer.toggleGameTimer()" id="timer-btn" class="control-btn">▶️ Start</button>
-            <button onclick="window.Timer.toggleEndHalfOrGame()" id="half-end-btn" class="control-btn">⏸️
-                Halbzeit</button>
+            <button onclick="window.Timer.toggleEndHalfOrGame()" id="half-end-btn" class="control-btn">⏸️ Halbzeit</button>
             <button onclick="window.Stats.showStats()" class="control-btn">📊 Statistik</button>
             <button onclick="window.UI.togglePlayerManagement()" class="control-btn">👥 Spieler</button>
             <button onclick="openArchiveModal()" class="control-btn">📚 Archiv</button>
             <button onclick="openWhatsAppModal()" class="control-btn" id="wa-connect-btn">💬 WA Connect</button>
+            
+            <div class="view-toggle-container">
+                <button onclick="window.UI.switchUIMode('classic')" id="btn-mode-classic" class="control-btn active-mode">📋 Classic</button>
+                <button onclick="window.UI.switchUIMode('thumb')" id="btn-mode-thumb" class="control-btn">📱 Mobile</button>
+                <button onclick="window.UI.switchUIMode('court')" id="btn-mode-court" class="control-btn">🏟️ Court</button>
+            </div>
         </div>
     </header>
 
-    <main id="app-container">
-
-        <section id="player-list">
-            <h3>Lade Spieler...</h3>
-        </section>
-
-        <section id="action-panel">
-            <h3>Aktion (Nach Spieler-Wahl)</h3>
-        </section>
+    <main id="app-container" class="layout-classic">
+        
+        <!-- DYNAMIC VIEW AREA -->
+        <div id="dynamic-view-container">
+            <section id="player-list">
+                <h3>Lade Spieler...</h3>
+            </section>
+            <section id="action-panel">
+                <h3>Aktion (Nach Spieler-Wahl)</h3>
+            </section>
+        </div>
 
         <section id="history-panel">
             <h3>Verlauf</h3>
