@@ -573,6 +573,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
 }
 .court-player-node.dragging { opacity: 0.5; }
+body.is-dragging-player .court-player-node { pointer-events: none; }
 
 /* Court Absolute Positions */
 .pos-TW { position: absolute; bottom: 5%; left: 50%; transform: translate(-50%, 50%); }

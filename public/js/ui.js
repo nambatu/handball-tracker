@@ -665,11 +665,18 @@ function renderThumbView(container) {
 
 function handleDragStart(e, playerId) {
     e.dataTransfer.setData('text/plain', playerId);
-    e.target.classList.add('dragging');
+    setTimeout(() => {
+        e.target.classList.add('dragging');
+        document.body.classList.add('is-dragging-player');
+    }, 0);
 }
 
 function handleDragEnd(e) {
     e.target.classList.remove('dragging');
+    document.body.classList.remove('is-dragging-player');
+    
+    // Safety cleanup for any stuck drag-over classes
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
 }
 
 function handleDragOver(e) {
