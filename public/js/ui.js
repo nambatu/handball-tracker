@@ -733,38 +733,55 @@ function renderCourtView(container) {
     benchArea.addEventListener('drop', (e) => handleDrop(e, 'Bank'));
 
     // Render Players
+    const occupied = new Set();
+    const courtPlayers = [];
+    const benchPlayers = [];
+
     spieler.forEach(p => {
         if (window.Store.isGuestTeam(p.name)) return; 
         
-        const node = document.createElement('div');
         let posClass = p.position;
         if(posClass === 'M') posClass = 'RM';
         if(posClass === 'K') posClass = 'KM';
         
-        node.className = `court-player-node pos-${posClass}`;
-        if(selectedPlayerId === p.id) node.classList.add('selected');
+        if (posClass !== 'Bank' && posClass !== 'N/A' && !occupied.has(posClass)) {
+            occupied.add(posClass);
+            courtPlayers.push({ player: p, posClass: posClass });
+        } else {
+            benchPlayers.push({ player: p, posClass: posClass });
+        }
+    });
+
+    const allRenderedPlayers = [...courtPlayers.map(cp => ({...cp, area: courtArea})), ...benchPlayers.map(bp => ({...bp, area: benchArea}))];
+
+    allRenderedPlayers.forEach(({player, posClass, area}) => {
+        const node = document.createElement('div');
+        node.className = `court-player-node ${area === courtArea ? 'pos-' + posClass : ''}`;
+        if(selectedPlayerId === player.id) node.classList.add('selected');
         
-        node.innerHTML = `${p.nummer}<span class="name">${p.name.split(' ')[0]}</span>`;
+        node.innerHTML = `${player.nummer}<span class="name">${player.name.split(' ')[0]}</span>`;
         node.draggable = true;
-        node.addEventListener('dragstart', (e) => handleDragStart(e, p.id));
+        node.addEventListener('dragstart', (e) => handleDragStart(e, player.id));
         node.addEventListener('dragend', handleDragEnd);
         
         node.onclick = (e) => {
             e.stopPropagation();
-            if(selectedPlayerId === p.id) selectPlayer(p.id); 
-            else selectPlayer(p.id);
+            selectPlayer(player.id);
         };
         
-        if (p.position === 'Bank' || p.position === 'N/A') {
-            benchArea.appendChild(node);
-        } else {
-            courtArea.appendChild(node);
-        }
+        area.appendChild(node);
         
-        if (selectedPlayerId === p.id && p.position !== 'Bank' && p.position !== 'N/A') {
+        if (selectedPlayerId === player.id && area === courtArea) {
             const menu = document.createElement('div');
-            menu.className = `court-action-menu pos-${posClass}`;
-            menu.style.marginBottom = '80px'; 
+            menu.className = 'court-action-menu';
+            // Position as a fixed bottom sheet inside the court area
+            menu.style.position = 'absolute';
+            menu.style.bottom = '10px';
+            menu.style.left = '50%';
+            menu.style.transform = 'translateX(-50%)';
+            menu.style.width = '90%';
+            menu.style.maxWidth = '400px';
+            menu.style.zIndex = '1000';
             
             const actions = window.Store.HAUPTAKTIONEN;
             actions.forEach(a => {
