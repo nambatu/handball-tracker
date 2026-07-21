@@ -118,5 +118,38 @@ window.Store = {
     saveActions,
     isGuestTeam,
     addPlayerToStore,
-    removePlayerFromStore
+    removePlayerFromStore,
+    
+    // Team API Wrappers
+    getTeams: async function() {
+        try {
+            const res = await fetch('/api/teams');
+            return await res.json();
+        } catch(e) {
+            console.error(e);
+            return [];
+        }
+    },
+    saveTeam: async function(teamData) {
+        try {
+            const res = await fetch('/api/teams', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(teamData)
+            });
+            return await res.json();
+        } catch(e) {
+            console.error(e);
+            return null;
+        }
+    },
+    deleteTeam: async function(teamId) {
+        try {
+            const res = await fetch('/api/teams/' + teamId, { method: 'DELETE' });
+            return await res.json();
+        } catch(e) {
+            console.error(e);
+            return null;
+        }
+    }
 };

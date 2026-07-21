@@ -389,7 +389,7 @@ function confirmAssist(assistPlayerId) {
 }
 
 // MANAGEMENT / ROSTER
-function togglePlayerManagement() {
+async function togglePlayerManagement() {
     const mainApp = document.getElementById("app-container");
     const managementView = document.getElementById("player-management-view");
 
@@ -397,6 +397,7 @@ function togglePlayerManagement() {
         mainApp.style.display = 'none';
         managementView.style.display = 'block';
         renderRosterList();
+        await populateTeamsDropdown();
     } else {
         managementView.style.display = 'none';
         mainApp.style.display = 'flex';
@@ -450,6 +451,103 @@ function removePlayer(playerId) {
     renderRosterList();
 }
 
+async function populateTeamsDropdown() {
+    const select = document.getElementById('team-select');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">-- Team auswählen --</option>';
+    const teams = await window.Store.getTeams();
+    
+    teams.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = t.name;
+        select.appendChild(opt);
+    });
+}
+
+async function saveCurrentRosterAsTeam() {
+    const nameInput = document.getElementById('new-team-name');
+    const name = nameInput.value.trim();
+    if (!name) {
+        alert("Bitte einen Teamnamen eingeben.");
+        return;
+    }
+    const players = window.Store.getSPIELER();
+    if (players.length === 0) {
+        alert("Der Kader ist leer!");
+        return;
+    }
+    
+    await window.Store.saveTeam({ name, players });
+    alert(`Team "${name}" erfolgreich gespeichert!`);
+    nameInput.value = "";
+    await populateTeamsDropdown();
+}
+
+async function loadTeam() {
+    const select = document.getElementById('team-select');
+    const teamId = select.value;
+    if (!teamId) {
+        alert("Bitte zuerst ein Team auswählen.");
+        return;
+    }
+    
+    const teams = await window.Store.getTeams();
+    const team = teams.find(t => t.id === teamId);
+    if (!team || !team.players) return;
+    
+    const currentPlayers = window.Store.getSPIELER();
+    let replace = false;
+    
+    if (currentPlayers.length > 0) {
+        const choice = confirm("Soll das Team den aktuellen Kader ERSETZEN (OK) oder HINZUGEFÜGT werden (Abbrechen)?");
+        if (choice) {
+            replace = true;
+        }
+    }
+    
+    if (replace) {
+        // Clear all players first
+        const allIds = currentPlayers.map(p => p.id);
+        allIds.forEach(id => window.Store.removePlayerFromStore(id));
+    }
+    
+    // Add players from team
+    team.players.forEach(p => {
+        window.Store.addPlayerToStore(p.name, p.nummer, p.position);
+    });
+    
+    alert(`Team "${team.name}" geladen!`);
+    renderRosterList();
+}
+
+async function deleteSelectedTeam() {
+    const select = document.getElementById('team-select');
+    const teamId = select.value;
+    if (!teamId) {
+        alert("Bitte ein Team zum Löschen auswählen.");
+        return;
+    }
+    
+    if (!confirm("Team wirklich löschen?")) return;
+    
+    await window.Store.deleteTeam(teamId);
+    await populateTeamsDropdown();
+}
+
+function clearAllPlayers() {
+    const currentPlayers = window.Store.getSPIELER();
+    if (currentPlayers.length === 0) return;
+    
+    if (!confirm("Wirklich ALLE Spieler aus dem aktuellen Kader löschen?")) return;
+    
+    const allIds = currentPlayers.map(p => p.id);
+    allIds.forEach(id => window.Store.removePlayerFromStore(id));
+    selectedPlayerId = null;
+    renderRosterList();
+}
+
 window.UI = {
     updateUI,
     renderHistory,
@@ -464,5 +562,10 @@ window.UI = {
     closeAssistOverlay,
     togglePlayerManagement,
     addPlayer,
-    removePlayer
+    removePlayer,
+    populateTeamsDropdown,
+    saveCurrentRosterAsTeam,
+    loadTeam,
+    deleteSelectedTeam,
+    clearAllPlayers
 };

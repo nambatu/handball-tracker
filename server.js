@@ -8,11 +8,16 @@ const QRCode = require('qrcode');
 
 const STATE_FILE = path.join(__dirname, 'data', 'state.json');
 const ARCHIVE_DIR = path.join(__dirname, 'data', 'archives');
+const TEAMS_FILE = path.join(__dirname, 'data', 'teams.json');
+
 if (!fs.existsSync(path.join(__dirname, 'data'))) {
     fs.mkdirSync(path.join(__dirname, 'data'));
 }
 if (!fs.existsSync(ARCHIVE_DIR)) {
     fs.mkdirSync(ARCHIVE_DIR);
+}
+if (!fs.existsSync(TEAMS_FILE)) {
+    fs.writeFileSync(TEAMS_FILE, JSON.stringify([]));
 }
 
 
@@ -253,6 +258,58 @@ app.get('/api/archive/:filename', (req, res) => {
         }
     } catch(e) {
         res.status(500).json({ error: 'Failed to read archive' });
+    }
+});
+
+// ==========================================
+// TEAMS API
+// ==========================================
+app.get('/api/teams', (req, res) => {
+    try {
+        if (!fs.existsSync(TEAMS_FILE)) {
+            return res.json([]);
+        }
+        const data = fs.readFileSync(TEAMS_FILE, 'utf8');
+        res.json(JSON.parse(data));
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read teams' });
+    }
+});
+
+app.post('/api/teams', (req, res) => {
+    try {
+        const newTeam = req.body;
+        let teams = [];
+        if (fs.existsSync(TEAMS_FILE)) {
+            teams = JSON.parse(fs.readFileSync(TEAMS_FILE, 'utf8'));
+        }
+        if (!newTeam.id) {
+            newTeam.id = "team_" + Date.now();
+        }
+        const existingIdx = teams.findIndex(t => t.id === newTeam.id);
+        if (existingIdx !== -1) {
+            teams[existingIdx] = newTeam;
+        } else {
+            teams.push(newTeam);
+        }
+        fs.writeFileSync(TEAMS_FILE, JSON.stringify(teams, null, 2));
+        res.json({ success: true, team: newTeam });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to save team' });
+    }
+});
+
+app.delete('/api/teams/:id', (req, res) => {
+    try {
+        let teams = [];
+        if (fs.existsSync(TEAMS_FILE)) {
+            teams = JSON.parse(fs.readFileSync(TEAMS_FILE, 'utf8'));
+        }
+        teams = teams.filter(t => t.id !== req.params.id);
+        fs.writeFileSync(TEAMS_FILE, JSON.stringify(teams, null, 2));
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete team' });
     }
 });
 

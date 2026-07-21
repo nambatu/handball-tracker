@@ -78,8 +78,35 @@
     </div>
 
     <div id="player-management-view" class="overlay-view" style="display:none;">
-        <div class="overlay-content management-content">
+        <div class="overlay-content management-content glass-panel">
             <h2>Spielerverwaltung</h2>
+            
+            <!-- TEAMS SECTION -->
+            <div id="team-management-section" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+                <h3 style="margin-top: 0; color: var(--accent-color);">Teams Verwalten</h3>
+                
+                <div class="form-row" style="align-items: center;">
+                    <select id="team-select" style="flex: 1;">
+                        <option value="">-- Team auswählen --</option>
+                    </select>
+                    <button onclick="window.UI.loadTeam()" class="add-btn" style="background: var(--success-color);">Team Laden</button>
+                    <button onclick="window.UI.deleteSelectedTeam()" class="cancel-btn" style="padding: 12px;">🗑️</button>
+                </div>
+
+                <hr style="border-color: rgba(255,255,255,0.05); margin: 15px 0;">
+
+                <div class="form-row" style="align-items: center; margin-bottom: 0;">
+                    <input type="text" id="new-team-name" placeholder="Name für neues Team" style="flex: 1;">
+                    <button onclick="window.UI.saveCurrentRosterAsTeam()" class="add-btn">Kader als Team speichern</button>
+                </div>
+            </div>
+
+            <hr style="border-color: var(--border-color); margin: 20px 0;">
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">Aktueller Kader (Live)</h3>
+                <button onclick="window.UI.clearAllPlayers()" class="cancel-btn" style="padding: 8px 12px; font-size: 0.9em;">Alle Spieler löschen</button>
+            </div>
 
             <div id="add-player-form">
                 <h3>Neuen Spieler hinzufügen</h3>
