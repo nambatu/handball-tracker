@@ -521,7 +521,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     height: 70px;
     border-radius: 50%;
     border: 2px dashed rgba(255,255,255,0.1);
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, 50%);
     z-index: 1;
     transition: background 0.2s;
 }
@@ -560,7 +560,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     transition: border-color 0.2s;
     flex-direction: column;
     z-index: 2;
-    transform: translate(-50%, -50%); /* Fix alignment with drop zones */
+    transform: translate(-50%, 50%); /* Fix alignment with drop zones */
 }
 .court-player-node:active { cursor: grabbing; }
 .court-player-node span.name {
@@ -575,15 +575,15 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .court-player-node.dragging { opacity: 0.5; }
 
 /* Court Absolute Positions */
-.pos-TW { position: absolute; bottom: 5%; left: 50%; transform: translate(-50%, -50%); }
-.pos-LA { position: absolute; bottom: 20%; left: 15%; transform: translate(-50%, -50%); }
-.pos-RA { position: absolute; bottom: 20%; left: 85%; transform: translate(-50%, -50%); }
-.pos-RL { position: absolute; bottom: 45%; left: 25%; transform: translate(-50%, -50%); }
-.pos-RR { position: absolute; bottom: 45%; left: 75%; transform: translate(-50%, -50%); }
-.pos-RM { position: absolute; bottom: 65%; left: 50%; transform: translate(-50%, -50%); }
-.pos-M  { position: absolute; bottom: 65%; left: 50%; transform: translate(-50%, -50%); }
-.pos-K  { position: absolute; bottom: 42%; left: 50%; transform: translate(-50%, -50%); }
-.pos-KM { position: absolute; bottom: 42%; left: 50%; transform: translate(-50%, -50%); }
+.pos-TW { position: absolute; bottom: 5%; left: 50%; transform: translate(-50%, 50%); }
+.pos-LA { position: absolute; bottom: 20%; left: 15%; transform: translate(-50%, 50%); }
+.pos-RA { position: absolute; bottom: 20%; left: 85%; transform: translate(-50%, 50%); }
+.pos-RL { position: absolute; bottom: 45%; left: 25%; transform: translate(-50%, 50%); }
+.pos-RR { position: absolute; bottom: 45%; left: 75%; transform: translate(-50%, 50%); }
+.pos-RM { position: absolute; bottom: 65%; left: 50%; transform: translate(-50%, 50%); }
+.pos-M  { position: absolute; bottom: 65%; left: 50%; transform: translate(-50%, 50%); }
+.pos-K  { position: absolute; bottom: 42%; left: 50%; transform: translate(-50%, 50%); }
+.pos-KM { position: absolute; bottom: 42%; left: 50%; transform: translate(-50%, 50%); }
 
 /* Bench nodes */
 .court-bench-area .court-player-node {

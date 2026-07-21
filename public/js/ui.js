@@ -790,6 +790,12 @@ function renderCourtView(container) {
         node.addEventListener('dragstart', (e) => handleDragStart(e, player.id));
         node.addEventListener('dragend', handleDragEnd);
         
+        if (area === courtArea) {
+            node.addEventListener('dragover', handleDragOver);
+            node.addEventListener('dragleave', handleDragLeave);
+            node.addEventListener('drop', (e) => handleDrop(e, posClass));
+        }
+        
         node.onclick = (e) => {
             e.stopPropagation();
             selectPlayer(player.id);
