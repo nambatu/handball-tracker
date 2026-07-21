@@ -191,6 +191,22 @@ function updateScoreboard() {
     }
 }
 
+function getAvailableActionsForPlayer(playerId, posClassFallback) {
+    if (!playerId) return window.Store.HAUPTAKTIONEN;
+    const player = window.Store.getSPIELER().find(p => p.id === playerId);
+    if (!player) return window.Store.HAUPTAKTIONEN;
+    
+    let position = posClassFallback || player.position;
+    
+    let actions = window.Store.HAUPTAKTIONEN;
+    if (position === 'TW') {
+        actions = actions.filter(a => a.typ === 'Parade');
+    } else {
+        actions = actions.filter(a => a.typ !== 'Parade');
+    }
+    return actions;
+}
+
 function renderActionButtons() {
     const actionPanelElement = document.getElementById('action-panel');
     if (!actionPanelElement) return;
@@ -213,7 +229,7 @@ function renderActionButtons() {
         actionTitleElement.insertAdjacentElement('afterend', backButton);
 
     } else {
-        buttonsToRender = window.Store.HAUPTAKTIONEN;
+        buttonsToRender = getAvailableActionsForPlayer(selectedPlayerId);
     }
 
     actionTitleElement.innerText = titleText;
@@ -649,14 +665,30 @@ function renderThumbView(container) {
             gridArea.appendChild(btn);
         });
     } else {
-        const actions = window.Store.HAUPTAKTIONEN;
-        actions.forEach(a => {
-            const btn = document.createElement('div');
-            btn.className = `thumb-btn thumb-action-btn ${a.farbe || 'neutral'}`;
-            btn.innerText = a.label;
-            btn.onclick = () => selectAction(a.typ);
-            gridArea.appendChild(btn);
-        });
+        if (selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]) {
+            const subEvents = window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory];
+            const backBtn = document.createElement('div');
+            backBtn.className = 'thumb-btn thumb-action-btn neutral';
+            backBtn.innerText = '← Zurück';
+            backBtn.onclick = resetActionSelection;
+            gridArea.appendChild(backBtn);
+            subEvents.forEach(u => {
+                const btn = document.createElement('div');
+                btn.className = 'thumb-btn thumb-action-btn sub-blue';
+                btn.innerText = u.label;
+                btn.onclick = () => selectAction(u.typ);
+                gridArea.appendChild(btn);
+            });
+        } else {
+            const actions = getAvailableActionsForPlayer(selectedPlayerId);
+            actions.forEach(a => {
+                const btn = document.createElement('div');
+                btn.className = `thumb-btn thumb-action-btn ${a.farbe || 'neutral'}`;
+                btn.innerText = a.label;
+                btn.onclick = () => selectAction(a.typ, a.category);
+                gridArea.appendChild(btn);
+            });
+        }
     }
     
     container.appendChild(topArea);
@@ -730,13 +762,30 @@ function renderCourtView(container) {
              menu.className = 'court-action-menu';
              menu.style.position = 'static';
              menu.style.marginLeft = '10px';
-             window.Store.HAUPTAKTIONEN.forEach(a => {
-                 const btn = document.createElement('button');
-                 btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
-                 btn.innerText = a.label;
-                 btn.onclick = (e) => { e.stopPropagation(); selectAction(a.typ); };
-                 menu.appendChild(btn);
-             });
+             if (selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]) {
+                 const subEvents = window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory];
+                 const backBtn = document.createElement('button');
+                 backBtn.className = 'court-action-btn neutral';
+                 backBtn.innerText = '← Zurück';
+                 backBtn.onclick = (e) => { e.stopPropagation(); resetActionSelection(); };
+                 menu.appendChild(backBtn);
+                 subEvents.forEach(u => {
+                     const btn = document.createElement('button');
+                     btn.className = 'court-action-btn sub-blue';
+                     btn.innerText = u.label;
+                     btn.onclick = (e) => { e.stopPropagation(); selectAction(u.typ); };
+                     menu.appendChild(btn);
+                 });
+             } else {
+                 const actions = getAvailableActionsForPlayer(guestPlayer.id);
+                 actions.forEach(a => {
+                     const btn = document.createElement('button');
+                     btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
+                     btn.innerText = a.label;
+                     btn.onclick = (e) => { e.stopPropagation(); selectAction(a.typ, a.category); };
+                     menu.appendChild(btn);
+                 });
+             }
              opponentArea.appendChild(menu);
         }
     }
@@ -822,14 +871,30 @@ function renderCourtView(container) {
             menu.style.maxWidth = '400px';
             menu.style.zIndex = '1000';
             
-            const actions = window.Store.HAUPTAKTIONEN;
-            actions.forEach(a => {
-                const btn = document.createElement('button');
-                btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
-                btn.innerText = a.label;
-                btn.onclick = (e) => { e.stopPropagation(); selectAction(a.typ); };
-                menu.appendChild(btn);
-            });
+            if (selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]) {
+                const subEvents = window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory];
+                const backBtn = document.createElement('button');
+                backBtn.className = 'court-action-btn neutral';
+                backBtn.innerText = '← Zurück';
+                backBtn.onclick = (e) => { e.stopPropagation(); resetActionSelection(); };
+                menu.appendChild(backBtn);
+                subEvents.forEach(u => {
+                    const btn = document.createElement('button');
+                    btn.className = 'court-action-btn sub-blue';
+                    btn.innerText = u.label;
+                    btn.onclick = (e) => { e.stopPropagation(); selectAction(u.typ); };
+                    menu.appendChild(btn);
+                });
+            } else {
+                const actions = getAvailableActionsForPlayer(player.id, posClass);
+                actions.forEach(a => {
+                    const btn = document.createElement('button');
+                    btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
+                    btn.innerText = a.label;
+                    btn.onclick = (e) => { e.stopPropagation(); selectAction(a.typ, a.category); };
+                    menu.appendChild(btn);
+                });
+            }
             courtArea.appendChild(menu);
         }
     });

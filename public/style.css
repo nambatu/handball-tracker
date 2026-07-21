@@ -614,9 +614,10 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     cursor: pointer;
     color: white;
 }
-.court-action-btn.green { background: rgba(16, 185, 129, 0.2); border: 1px solid var(--success-color); }
-.court-action-btn.red { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger-color); }
-.court-action-btn.yellow { background: rgba(245, 158, 11, 0.2); border: 1px solid var(--warning-color); }
+.court-action-btn.green, .thumb-action-btn.green { background: rgba(16, 185, 129, 0.2); border: 1px solid var(--success-color); }
+.court-action-btn.red, .thumb-action-btn.red { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger-color); }
+.court-action-btn.yellow, .thumb-action-btn.yellow { background: rgba(245, 158, 11, 0.2); border: 1px solid var(--warning-color); }
+.court-action-btn.sub-blue, .thumb-action-btn.sub-blue { background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; }
 
 /* =========================================
    THUMB VIEW (MOBILE)
