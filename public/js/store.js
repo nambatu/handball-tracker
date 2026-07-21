@@ -93,7 +93,7 @@ function isGuestTeam(name) {
 
 function addPlayerToStore(name, number, position) {
     SPIELER.push({
-        id: 'p' + Date.now(),
+        id: 'p' + Date.now() + '_' + Math.floor(Math.random() * 10000),
         name: name,
         nummer: number,
         position: position || "N/A"
