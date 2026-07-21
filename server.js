@@ -3,6 +3,14 @@ const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcodeTerminal = require('qrcode-terminal');
 const path = require('path');
+const fs = require('fs');
+const QRCode = require('qrcode');
+
+const STATE_FILE = path.join(__dirname, 'data', 'state.json');
+if (!fs.existsSync(path.join(__dirname, 'data'))) {
+    fs.mkdirSync(path.join(__dirname, 'data'));
+}
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +25,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let waClient = null;
 let isAuthenticated = false;
 let isInitializing = false;
+let currentQRBase64 = null;
 
 // Initialize WhatsApp Client
 function initializeWhatsAppClient() {
@@ -44,18 +53,25 @@ function initializeWhatsAppClient() {
         }
     });
 
-    waClient.on('qr', (qr) => {
+    waClient.on('qr', async (qr) => {
         console.log('\n======================================================');
         console.log('                 WhatsApp Authentication Required                 ');
         console.log('======================================================\n');
         console.log('Please scan the QR code below with your WhatsApp app:\n');
         qrcodeTerminal.generate(qr, { small: true });
         console.log('\n======================================================\n');
+
+        try {
+            currentQRBase64 = await QRCode.toDataURL(qr);
+        } catch (e) {
+            console.error('Failed to generate QR DataURL', e);
+        }
     });
 
     waClient.on('ready', async () => {
         console.log('WhatsApp Client is ready!');
         isAuthenticated = true;
+        currentQRBase64 = null;
 
         // Print available groups to console to help user configure .env
         try {
@@ -137,7 +153,56 @@ function requireAdminPassword(req, res, next) {
 
 // 1. Get Authentication Status (Protected)
 app.get('/api/whatsapp/status', requireAdminPassword, (req, res) => {
-    res.json({ authenticated: isAuthenticated, running: !!waClient });
+    res.json({ 
+        authenticated: isAuthenticated, 
+        running: !!waClient,
+        qr: currentQRBase64
+    });
+});
+
+// 1b. Logout WhatsApp (Protected)
+app.post('/api/whatsapp/logout', requireAdminPassword, async (req, res) => {
+    if (waClient) {
+        try {
+            await waClient.logout();
+            waClient.destroy();
+            waClient = null;
+            isAuthenticated = false;
+            currentQRBase64 = null;
+            initializeWhatsAppClient();
+            res.json({ success: true, message: 'Logged out and re-initializing.' });
+        } catch (e) {
+            res.status(500).json({ error: 'Failed to logout' });
+        }
+    } else {
+        res.json({ success: true, message: 'Not running.' });
+    }
+});
+
+// ==========================================
+// GAME STATE API
+// ==========================================
+
+app.get('/api/state', (req, res) => {
+    try {
+        if (fs.existsSync(STATE_FILE)) {
+            const data = fs.readFileSync(STATE_FILE, 'utf8');
+            res.json(JSON.parse(data));
+        } else {
+            res.json({ spieler: [], aktionen: [] });
+        }
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read state' });
+    }
+});
+
+app.post('/api/state', (req, res) => {
+    try {
+        fs.writeFileSync(STATE_FILE, JSON.stringify(req.body, null, 2));
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to write state' });
+    }
 });
 
 // 2. Send Message to the Hardcoded Bot Group (Protected)

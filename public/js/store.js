@@ -35,31 +35,53 @@ const UNTERAKTIONEN = {
 };
 
 let SPIELER = [];
+let AKTIONEN = [];
 
-function loadPlayers() {
-    let savedPlayers = JSON.parse(localStorage.getItem("spieler"));
-    if (savedPlayers && savedPlayers.length > 0) {
-        SPIELER = savedPlayers;
-    } else {
-        SPIELER = [
-            { id: 'p1', name: "Gegner", nummer: 0, position: "N/A" },
-            { id: 'p2', name: "Tom Tester", nummer: 22, position: "LA" },
-            { id: 'p3', name: "Kai Keeper", nummer: 1, position: "TW" },
-        ];
-        savePlayers();
+async function loadInitialState() {
+    try {
+        const res = await fetch('/api/state');
+        if (res.ok) {
+            const state = await res.json();
+            SPIELER = state.spieler || [];
+            AKTIONEN = state.aktionen || [];
+
+            if (SPIELER.length === 0) {
+                SPIELER = [
+                    { id: 'p1', name: "Gegner", nummer: 0, position: "N/A" },
+                    { id: 'p2', name: "Tom Tester", nummer: 22, position: "LA" },
+                    { id: 'p3', name: "Kai Keeper", nummer: 1, position: "TW" },
+                ];
+                savePlayers();
+            }
+        }
+    } catch (e) {
+        console.error("Failed to load initial state from server", e);
     }
 }
 
+function loadPlayers() {
+    return SPIELER;
+}
+
 function savePlayers() {
-    localStorage.setItem("spieler", JSON.stringify(SPIELER));
+    fetch('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spieler: SPIELER, aktionen: AKTIONEN })
+    }).catch(e => console.error(e));
 }
 
 function loadActions() {
-    return JSON.parse(localStorage.getItem("aktionen")) || [];
+    return AKTIONEN;
 }
 
 function saveActions(aktionen) {
-    localStorage.setItem("aktionen", JSON.stringify(aktionen));
+    AKTIONEN = aktionen;
+    fetch('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spieler: SPIELER, aktionen: AKTIONEN })
+    }).catch(e => console.error(e));
 }
 
 // Helper: Ist es ein Gegner?
@@ -89,6 +111,7 @@ window.Store = {
     HAUPTAKTIONEN,
     UNTERAKTIONEN,
     getSPIELER: () => SPIELER,
+    loadInitialState,
     loadPlayers,
     savePlayers,
     loadActions,

@@ -2,17 +2,20 @@
 // MAIN INITIALIZATION
 // ===================================================================
 
-window.onload = () => {
-    // 1. Initialize logic
+window.onload = async () => {
+    // 1. Load Server State
+    await window.Store.loadInitialState();
+
+    // 2. Initialize logic
     window.Store.loadPlayers();
     window.Timer.loadGameState();
 
-    // 2. Initialize UI
+    // 3. Initialize UI
     window.UI.updateActionCount();
     window.UI.renderHistory();
     window.UI.updateUI();
 
-    // 3. Initialize WhatsApp UI logic (if modal is present)
+    // 4. Initialize WhatsApp UI logic (if modal is present)
     checkWhatsAppStatusOnLoad();
 };
 

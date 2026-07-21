@@ -4,7 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Handball Ticker & Statistik</title>
+    <title>Handball Ticker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -110,14 +113,13 @@
 
     <!-- WhatsApp Setup Modal -->
     <div id="wa-setup-view" class="overlay-view" style="display:none;">
-        <div class="overlay-content management-content">
+        <div class="overlay-content management-content glass-panel">
             <h2>WhatsApp Bot Status</h2>
-            <div id="wa-status-box"
-                style="padding: 15px; margin-bottom: 20px; text-align: center; border: 1px solid #ccc; border-radius: 8px;">
+            <div id="wa-status-box" style="text-align: center; padding: 20px;">
                 <p>Status: <strong id="wa-status-text">Prüfe Verbindung...</strong></p>
-                <p id="wa-help-text" style="font-size: 0.9em; color: #666; margin-top: 10px;">
-                    Der WhatsApp Bot läuft im Hintergrund. Authentifizierung erfolgt über den Server
-                    Administrator.
+                <img id="wa-qr-image" src="" alt="WhatsApp QR Code" style="display:none; margin: 15px auto; max-width: 250px; border-radius: 10px; border: 2px solid white;">
+                <p id="wa-help-text" style="font-size: 0.9em; color: var(--text-color); opacity: 0.7; margin-top: 10px;">
+                    Scanne den QR Code mit WhatsApp, um den Bot zu verbinden.
                 </p>
             </div>
 
@@ -131,7 +133,7 @@
             </div>
 
             <div id="wa-logout-section" style="display:none; text-align: center; margin-bottom: 20px;">
-                <button onclick="logoutWhatsApp()" class="cancel-btn">Logout (Schreibrechte entziehen)</button>
+                <button onclick="logoutWhatsApp()" class="cancel-btn">Bot Logout & Neu Starten</button>
             </div>
 
             <button onclick="closeWhatsAppModal()" class="back-btn" style="margin-top:20px;">Schließen</button>
@@ -187,29 +189,40 @@
                 }
 
                 const data = await res.json();
+                const qrImg = document.getElementById('wa-qr-image');
 
                 if (data.authenticated) {
                     statusText.innerText = "🟢 Verbunden & Online";
-                    statusText.style.color = "green";
-                    waBtn.innerText = "🟢 WA Bot Online";
+                    statusText.style.color = "#4ade80";
+                    waBtn.innerText = "🟢 WA Online";
                     startForm.style.display = "none";
                     logoutSection.style.display = "block";
+                    qrImg.style.display = "none";
                     if (window.qrPollInterval) clearInterval(window.qrPollInterval);
                 } else if (data.running) {
-                    statusText.innerText = "🟡 Startet / QR Scan benötigt (Siehe Server Console)";
-                    statusText.style.color = "orange";
-                    waBtn.innerText = "🟡 WA Bot Startet...";
+                    statusText.innerText = "🟡 QR Scan benötigt";
+                    statusText.style.color = "#fbbf24";
+                    waBtn.innerText = "🟡 WA Scan QR";
                     startForm.style.display = "none";
                     logoutSection.style.display = "block";
+                    
+                    if (data.qr) {
+                        qrImg.src = data.qr;
+                        qrImg.style.display = "block";
+                    } else {
+                        qrImg.style.display = "none";
+                    }
+                    
                     if (!window.qrPollInterval) {
                         window.qrPollInterval = setInterval(checkBackendWhatsAppStatus, 3000);
                     }
                 } else {
                     statusText.innerText = "🔴 Backend Bot Gestoppt";
-                    statusText.style.color = "red";
-                    waBtn.innerText = "🔴 WA Backend Offline";
+                    statusText.style.color = "#f87171";
+                    waBtn.innerText = "🔴 WA Offline";
                     startForm.style.display = "none";
                     logoutSection.style.display = "block";
+                    qrImg.style.display = "none";
                     if (window.qrPollInterval) clearInterval(window.qrPollInterval);
                 }
             } catch (e) {
@@ -246,10 +259,21 @@
             }
         }
 
-        function logoutWhatsApp() {
-            sessionStorage.removeItem('wa_admin_password');
-            checkBackendWhatsAppStatus();
-            document.getElementById('wa-start-msg').innerText = "";
+        async function logoutWhatsApp() {
+            const pwd = sessionStorage.getItem('wa_admin_password');
+            try {
+                await fetch('/api/whatsapp/logout', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${pwd}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password: pwd })
+                });
+                checkBackendWhatsAppStatus();
+            } catch (e) {
+                console.error("Logout failed", e);
+            }
         }
     </script>
 </body>
