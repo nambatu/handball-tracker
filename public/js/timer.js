@@ -36,11 +36,15 @@ function toggleGameTimer() {
     if (isTimerRunning) {
         clearInterval(timerInterval);
         isTimerRunning = false;
+        if (window.Store && window.Store.savePlayers) window.Store.savePlayers();
     } else {
         timerInterval = setInterval(() => {
             spielzeitSekunden++;
             updateTimerDisplay();
             saveGameState();
+            if (window.Store && window.Store.tickPlaytime) {
+                window.Store.tickPlaytime();
+            }
         }, 1000);
         isTimerRunning = true;
     }
@@ -99,6 +103,9 @@ async function endGame() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ spieler, aktionen })
         });
+
+        spieler.forEach(p => p.playtimeSeconds = 0);
+        window.Store.savePlayers();
 
         window.Store.saveActions([]); // Leeres Array speichern
         window.UI.renderHistory();

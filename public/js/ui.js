@@ -57,6 +57,33 @@ function renderDynamicView() {
     }
 }
 
+function getPlayerDisplayHtml(player, size = '40px') {
+    const timerState = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0 };
+    let suspensionOverlay = '';
+    let isSuspended = false;
+    
+    if (player.suspendedUntilGameTime !== null && timerState.spielzeitSekunden < player.suspendedUntilGameTime) {
+        isSuspended = true;
+        const remaining = player.suspendedUntilGameTime - timerState.spielzeitSekunden;
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        suspensionOverlay = `<div style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(220,38,38,0.85); display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; font-size:12px; border-radius:50%; z-index:10;">${m}:${s<10?'0':''}${s}</div>`;
+    }
+
+    if (player.avatarUrl) {
+        return `<div style="position:relative; width:${size}; height:${size}; border-radius:50%; margin:0 auto; box-shadow:0 0 5px rgba(0,0,0,0.5);">
+            <img src="${player.avatarUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%; ${isSuspended ? 'filter: grayscale(100%); opacity:0.6;' : ''}">
+            ${suspensionOverlay}
+        </div>`;
+    } else {
+        const initials = player.name ? player.name.substring(0, 2).toUpperCase() : '?';
+        return `<div style="position:relative; width:${size}; height:${size}; background:var(--primary-color); border:2px solid white; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px; margin:0 auto; ${isSuspended ? 'filter: grayscale(100%); opacity:0.6;' : ''}">
+            ${initials}
+            ${suspensionOverlay}
+        </div>`;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('app-container');
     if(container) container.className = 'layout-' + window.UI_MODE;
@@ -113,9 +140,12 @@ function renderPlayerList() {
         playerButton.onclick = () => selectPlayer(player.id);
 
         playerButton.innerHTML = `
-            <div class="player-info">
-                <span class="player-number">#${player.nummer}</span>
-                <span class="player-name">${player.name} (${player.position})</span>
+            <div style="display:flex; align-items:center; gap: 10px;">
+                ${getPlayerDisplayHtml(player, '40px')}
+                <div class="player-info">
+                    <span class="player-number">#${player.nummer}</span>
+                    <span class="player-name">${player.name} (${player.position})</span>
+                </div>
             </div>
             <div class="player-stats"> 
                 <span class="stat-item green">🥅 ${stats.tore}</span> 
@@ -358,6 +388,10 @@ function executeSaveAction(player, actionType, actionLabel, category, assistId) 
 
     aktionen.push(newAction);
     window.Store.saveActions(aktionen);
+    
+    if (actionType === 'Zeitstrafe') {
+        window.Store.applySuspension(player.id, timerState.spielzeitSekunden);
+    }
 
     updateActionCount();
     renderHistory();
@@ -483,10 +517,11 @@ function renderRosterList() {
     });
 }
 
-function addPlayer() {
+async function addPlayer() {
     const nameEl = document.getElementById("input-name");
     const numEl = document.getElementById("input-number");
     const posEl = document.getElementById("input-position");
+    const avatarEl = document.getElementById("input-avatar");
 
     const name = nameEl.value;
     const number = parseInt(numEl.value);
@@ -495,11 +530,33 @@ function addPlayer() {
         alert("Bitte Name und Nummer angeben.");
         return;
     }
+    
+    let avatarUrl = null;
+    if (avatarEl && avatarEl.files.length > 0) {
+        const formData = new FormData();
+        formData.append('avatar', avatarEl.files[0]);
+        try {
+            const res = await fetch('/api/upload-avatar', {
+                method: 'POST',
+                // Don't set Content-Type header manually for FormData, let browser do it
+                body: formData
+            });
+            const data = await res.json();
+            if (res.ok && data.avatarUrl) {
+                avatarUrl = data.avatarUrl;
+            } else {
+                alert("Fehler beim Avatar-Upload.");
+            }
+        } catch(e) {
+            console.error("Upload failed", e);
+        }
+    }
 
-    window.Store.addPlayerToStore(name, number, posEl.value);
+    window.Store.addPlayerToStore(name, number, posEl.value, avatarUrl);
 
     nameEl.value = "";
     numEl.value = "";
+    if (avatarEl) avatarEl.value = "";
     renderRosterList();
 }
 
@@ -660,7 +717,7 @@ function renderThumbView(container) {
         spieler.forEach(p => {
             const btn = document.createElement('div');
             btn.className = 'thumb-btn';
-            btn.innerHTML = `${p.nummer}<span class="name">${p.name.split(' ')[0]}</span>`;
+            btn.innerHTML = getPlayerDisplayHtml(p, '40px') + `<span class="name">${p.name.split(' ')[0]}</span>`;
             btn.onclick = () => selectPlayer(p.id);
             gridArea.appendChild(btn);
         });
@@ -841,7 +898,7 @@ function renderCourtView(container) {
         node.className = `court-player-node ${area === courtArea ? 'pos-' + posClass : ''}`;
         if(selectedPlayerId === player.id) node.classList.add('selected');
         
-        node.innerHTML = `${player.nummer}<span class="name">${player.name.split(' ')[0]}</span>`;
+        node.innerHTML = getPlayerDisplayHtml(player, '50px') + `<span class="name">${player.name.split(' ')[0]}</span>`;
         node.draggable = true;
         node.addEventListener('dragstart', (e) => handleDragStart(e, player.id));
         node.addEventListener('dragend', handleDragEnd);

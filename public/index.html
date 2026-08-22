@@ -36,6 +36,7 @@
             <button onclick="window.UI.togglePlayerManagement()" class="control-btn">👥 Spieler</button>
             <button onclick="openArchiveModal()" class="control-btn">📚 Archiv</button>
             <button onclick="openWhatsAppModal()" class="control-btn" id="wa-connect-btn">💬 WA Connect</button>
+            <button onclick="logoutUser()" class="control-btn" id="auth-logout-btn" style="display:none; background:var(--danger-color);">🚪 Logout</button>
             
             <div class="view-toggle-container">
                 <button onclick="window.UI.switchUIMode('classic')" id="btn-mode-classic" class="control-btn active-mode">📋 Classic</button>
@@ -71,6 +72,20 @@
     </footer>
 
     <div id="feedback-overlay"></div>
+
+    <!-- AUTHENTICATION OVERLAY -->
+    <div id="auth-overlay" class="overlay-view" style="display:none; z-index: 9999; background: rgba(0,0,0,0.95);">
+        <div class="overlay-content management-content glass-panel" style="max-width: 400px;">
+            <h2 id="auth-title">Login</h2>
+            <div class="form-row" style="flex-direction: column; align-items: stretch;">
+                <input type="text" id="auth-username" placeholder="Username" style="margin-bottom: 10px;">
+                <input type="password" id="auth-password" placeholder="Password" style="margin-bottom: 20px;">
+                <button onclick="loginUser()" id="auth-submit-btn" class="add-btn" style="margin-bottom: 10px;">Login</button>
+                <button onclick="toggleAuthMode()" id="auth-toggle-btn" class="back-btn" style="background: transparent; border: 1px solid var(--border-color);">Need an account? Register</button>
+            </div>
+            <p id="auth-error-msg" style="color: var(--danger-color); text-align: center; margin-top: 15px;"></p>
+        </div>
+    </div>
 
     <div id="assist-overlay" class="overlay-view" style="display:none;">
         <div class="overlay-content">
@@ -131,6 +146,7 @@
                         <option value="K">Kreis (K)</option>
                         <option value="N/A">N/A</option>
                     </select>
+                    <input type="file" id="input-avatar" accept="image/*" style="width: 150px;">
                     <button onclick="window.UI.addPlayer()" class="add-btn">Hinzufügen</button>
                 </div>
             </div>

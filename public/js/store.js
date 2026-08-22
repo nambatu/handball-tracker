@@ -7,6 +7,7 @@ const HAUPTAKTIONEN = [
     { typ: "WurfOhneTor", label: "❌ Wurf ohne Tor", category: "Wurf", farbe: "red" },
     { typ: "Ballverlust", label: "🥀 Ballverlust", category: "Verlust", farbe: "red" },
     { typ: "Parade", label: "🧤 Parade", category: "Wurf", farbe: "yellow" },
+    { typ: "Zeitstrafe", label: "⏱️ 2-Minuten", farbe: "orange" },
 ];
 
 const UNTERAKTIONEN = {
@@ -91,14 +92,34 @@ function isGuestTeam(name) {
     return lowerName === 'gegner' || lowerName === 'enemy' || lowerName === 'gast';
 }
 
-function addPlayerToStore(name, number, position) {
+function addPlayerToStore(name, number, position, avatarUrl = null) {
     SPIELER.push({
         id: 'p' + Date.now() + '_' + Math.floor(Math.random() * 10000),
         name: name,
         nummer: number,
-        position: position || "N/A"
+        position: position || "N/A",
+        playtimeSeconds: 0,
+        avatarUrl: avatarUrl,
+        suspendedUntilGameTime: null
     });
     savePlayers();
+}
+
+function updatePlayerAvatar(playerId, avatarUrl) {
+    const player = SPIELER.find(p => String(p.id) === String(playerId));
+    if (player) {
+        player.avatarUrl = avatarUrl;
+        savePlayers();
+    }
+}
+
+function applySuspension(playerId, currentGameTimeSeconds) {
+    const player = SPIELER.find(p => String(p.id) === String(playerId));
+    if (player) {
+        // 2 minutes = 120 seconds
+        player.suspendedUntilGameTime = currentGameTimeSeconds + 120;
+        savePlayers();
+    }
 }
 
 function removePlayerFromStore(playerId) {
@@ -112,6 +133,33 @@ function updatePlayerPosition(playerId, newPosition) {
         player.position = newPosition;
         savePlayers();
     }
+}
+
+function tickPlaytime() {
+    let updated = false;
+    // We need current game time to clear suspensions
+    const timerState = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0 };
+    
+    SPIELER.forEach(p => {
+        // Clear suspension if time has passed
+        if (p.suspendedUntilGameTime !== null && timerState.spielzeitSekunden >= p.suspendedUntilGameTime) {
+            p.suspendedUntilGameTime = null;
+            updated = true;
+            if (window.UI) window.UI.updateUI(); // refresh UI so they aren't grayed out
+        }
+        
+        // Initialize if undefined
+        if (typeof p.playtimeSeconds !== 'number') {
+            p.playtimeSeconds = 0;
+        }
+        // Exclude guest team and players on the bench or N/A
+        if (!isGuestTeam(p.name) && p.position !== 'Bank' && p.position !== 'N/A' && p.position !== 'Gast') {
+            p.playtimeSeconds++;
+            updated = true;
+        }
+    });
+    // We don't call savePlayers() here to avoid spamming the backend every second.
+    // The state will be saved when the game timer is paused, or positions change.
 }
 
 // Export for other modules if utilizing ES modules later, or attach to window
@@ -128,6 +176,9 @@ window.Store = {
     addPlayerToStore,
     removePlayerFromStore,
     updatePlayerPosition,
+    updatePlayerAvatar,
+    applySuspension,
+    tickPlaytime,
     
     // Team API Wrappers
     getTeams: async function() {

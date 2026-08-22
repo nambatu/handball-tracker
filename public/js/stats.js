@@ -43,7 +43,7 @@ function showStats_GetDetailedData() {
     allActionTypes = [...new Set([...allActionTypes, ...storedTypes])].sort();
 
     spieler.forEach(s => {
-        stats[s.id] = { name: s.name, nummer: s.nummer, aktionen: {} };
+        stats[s.id] = { name: s.name, nummer: s.nummer, playtimeSeconds: s.playtimeSeconds || 0, aktionen: {} };
         allActionTypes.forEach(typ => stats[s.id].aktionen[typ] = 0);
     });
 
@@ -63,7 +63,7 @@ function showStats() {
 
     let html = "<h2>Statistikübersicht</h2>";
     html += "<table border='1' cellspacing='0' cellpadding='5' width='100%'>";
-    html += "<thead style='background:#f2f2f2;'><tr><th style='text-align:left;'>Spieler</th>";
+    html += "<thead style='background:#f2f2f2;'><tr><th style='text-align:left;'>Spieler</th><th style='text-align:center;'>Spielzeit</th>";
 
     allActionTypes.forEach(typ => {
         html += `<th style='font-size:0.8em;'>${typ.replace('_', ' ')}</th>`;
@@ -71,7 +71,9 @@ function showStats() {
     html += "</tr></thead><tbody>";
 
     Object.values(stats).forEach(p => {
+        const pTime = window.Timer ? window.Timer.formatTime(p.playtimeSeconds) : "00:00";
         html += `<tr><td style='font-weight:bold;'>#${p.nummer} ${p.name}</td>`;
+        html += `<td style='text-align:center;'>${pTime}</td>`;
         allActionTypes.forEach(typ => {
             const count = p.aktionen[typ] || 0;
             const style = count > 0 ? "font-weight:bold;" : "color:#ccc;";
@@ -101,7 +103,8 @@ function getHighLevelStats() {
             fehlwuerfe: 0,
             assists: 0,
             fehler: 0,
-            paraden: 0
+            paraden: 0,
+            playtimeSeconds: s.playtimeSeconds || 0
         };
     });
 
@@ -142,7 +145,7 @@ function exportAsCSV() {
 
     let csv = "\uFEFF";
     csv += "=== SPIELER STATISTIK ===\n";
-    csv += "Nr.,Name,Tore,Assists,Fehlwürfe,Tech. Fehler,Paraden\n";
+    csv += "Nr.,Name,Spielzeit,Tore,Assists,Fehlwürfe,Tech. Fehler,Paraden\n";
 
     const summary = getHighLevelStats();
 
@@ -152,7 +155,8 @@ function exportAsCSV() {
 
     sortedPlayerIds.forEach(id => {
         const s = summary[id];
-        csv += `${s.nummer},"${s.name}",${s.tore},${s.assists},${s.fehlwuerfe},${s.fehler},${s.paraden}\n`;
+        const pTime = window.Timer ? window.Timer.formatTime(s.playtimeSeconds) : "00:00";
+        csv += `${s.nummer},"${s.name}",${pTime},${s.tore},${s.assists},${s.fehlwuerfe},${s.fehler},${s.paraden}\n`;
     });
 
     csv += "\n";
@@ -250,11 +254,11 @@ async function downloadArchive(filename) {
 
         let csv = "\uFEFF";
         csv += "=== SPIELER STATISTIK ===\n";
-        csv += "Nr.,Name,Tore,Assists,Fehlwürfe,Tech. Fehler,Paraden\n";
+        csv += "Nr.,Name,Spielzeit,Tore,Assists,Fehlwürfe,Tech. Fehler,Paraden\n";
 
         let stats = {};
         archSpieler.forEach(s => {
-            stats[s.id] = { name: s.name, nummer: s.nummer, tore: 0, fehlwuerfe: 0, assists: 0, fehler: 0, paraden: 0 };
+            stats[s.id] = { name: s.name, nummer: s.nummer, playtimeSeconds: s.playtimeSeconds || 0, tore: 0, fehlwuerfe: 0, assists: 0, fehler: 0, paraden: 0 };
         });
 
         archAktionen.forEach(a => {
@@ -270,7 +274,8 @@ async function downloadArchive(filename) {
         const sortedPlayerIds = Object.keys(stats).sort((a, b) => stats[b].tore - stats[a].tore);
         sortedPlayerIds.forEach(id => {
             const s = stats[id];
-            csv += `${s.nummer},"${s.name}",${s.tore},${s.assists},${s.fehlwuerfe},${s.fehler},${s.paraden}\n`;
+            const pTime = window.Timer ? window.Timer.formatTime(s.playtimeSeconds) : "00:00";
+            csv += `${s.nummer},"${s.name}",${pTime},${s.tore},${s.assists},${s.fehlwuerfe},${s.fehler},${s.paraden}\n`;
         });
 
         csv += "\n=== SPIELVERLAUF ===\n";
