@@ -25,7 +25,20 @@
                 <span id="guest-name">GAST</span>
             </div>
             <div class="timer-display">
-                Spielzeit: <span id="game-timer">00:00</span>
+                Spielzeit:
+                <button id="game-timer" class="timer-value" onclick="window.UI.openTimeEdit()"
+                        title="Antippen, um die Spielzeit zu korrigieren">00:00</button>
+                <button id="gk-indicator" class="gk-badge" onclick="window.UI.openGoalkeeperPicker()"
+                        title="Aktiver Torwart"></button>
+                <span id="sync-status" class="sync-badge sync-ok" title="Synchronisierung"></span>
+            </div>
+
+            <!-- Zeitkorrektur (z.B. wenn die App im Hintergrund weiterlief) -->
+            <div id="time-edit" class="time-edit" style="display:none;">
+                <label for="time-edit-input">Spielzeit auf</label>
+                <input type="text" id="time-edit-input" inputmode="numeric" placeholder="mm:ss" size="5">
+                <button onclick="window.UI.applyTimeEdit()" class="add-btn">Setzen</button>
+                <button onclick="window.UI.closeTimeEdit()" class="cancel-btn">Abbrechen</button>
             </div>
         </div>
 
@@ -79,11 +92,38 @@
             <h2 id="auth-title">Login</h2>
             <div class="form-row" style="flex-direction: column; align-items: stretch;">
                 <input type="text" id="auth-username" placeholder="Username" style="margin-bottom: 10px;">
-                <input type="password" id="auth-password" placeholder="Password" style="margin-bottom: 20px;">
+                <input type="password" id="auth-password" placeholder="Password" style="margin-bottom: 10px;">
+                <input type="text" id="auth-code" placeholder="Einladungscode" style="margin-bottom: 10px; display: none;">
+                <p id="auth-hint" style="font-size: 0.85em; color: var(--text-muted); margin: 0 0 15px 0; text-align: center;"></p>
                 <button onclick="loginUser()" id="auth-submit-btn" class="add-btn" style="margin-bottom: 10px;">Login</button>
                 <button onclick="toggleAuthMode()" id="auth-toggle-btn" class="back-btn" style="background: transparent; border: 1px solid var(--border-color);">Need an account? Register</button>
             </div>
             <p id="auth-error-msg" style="color: var(--danger-color); text-align: center; margin-top: 15px;"></p>
+        </div>
+    </div>
+
+    <!-- Torwart-Auswahl -->
+    <div id="gk-picker" class="overlay-view" style="display:none;">
+        <div class="overlay-content management-content glass-panel" style="max-width: 420px;">
+            <h2>🧤 Wer steht im Tor?</h2>
+            <p class="gk-explain">
+                Gegentore und Paraden werden dem hier gewählten Torwart zugerechnet.
+                So lässt sich die Fangquote auch bei zwei Keepern getrennt auswerten.
+            </p>
+            <div id="gk-picker-list" class="gk-list"></div>
+            <button onclick="window.UI.closeGoalkeeperPicker()" class="back-btn">Schließen</button>
+        </div>
+    </div>
+
+    <!-- Statistik -->
+    <div id="stats-view" class="overlay-view" style="display:none;">
+        <div class="overlay-content management-content glass-panel stats-panel">
+            <div class="stats-header">
+                <h2>📊 Statistik</h2>
+                <button onclick="window.Stats.exportAsCSV()" class="add-btn">⬇️ CSV Export</button>
+            </div>
+            <div id="stats-content"></div>
+            <button onclick="window.Stats.closeStats()" class="back-btn">Zurück zum Spiel</button>
         </div>
     </div>
 
@@ -207,6 +247,7 @@
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
     <script src="https://bernardo-castilho.github.io/DragDropTouch/DragDropTouch.js"></script>
+    <script src="js/sync.js"></script>
     <script src="js/store.js"></script>
     <script src="js/timer.js"></script>
     <script src="js/stats.js"></script>

@@ -34,7 +34,83 @@ function switchUIMode(mode) {
 
 function updateUI() {
     renderDynamicView();
+    renderGoalkeeperBadge();
     if (window.Timer) window.Timer.updateTimerDisplay();
+}
+
+// ===================================================================
+// AKTIVER TORWART
+// ===================================================================
+
+function renderGoalkeeperBadge() {
+    const el = document.getElementById('gk-indicator');
+    if (!el) return;
+
+    const gk = window.Store.getActiveGoalkeeper();
+    if (!gk) {
+        el.innerHTML = '<span class="gk-icon">🧤</span><span class="gk-name">Kein Torwart</span>';
+        el.title = 'Kein Spieler auf Position TW. Gegentore lassen sich ohne Torwart nicht zuordnen.';
+        el.classList.add('gk-missing');
+    } else {
+        el.innerHTML = '<span class="gk-icon">🧤</span><span class="gk-name">#' + gk.nummer + ' '
+            + escapeHtml(String(gk.name).split(' ')[0]) + '</span><span class="gk-caret">▾</span>';
+        el.title = 'Im Tor: ' + gk.name + ' — antippen zum Wechseln. Gegentore und Paraden werden diesem Torwart zugerechnet.';
+        el.classList.remove('gk-missing');
+    }
+}
+
+function openGoalkeeperPicker() {
+    const box = document.getElementById('gk-picker');
+    const list = document.getElementById('gk-picker-list');
+    if (!box || !list) return;
+
+    const keepers = window.Store.getGoalkeepers();
+    const activeId = window.Store.getActiveGoalkeeperId();
+
+    list.innerHTML = '';
+
+    if (keepers.length === 0) {
+        list.innerHTML = '<p class="gk-empty">Kein Spieler hat die Position TW. '
+            + 'Bitte in der Spielerverwaltung einen Torwart anlegen.</p>';
+    } else {
+        keepers.forEach(function (p) {
+            const btn = document.createElement('button');
+            btn.className = 'gk-option' + (String(p.id) === String(activeId) ? ' gk-active' : '');
+            btn.innerHTML = '<span class="gk-radio">' + (String(p.id) === String(activeId) ? '●' : '○') + '</span>'
+                + '<strong>#' + p.nummer + '</strong> ' + escapeHtml(p.name)
+                + (p.position !== 'TW' ? ' <em class="gk-hint">(steht auf ' + escapeHtml(p.position) + ')</em>' : '');
+            btn.onclick = function () { selectGoalkeeper(p.id); };
+            list.appendChild(btn);
+        });
+    }
+
+    box.style.display = 'flex';
+}
+
+function closeGoalkeeperPicker() {
+    const box = document.getElementById('gk-picker');
+    if (box) box.style.display = 'none';
+}
+
+function selectGoalkeeper(playerId) {
+    if (window.Store.setActiveGoalkeeper(playerId)) {
+        const gk = window.Store.getActiveGoalkeeper();
+        closeGoalkeeperPicker();
+        renderGoalkeeperBadge();
+        if (window.Toast && gk) {
+            window.Toast('Im Tor: #' + gk.nummer + ' ' + gk.name, { type: 'success', duration: 2500 });
+        }
+    }
+}
+
+/** Spielernamen kommen aus Nutzereingaben und landen in innerHTML. */
+function escapeHtml(str) {
+    return String(str === null || str === undefined ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function renderDynamicView() {
@@ -222,19 +298,19 @@ function updateScoreboard() {
 }
 
 function getAvailableActionsForPlayer(playerId, posClassFallback) {
-    if (!playerId) return window.Store.HAUPTAKTIONEN;
+    const all = window.Store.HAUPTAKTIONEN;
+    if (!playerId) return all.filter(a => !a.nurTorwart);
+
     const player = window.Store.getSPIELER().find(p => p.id === playerId);
-    if (!player) return window.Store.HAUPTAKTIONEN;
-    
-    let position = posClassFallback || player.position;
-    
-    let actions = window.Store.HAUPTAKTIONEN;
-    if (position === 'TW') {
-        actions = actions.filter(a => a.typ === 'Parade');
-    } else {
-        actions = actions.filter(a => a.typ !== 'Parade');
-    }
-    return actions;
+    if (!player) return all.filter(a => !a.nurTorwart);
+
+    const position = posClassFallback || player.position;
+
+    // Der Torwart konnte frueher AUSSCHLIESSLICH Paraden machen - Fehlpaesse,
+    // Zeitstrafen oder ein Tor ins leere Tor liessen sich gar nicht erfassen.
+    // Jetzt bekommt er alles, Feldspieler alles ausser der Parade.
+    if (position === 'TW') return all;
+    return all.filter(a => !a.nurTorwart);
 }
 
 function renderActionButtons() {
@@ -373,11 +449,20 @@ function executeSaveAction(player, actionType, actionLabel, category, assistId) 
     const aktionen = window.Store.loadActions();
     const timerState = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0, currentHalf: 1 };
 
+    // Torwart mitschreiben: bei einer Aktion DES Torwarts er selbst,
+    // sonst der gerade im Tor stehende Keeper. Nur so laesst sich spaeter
+    // ein Gegentor dem richtigen Torhueter zuordnen (Fangquote bei
+    // zwei Keepern getrennt berechenbar).
+    const torwartId = window.Store.isGoalkeeper(player)
+        ? player.id
+        : window.Store.getActiveGoalkeeperId();
+
     const newAction = {
         id: Date.now(),
         spielId: "current_match",
         spielerId: player.id,
         assistId: assistId,
+        torwartId: torwartId,
         typ: actionType,
         label: actionLabel,
         category: category || "Unbekannt",
@@ -422,6 +507,12 @@ function undoLastAction() {
     const lastAction = aktionen.pop();
     window.Store.saveActions(aktionen);
 
+    // Beim Zuruecknehmen einer Zeitstrafe muss auch die Sperre fallen,
+    // sonst bleibt der Spieler bis zum Ablauf ausgegraut.
+    if (lastAction.typ === 'Zeitstrafe' && window.Store.clearSuspension) {
+        window.Store.clearSuspension(lastAction.spielerId);
+    }
+
     const player = window.Store.getSPIELER().find(s => s.id === lastAction.spielerId);
     const actionLabel = lastAction.label || lastAction.typ;
 
@@ -431,6 +522,63 @@ function undoLastAction() {
     updateUI();
 
     alert(`RÜCKGÄNGIG: ${player ? player.nummer : '?'} (${actionLabel})`);
+}
+
+// ===================================================================
+// ZEITKORREKTUR
+// ===================================================================
+
+function openTimeEdit() {
+    const box = document.getElementById('time-edit');
+    const input = document.getElementById('time-edit-input');
+    if (!box || !input) return;
+
+    const state = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0 };
+    input.value = window.Timer ? window.Timer.formatTime(state.spielzeitSekunden) : '00:00';
+    box.style.display = 'flex';
+    input.focus();
+    input.select();
+
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); applyTimeEdit(); }
+        if (e.key === 'Escape') { e.preventDefault(); closeTimeEdit(); }
+    };
+}
+
+function closeTimeEdit() {
+    const box = document.getElementById('time-edit');
+    if (box) box.style.display = 'none';
+}
+
+function parseTimeInput(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+
+    // "12:34" oder "1234" oder "12" (= Minuten)
+    let m = raw.match(/^(\d{1,3}):([0-5]?\d)$/);
+    if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+
+    m = raw.match(/^(\d{1,3})$/);
+    if (m) return parseInt(m[1], 10) * 60;
+
+    return null;
+}
+
+function applyTimeEdit() {
+    const input = document.getElementById('time-edit-input');
+    if (!input) return;
+
+    const seconds = parseTimeInput(input.value);
+    if (seconds === null) {
+        if (window.Toast) window.Toast('Bitte im Format mm:ss eingeben, z.B. 23:40.', { type: 'error' });
+        return;
+    }
+
+    window.Timer.setGameTime(seconds);
+    closeTimeEdit();
+    if (window.Toast) {
+        window.Toast('Spielzeit auf ' + window.Timer.formatTime(seconds) + ' gesetzt.', { type: 'success' });
+    }
 }
 
 function updateActionCount() {
@@ -981,5 +1129,14 @@ window.UI = {
     updateSelectedTeam,
     loadTeam,
     deleteSelectedTeam,
-    clearAllPlayers
+    clearAllPlayers,
+    openTimeEdit,
+    closeTimeEdit,
+    applyTimeEdit,
+    parseTimeInput,
+    renderGoalkeeperBadge,
+    openGoalkeeperPicker,
+    closeGoalkeeperPicker,
+    selectGoalkeeper,
+    escapeHtml
 };
