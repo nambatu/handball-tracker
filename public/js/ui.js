@@ -195,10 +195,137 @@ function refreshSuspensions() {
     return nochAktiv;
 }
 
+// ---------------------------------------------------------------
+// Aktions-Sheet (Court-Ansicht)
+// ---------------------------------------------------------------
+// Das Menue haengt bewusst NICHT im #dynamic-view-container:
+//   - als Flex-Kind hat es dem Spielfeld Hoehe weggenommen, dadurch sind
+//     bei jeder Auswahl alle prozentual positionierten Spieler gesprungen;
+//   - der Container hat overflow:hidden, auf dem Handy lag das Menue danach
+//     komplett ausserhalb des sichtbaren Bereichs ("es geht kein Menue auf").
+// Als fixes Bottom-Sheet am <body> kann beides nicht mehr passieren.
+
+const ACTION_SHEET_ID = 'court-action-sheet';
+
+function closeActionSheet() {
+    const alt = document.getElementById(ACTION_SHEET_ID);
+    if (alt) alt.remove();
+    document.documentElement.style.setProperty('--cas-height', '0px');
+}
+
+/**
+ * Breite/Position des Sheets nachziehen.
+ * Auf dem Handy volle Breite (das macht schon das CSS). Auf dem Desktop
+ * liegt neben dem Feld der Verlauf - dort wird das Sheet auf die Spalte
+ * des Spielfelds gesetzt, sonst haengt es quer unter beiden Panels.
+ * Ausserdem meldet es seine Hoehe an die Toasts, damit die nicht
+ * ausgerechnet die Aktionsbuttons zudecken.
+ */
+function positionActionSheet() {
+    const sheet = document.getElementById(ACTION_SHEET_ID);
+    if (!sheet) { document.documentElement.style.setProperty('--cas-height', '0px'); return; }
+
+    const container = document.getElementById('dynamic-view-container');
+    const zweispaltig = window.innerWidth > 1024 && container;
+
+    if (zweispaltig) {
+        const r = container.getBoundingClientRect();
+        sheet.style.left = Math.round(r.left) + 'px';
+        sheet.style.right = 'auto';
+        sheet.style.width = Math.round(r.width) + 'px';
+        sheet.style.maxWidth = 'none';
+        sheet.style.margin = '0';
+    } else {
+        sheet.style.left = '';
+        sheet.style.right = '';
+        sheet.style.width = '';
+        sheet.style.maxWidth = '';
+        sheet.style.margin = '';
+    }
+
+    document.documentElement.style.setProperty('--cas-height', sheet.offsetHeight + 'px');
+}
+
+window.addEventListener('resize', positionActionSheet);
+window.addEventListener('orientationchange', positionActionSheet);
+
+/**
+ * Baut das Aktions-Sheet fuer den gewaehlten Spieler und haengt es an <body>.
+ * @param {string} playerId
+ * @param {string} [posClass] Position auf dem Feld (fuer Torwart-Aktionen)
+ */
+function openActionSheet(playerId, posClass) {
+    closeActionSheet();
+
+    const player = window.Store.getSPIELER().find(p => p.id === playerId);
+    if (!player) return;
+
+    const sheet = document.createElement('div');
+    sheet.id = ACTION_SHEET_ID;
+    sheet.className = 'court-action-sheet';
+
+    // Kopfzeile: das Sheet sitzt am unteren Bildschirmrand, der markierte
+    // Spieler weiter oben. Ohne Namen tippt man im Eifer auf den Falschen.
+    const head = document.createElement('div');
+    head.className = 'cas-head';
+    const istGast = window.Store.isGuestTeam(player.name);
+    const titel = istGast
+        ? (window.Store.getTeamNames().gast && window.Store.getTeamNames().gast !== 'GAST'
+            ? window.Store.getTeamNames().gast : 'Gegner')
+        : `#${player.nummer} ${player.name}`;
+    const label = document.createElement('span');
+    label.className = 'cas-title';
+    label.innerText = titel;
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'cas-close';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', 'Auswahl aufheben');
+    closeBtn.innerText = '✕';
+    closeBtn.onclick = (e) => { e.stopPropagation(); selectPlayer(playerId); };
+    head.appendChild(label);
+    head.appendChild(closeBtn);
+    sheet.appendChild(head);
+
+    const grid = document.createElement('div');
+    grid.className = 'cas-grid';
+
+    if (selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]) {
+        const backBtn = document.createElement('button');
+        backBtn.className = 'court-action-btn neutral';
+        backBtn.innerText = '← Zurück';
+        backBtn.onclick = (e) => { e.stopPropagation(); resetActionSelection(); };
+        grid.appendChild(backBtn);
+
+        window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory].forEach(u => {
+            const btn = document.createElement('button');
+            btn.className = 'court-action-btn sub-blue';
+            btn.innerText = u.label;
+            btn.onclick = (e) => { e.stopPropagation(); selectAction(u.typ); };
+            grid.appendChild(btn);
+        });
+    } else {
+        getAvailableActionsForPlayer(playerId, posClass).forEach(a => {
+            const btn = document.createElement('button');
+            btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
+            btn.innerText = a.label;
+            btn.onclick = (e) => { e.stopPropagation(); selectAction(a.typ, a.category); };
+            grid.appendChild(btn);
+        });
+    }
+
+    sheet.appendChild(grid);
+    document.body.appendChild(sheet);
+    positionActionSheet();
+}
+
 function renderDynamicView() {
     const container = document.getElementById('dynamic-view-container');
     if (!container) return;
-    
+
+    // Bei jedem Neuzeichnen zuerst weg - sonst bleibt beim Moduswechsel
+    // oder nach dem Abwaehlen ein verwaistes Sheet am <body> haengen.
+    closeActionSheet();
+
     if (window.UI_MODE === 'classic') {
         container.innerHTML = `
             <section id="player-list"></section>
@@ -1361,38 +1488,10 @@ function renderCourtView(container) {
         onTap(oppBtn, function () { selectPlayer(guestPlayer.id); });
         if(selectedPlayerId === guestPlayer.id) oppBtn.style.borderColor = 'white';
         opponentArea.appendChild(oppBtn);
-        
-        if (selectedPlayerId === guestPlayer.id) {
-             const menu = document.createElement('div');
-             menu.className = 'court-action-menu';
-             menu.style.position = 'static';
-             menu.style.marginLeft = '10px';
-             if (selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]) {
-                 const subEvents = window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory];
-                 const backBtn = document.createElement('button');
-                 backBtn.className = 'court-action-btn neutral';
-                 backBtn.innerText = '← Zurück';
-                 backBtn.onclick = (e) => { e.stopPropagation(); resetActionSelection(); };
-                 menu.appendChild(backBtn);
-                 subEvents.forEach(u => {
-                     const btn = document.createElement('button');
-                     btn.className = 'court-action-btn sub-blue';
-                     btn.innerText = u.label;
-                     btn.onclick = (e) => { e.stopPropagation(); selectAction(u.typ); };
-                     menu.appendChild(btn);
-                 });
-             } else {
-                 const actions = getAvailableActionsForPlayer(guestPlayer.id);
-                 actions.forEach(a => {
-                     const btn = document.createElement('button');
-                     btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
-                     btn.innerText = a.label;
-                     btn.onclick = (e) => { e.stopPropagation(); selectAction(a.typ, a.category); };
-                     menu.appendChild(btn);
-                 });
-             }
-             opponentArea.appendChild(menu);
-        }
+
+        // Gleiches Sheet wie bei den eigenen Spielern. Frueher wuchs hier ein
+        // zweispaltiges Menue IN die Gegner-Zeile und schob das Feld nach unten.
+        if (selectedPlayerId === guestPlayer.id) openActionSheet(guestPlayer.id);
     }
     container.appendChild(opponentArea);
 
@@ -1452,7 +1551,6 @@ function renderCourtView(container) {
         if (dz) dz.classList.add('is-occupied');
     });
 
-    let menuFuerUnten = null;
     const allRenderedPlayers = [...courtPlayers.map(cp => ({...cp, area: courtArea})), ...benchPlayers.map(bp => ({...bp, area: benchArea}))];
 
     allRenderedPlayers.forEach(({player, posClass, area}) => {
@@ -1475,46 +1573,10 @@ function renderCourtView(container) {
         
         area.appendChild(node);
         
-        if (selectedPlayerId === player.id && area === courtArea) {
-            // Das Menue lag frueher absolut im Feld und verdeckte damit
-            // genau die unteren Spieler (Torwart, Aussen). Jetzt haengt es
-            // unter dem Feld und kann niemanden mehr zudecken.
-            const menu = document.createElement('div');
-            menu.className = 'court-action-menu court-action-sheet';
-            
-            if (selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]) {
-                const subEvents = window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory];
-                const backBtn = document.createElement('button');
-                backBtn.className = 'court-action-btn neutral';
-                backBtn.innerText = '← Zurück';
-                backBtn.onclick = (e) => { e.stopPropagation(); resetActionSelection(); };
-                menu.appendChild(backBtn);
-                subEvents.forEach(u => {
-                    const btn = document.createElement('button');
-                    btn.className = 'court-action-btn sub-blue';
-                    btn.innerText = u.label;
-                    btn.onclick = (e) => { e.stopPropagation(); selectAction(u.typ); };
-                    menu.appendChild(btn);
-                });
-            } else {
-                const actions = getAvailableActionsForPlayer(player.id, posClass);
-                actions.forEach(a => {
-                    const btn = document.createElement('button');
-                    btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
-                    btn.innerText = a.label;
-                    btn.onclick = (e) => { e.stopPropagation(); selectAction(a.typ, a.category); };
-                    menu.appendChild(btn);
-                });
-            }
-            menuFuerUnten = menu;
-        }
+        if (selectedPlayerId === player.id) openActionSheet(player.id, posClass);
     });
 
     container.appendChild(courtArea);
-    // Das Menue haengt UNTER dem Feld. Frueher lag es absolut positioniert
-    // darin und verdeckte genau die unteren Spieler - Torwart und Aussen
-    // waren dann nicht mehr antippbar.
-    if (menuFuerUnten) container.appendChild(menuFuerUnten);
     container.appendChild(benchArea);
 }
 
