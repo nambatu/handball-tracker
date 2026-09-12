@@ -585,9 +585,13 @@ app.post('/api/state', requireUser, (req, res) => {
             updatedAt: Number(incoming.updatedAt) || Date.now(),
             spieler: Array.isArray(incoming.spieler) ? incoming.spieler : [],
             aktionen: Array.isArray(incoming.aktionen) ? incoming.aktionen : [],
+<<<<<<< HEAD
             aktiverTorwartId: incoming.aktiverTorwartId || null,
             teamHeim: incoming.teamHeim || null,
             teamGast: incoming.teamGast || null
+=======
+            aktiverTorwartId: incoming.aktiverTorwartId || null
+>>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
         });
 
         res.json({ success: true, rev: incomingRev });
@@ -625,12 +629,16 @@ app.post('/api/archive', requireUser, (req, res) => {
         const { spieler, aktionen, teamHeim, teamGast } = req.body;
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `game-${timestamp}.json`;
+<<<<<<< HEAD
         writeJsonAtomic(path.join(paths.archives, filename), {
             spieler, aktionen,
             teamHeim: teamHeim || null,
             teamGast: teamGast || null,
             archivedAt: new Date().toISOString()
         });
+=======
+        writeJsonAtomic(path.join(paths.archives, filename), { spieler, aktionen });
+>>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
         res.json({ success: true, filename });
     } catch (e) {
         res.status(500).json({ error: 'Failed to archive game' });

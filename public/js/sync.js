@@ -42,7 +42,11 @@
     };
 
     function emptyState() {
+<<<<<<< HEAD
         return { rev: 0, updatedAt: 0, spieler: [], aktionen: [], aktiverTorwartId: null, teamHeim: null, teamGast: null };
+=======
+        return { rev: 0, updatedAt: 0, spieler: [], aktionen: [], aktiverTorwartId: null };
+>>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
     }
 
     function normalize(raw) {
@@ -51,9 +55,13 @@
             updatedAt: Number(raw && raw.updatedAt) || 0,
             spieler: (raw && Array.isArray(raw.spieler)) ? raw.spieler : [],
             aktionen: (raw && Array.isArray(raw.aktionen)) ? raw.aktionen : [],
+<<<<<<< HEAD
             aktiverTorwartId: (raw && raw.aktiverTorwartId) || null,
             teamHeim: (raw && raw.teamHeim) || null,
             teamGast: (raw && raw.teamGast) || null
+=======
+            aktiverTorwartId: (raw && raw.aktiverTorwartId) || null
+>>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
         };
     }
 
@@ -63,9 +71,13 @@
             updatedAt: state.updatedAt,
             spieler: state.spieler,
             aktionen: state.aktionen,
+<<<<<<< HEAD
             aktiverTorwartId: state.aktiverTorwartId,
             teamHeim: state.teamHeim,
             teamGast: state.teamGast
+=======
+            aktiverTorwartId: state.aktiverTorwartId
+>>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
         };
     }
 

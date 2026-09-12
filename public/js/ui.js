@@ -111,6 +111,7 @@ function selectGoalkeeper(playerId) {
     }
 }
 
+<<<<<<< HEAD
 // ===================================================================
 // ERFASSUNGS-FEEDBACK
 // ===================================================================
@@ -157,6 +158,8 @@ function showFeedback(text, kind, vibratePattern) {
     } catch (e) { /* nicht unterstuetzt - egal */ }
 }
 
+=======
+>>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
 /** Spielernamen kommen aus Nutzereingaben und landen in innerHTML. */
 function escapeHtml(str) {
     return String(str === null || str === undefined ? '' : str)
@@ -678,9 +681,20 @@ function removeActionById(actionId, mitWiederherstellen) {
     const entfernt = aktionen.splice(idx, 1)[0];
     window.Store.saveActions(aktionen);
 
+<<<<<<< HEAD
     if (entfernt.typ === 'Zeitstrafe' && window.Store.clearSuspension) {
         window.Store.clearSuspension(entfernt.spielerId);
     }
+=======
+    // Beim Zuruecknehmen einer Zeitstrafe muss auch die Sperre fallen,
+    // sonst bleibt der Spieler bis zum Ablauf ausgegraut.
+    if (lastAction.typ === 'Zeitstrafe' && window.Store.clearSuspension) {
+        window.Store.clearSuspension(lastAction.spielerId);
+    }
+
+    const player = window.Store.getSPIELER().find(s => s.id === lastAction.spielerId);
+    const actionLabel = lastAction.label || lastAction.typ;
+>>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
 
     updateActionCount();
     renderHistory();
@@ -865,6 +879,63 @@ function openTimeEdit() {
     input.select();
 
     input.onkeydown = function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); applyTimeEdit(); }
+        if (e.key === 'Escape') { e.preventDefault(); closeTimeEdit(); }
+    };
+}
+
+function closeTimeEdit() {
+    const box = document.getElementById('time-edit');
+    if (box) box.style.display = 'none';
+}
+
+function parseTimeInput(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+
+    // "12:34" oder "1234" oder "12" (= Minuten)
+    let m = raw.match(/^(\d{1,3}):([0-5]?\d)$/);
+    if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+
+    m = raw.match(/^(\d{1,3})$/);
+    if (m) return parseInt(m[1], 10) * 60;
+
+    return null;
+}
+
+function applyTimeEdit() {
+    const input = document.getElementById('time-edit-input');
+    if (!input) return;
+
+    const seconds = parseTimeInput(input.value);
+    if (seconds === null) {
+        if (window.Toast) window.Toast('Bitte im Format mm:ss eingeben, z.B. 23:40.', { type: 'error' });
+        return;
+    }
+
+    window.Timer.setGameTime(seconds);
+    closeTimeEdit();
+    if (window.Toast) {
+        window.Toast('Spielzeit auf ' + window.Timer.formatTime(seconds) + ' gesetzt.', { type: 'success' });
+    }
+}
+
+// ===================================================================
+// ZEITKORREKTUR
+// ===================================================================
+
+function openTimeEdit() {
+    const box = document.getElementById('time-edit');
+    const input = document.getElementById('time-edit-input');
+    if (!box || !input) return;
+
+    const state = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0 };
+    input.value = window.Timer ? window.Timer.formatTime(state.spielzeitSekunden) : '00:00';
+    box.style.display = 'flex';
+    input.focus();
+    input.select();
+
+    input.onkeydown = (e) => {
         if (e.key === 'Enter') { e.preventDefault(); applyTimeEdit(); }
         if (e.key === 'Escape') { e.preventDefault(); closeTimeEdit(); }
     };
@@ -1470,10 +1541,13 @@ window.UI = {
     applyTimeEdit,
     parseTimeInput,
     renderGoalkeeperBadge,
+<<<<<<< HEAD
     renderTeamNames,
     openTeamNameEdit,
     closeTeamNameEdit,
     applyTeamNameEdit,
+=======
+>>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
     openGoalkeeperPicker,
     closeGoalkeeperPicker,
     selectGoalkeeper,
