@@ -521,10 +521,35 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     width: 70px;
     height: 70px;
     border-radius: 50%;
-    border: 2px dashed rgba(255,255,255,0.1);
+    border: 2px dashed rgba(255, 255, 255, 0.08);
     transform: translate(-50%, 50%);
+    /* Die Zone ist Untergrund. Lag sie ueber dem Spieler, fing sie jeden
+       Klick ab - der Spieler war nicht mehr antippbar. */
     z-index: 1;
-    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+}
+
+.dz-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: rgba(255, 255, 255, 0.22);
+}
+
+/* Wo jemand steht, verschwindet der Platzhalter komplett */
+.court-drop-zone.is-occupied { border-color: transparent; }
+.court-drop-zone.is-occupied .dz-label { display: none; }
+
+/* Beim Ziehen treten alle Plaetze deutlich hervor */
+body.is-dragging-player .court-drop-zone {
+    border-color: rgba(255, 255, 255, 0.3);
+}
+body.is-dragging-player .court-drop-zone .dz-label {
+    display: block;
+    color: rgba(255, 255, 255, 0.5);
 }
 .court-drop-zone.drag-over {
     background: rgba(255,255,255,0.1);
@@ -556,6 +581,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     border-radius: 0;
     box-shadow: none;
     cursor: grab;
+    /* MUSS ueber der Drop-Zone (z-index 1) liegen, sonst fangen die
+       gestrichelten Kreise saemtliche Klicks ab. */
+    z-index: 2;
 }
 .court-player-node:active { cursor: grabbing; }
 .court-player-node span.name {
@@ -792,7 +820,10 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 }
 
 .toast {
-    pointer-events: auto;
+    /* Der Streifen selbst schluckt KEINE Tipper: er liegt ueber dem Feld,
+       und ein Tipp auf den Torwart darf nicht im Hinweis haengenbleiben.
+       Nur die Knoepfe darin sind anklickbar. */
+    pointer-events: none;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -822,6 +853,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .toast-text { flex: 1; }
 
 .toast-action {
+    pointer-events: auto;
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid var(--border-color);
@@ -836,6 +868,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .toast-action:hover { background: rgba(255, 255, 255, 0.18); }
 
 .toast-close {
+    pointer-events: auto;
     flex-shrink: 0;
     background: transparent;
     border: none;

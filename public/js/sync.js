@@ -451,6 +451,13 @@
         el.appendChild(close);
 
         host.appendChild(el);
+
+        // Hoechstens drei gleichzeitig - gestapelte Hinweise verdecken sonst
+        // das halbe Spielfeld. Der aelteste weicht.
+        while (host.children.length > 3) {
+            host.removeChild(host.firstChild);
+        }
+
         requestAnimationFrame(function () { el.classList.add('toast-in'); });
 
         timer = setTimeout(dismiss, opts.duration || 4000);

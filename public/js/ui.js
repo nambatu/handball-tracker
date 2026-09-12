@@ -8,6 +8,7 @@ let selectedPrimaryActionCategory = null;
 let currentSort = 'nummer';
 
 let tempActionData = null;
+let uhrHinweisGezeigt = false;
 
 const feedbackOverlay = document.getElementById('feedback-overlay');
 const historyPanelElement = document.getElementById('history-panel');
@@ -567,10 +568,17 @@ function handleActionFlow(player, finalActionType, finalActionLabel, category) {
     // vor dem Anwurf, in der Halbzeit oder nach Spielende nichts nachtragen.
     // Jetzt wird erfasst und nur darauf hingewiesen - danebengetippt ist
     // dank des Rueckgaengig-Toasts in zwei Sekunden behoben.
-    if (!timerState.isTimerRunning && window.Toast) {
-        window.Toast('Uhr läuft nicht — erfasst bei '
-            + (window.Timer ? window.Timer.formatTime(timerState.spielzeitSekunden) : '00:00') + '.',
-            { type: 'warn', duration: 3000 });
+    //
+    // Der Hinweis kommt EINMAL pro Pausenphase. Bei jeder Aktion waere er
+    // Krach: wer in der Halbzeit fuenf Sachen nachtraegt, will ihn nicht
+    // fuenfmal lesen.
+    if (timerState.isTimerRunning) {
+        uhrHinweisGezeigt = false;
+    } else if (!uhrHinweisGezeigt && window.Toast) {
+        uhrHinweisGezeigt = true;
+        window.Toast('Uhr läuft nicht — Aktionen werden bei '
+            + (window.Timer ? window.Timer.formatTime(timerState.spielzeitSekunden) : '00:00') + ' eingetragen.',
+            { type: 'warn', duration: 4000 });
     }
 
     const isGoal = finalActionType.includes('WurfTor');
@@ -1331,6 +1339,10 @@ function renderCourtView(container) {
     positions.forEach(pos => {
         const dropZone = document.createElement('div');
         dropZone.className = `court-drop-zone pos-${pos}`;
+        dropZone.dataset.pos = pos;
+        // Beschriftung macht aus dem raetselhaften gestrichelten Kreis
+        // einen erkennbar leeren Platz
+        dropZone.innerHTML = `<span class="dz-label">${escapeHtml(pos)}</span>`;
         dropZone.addEventListener('dragover', handleDragOver);
         dropZone.addEventListener('dragleave', handleDragLeave);
         dropZone.addEventListener('drop', (e) => handleDrop(e, pos));
@@ -1362,6 +1374,12 @@ function renderCourtView(container) {
         } else {
             benchPlayers.push({ player: p, posClass: posClass });
         }
+    });
+
+    // Wo jemand steht, braucht es keinen leeren Platzhalter mehr
+    courtPlayers.forEach(cp => {
+        const dz = courtArea.querySelector('.court-drop-zone.pos-' + cp.posClass);
+        if (dz) dz.classList.add('is-occupied');
     });
 
     const allRenderedPlayers = [...courtPlayers.map(cp => ({...cp, area: courtArea})), ...benchPlayers.map(bp => ({...bp, area: benchArea}))];
