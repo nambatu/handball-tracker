@@ -1046,7 +1046,6 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     .stats-table .col-name { min-width: 110px; }
     #stats-content { max-height: 62vh; }
 }
-<<<<<<< HEAD
 
 /* =========================================
    14. SPIELER-BADGE (runder Kreis mit Nummer)
@@ -1497,5 +1496,3 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     margin-bottom: 18px;
 }
 .history-empty { padding: 18px; text-align: center; color: var(--text-muted); font-size: 0.9rem; }
-=======
->>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e

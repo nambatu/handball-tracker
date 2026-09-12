@@ -534,7 +534,6 @@ async function openArchiveModal() {
                 <div>
                     <strong style="font-size: 1.1rem;">${esc(dateStr)}</strong>
                     <div style="font-size: 0.85em; color: var(--text-muted);">${esc(a.filename)}</div>
-<<<<<<< HEAD
                 </div>
                 <div class="archive-btns">
                     <button class="add-btn js-report">📄 Bericht</button>
@@ -543,12 +542,6 @@ async function openArchiveModal() {
             `;
             li.querySelector('.js-report').onclick = () => window.Report.showArchiveReport(a.filename);
             li.querySelector('.js-csv').onclick = () => downloadArchive(a.filename);
-=======
-                </div>
-                <button class="add-btn">CSV Export</button>
-            `;
-            li.querySelector('button').onclick = () => downloadArchive(a.filename);
->>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
             list.appendChild(li);
         });
     } catch (e) {

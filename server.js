@@ -585,13 +585,9 @@ app.post('/api/state', requireUser, (req, res) => {
             updatedAt: Number(incoming.updatedAt) || Date.now(),
             spieler: Array.isArray(incoming.spieler) ? incoming.spieler : [],
             aktionen: Array.isArray(incoming.aktionen) ? incoming.aktionen : [],
-<<<<<<< HEAD
             aktiverTorwartId: incoming.aktiverTorwartId || null,
             teamHeim: incoming.teamHeim || null,
             teamGast: incoming.teamGast || null
-=======
-            aktiverTorwartId: incoming.aktiverTorwartId || null
->>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
         });
 
         res.json({ success: true, rev: incomingRev });
@@ -629,16 +625,12 @@ app.post('/api/archive', requireUser, (req, res) => {
         const { spieler, aktionen, teamHeim, teamGast } = req.body;
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `game-${timestamp}.json`;
-<<<<<<< HEAD
         writeJsonAtomic(path.join(paths.archives, filename), {
             spieler, aktionen,
             teamHeim: teamHeim || null,
             teamGast: teamGast || null,
             archivedAt: new Date().toISOString()
         });
-=======
-        writeJsonAtomic(path.join(paths.archives, filename), { spieler, aktionen });
->>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
         res.json({ success: true, filename });
     } catch (e) {
         res.status(500).json({ error: 'Failed to archive game' });
@@ -824,7 +816,7 @@ if (process.env.WHATSAPP_ENABLED !== 'false') {
 // zusaetzlich im Heimnetz (z.B. zum Testen per LAN-IP).
 const HOST = process.env.HOST || '0.0.0.0';
 
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
     console.log(`Server laeuft auf http://${HOST}:${PORT}`);
     console.log(`Datenverzeichnis: ${DATA_DIR}`);
     if (!process.env.REGISTRATION_CODE) {
@@ -834,3 +826,29 @@ app.listen(PORT, HOST, () => {
         console.warn('[WARN] Der Server lauscht auf allen Interfaces. Hinter einem Tunnel ist HOST=127.0.0.1 sicherer.');
     }
 });
+
+if (server && typeof server.on === 'function') {
+    server.on('error', (e) => {
+        console.error(`[FATAL] Port ${PORT} nicht belegbar: ${e.code}`);
+        process.exit(1);
+    });
+}
+
+// 127.0.0.1 ist reines IPv4. Manche Clients - darunter ngrok - loesen
+// "localhost" zuerst zu ::1 auf und laufen dann ins Leere
+// ("dial tcp [::1]:3000: connect: connection refused"). Deshalb bei
+// Loopback-Bindung zusaetzlich auf IPv6 lauschen.
+if (HOST === '127.0.0.1' || HOST === 'localhost') {
+    try {
+        const v6 = app.listen(PORT, '::1', () => {
+            console.log(`Server laeuft zusaetzlich auf http://[::1]:${PORT}`);
+        });
+        if (v6 && typeof v6.on === 'function') {
+            v6.on('error', (e) => {
+                console.warn(`[WARN] IPv6-Loopback nicht verfuegbar (${e.code}) - IPv4 allein reicht auch.`);
+            });
+        }
+    } catch (e) {
+        console.warn('[WARN] IPv6-Loopback nicht moeglich:', e.message);
+    }
+}

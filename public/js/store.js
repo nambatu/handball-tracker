@@ -153,18 +153,11 @@ function updatePlayerPosition(playerId, newPosition) {
     }
 }
 
-<<<<<<< HEAD
-=======
-// ===================================================================
-// AKTIVER TORWART
-// ===================================================================
->>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
 // Jede Aktion bekommt beim Speichern die ID des Torwarts mit, der in
 // diesem Moment im Tor steht. Erst dadurch lassen sich Gegentore einem
 // Keeper zuordnen und die Fangquote bei zwei Torhuetern getrennt
 // berechnen - ohne dass man im Spiel einen Klick mehr machen muss.
 
-<<<<<<< HEAD
 function getTeamNames() {
     const st = state();
     return {
@@ -184,8 +177,6 @@ function setTeamNames(heim, gast) {
 // AKTIVER TORWART
 // ===================================================================
 
-=======
->>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
 function isGoalkeeper(p) {
     return !!p && p.position === 'TW';
 }
@@ -284,11 +275,8 @@ window.Store = {
     UNTERAKTIONEN,
     WURFPOSITIONEN,
     getSPIELER: () => state().spieler,
-<<<<<<< HEAD
     getTeamNames,
     setTeamNames,
-=======
->>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
     isGoalkeeper,
     getGoalkeepers,
     getActiveGoalkeeper,

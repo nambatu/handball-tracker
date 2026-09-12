@@ -1,6 +1,18 @@
 node_modules/
+package-lock.json
 .env
 .wwebjs_auth/
 .wwebjs_cache/
 npm-debug.log
 .DS_Store
+
+# Spieldaten gehoeren NICHT ins Repo. Auf dem Pi liegen sie unter
+# /var/lib/handball-tracker (siehe DATA_DIR in der .env); ein lokales
+# data/ entsteht nur bei der Entwicklung.
+data/
+data.verschoben-*/
+*.tar.gz
+
+# Logs und Zwischenstaende
+*.log
+*.tmp

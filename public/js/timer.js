@@ -165,20 +165,14 @@ function toggleGameTimer() {
         clock.startedAt = null;
         stopDisplayLoop();
         tick();
-<<<<<<< HEAD
         if (window.WakeLock) window.WakeLock.release();
-=======
->>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
         if (window.Sync) window.Sync.flush();
     } else {
         clock.startedAt = Date.now();
         lastPlaytimeSeconds = elapsedSeconds();
         startDisplayLoop();
-<<<<<<< HEAD
         // Solange das Spiel laeuft, darf sich das Handy nicht sperren
         if (window.WakeLock) window.WakeLock.enable(true);
-=======
->>>>>>> 0b29f46e0ef45b664cf4cf7e8385847e009c625e
     }
     saveGameState();
     updateTimerDisplay();
