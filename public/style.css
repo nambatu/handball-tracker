@@ -413,10 +413,18 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 }
 
 @media (max-width: 768px) {
-    /* Hier scrollt der <body>. Der Platz unten sorgt dafuer, dass sich das
-       ganze Feld ueber das Aktions-Sheet schieben laesst. */
-    body { overflow-y: auto; padding-bottom: var(--cas-height, 0px); }
+    body { overflow-y: auto; }
     #app-container { flex-direction: column; height: auto; overflow: visible; padding: 10px; }
+    /* Fester Platz unter dem Feld, damit man es ueber das Aktions-Sheet
+       schieben kann.
+       WICHTIG: der Wert haengt bewusst NICHT an --cas-height. Wuerde er mit
+       dem Sheet auftauchen und verschwinden, waere die Seite beim Schliessen
+       schlagartig um die Sheet-Hoehe kuerzer - der Browser kappt die
+       Scrollposition dann auf das neue Maximum, und nach jeder Aktion rutscht
+       die Ansicht genau um eine Sheet-Hoehe nach oben. Konstant reserviert
+       bleibt die Seitenhoehe gleich und die Scrollposition damit erreichbar.
+       52vh entspricht der max-height des Sheets. */
+    #app-container.layout-court { padding-bottom: max(300px, 52vh); }
     header { flex-direction: column; gap: 10px; padding: 10px; }
     .scoreboard { width: 100%; justify-content: center; }
     #controls { width: 100%; flex-wrap: wrap; }
