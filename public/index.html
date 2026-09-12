@@ -8,6 +8,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="description" content="Aktionen eines Handballspiels live erfassen — Tore, Paraden, Strafen — mit Statistik und Spielbericht.">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icons/icon-192.png" sizes="192x192">
+    <!-- iOS kennt kein Manifest: Vollbild und Icon brauchen eigene Angaben -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tracker">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -16,16 +25,29 @@
     <header>
         <div id="game-info">
             <div class="scoreboard">
-                <span id="team-name">HEIM</span>
+                <button id="team-name" class="team-name-btn" onclick="window.UI.openTeamNameEdit()" title="Teamnamen ändern">HEIM</button>
                 <div class="score-container">
                     <span id="score-home" class="score-number">0</span>
                     <span class="score-divider">:</span>
                     <span id="score-guest" class="score-number">0</span>
                 </div>
-                <span id="guest-name">GAST</span>
+                <button id="guest-name" class="team-name-btn" onclick="window.UI.openTeamNameEdit()" title="Teamnamen ändern">GAST</button>
             </div>
             <div class="timer-display">
-                Spielzeit: <span id="game-timer">00:00</span>
+                Spielzeit:
+                <button id="game-timer" class="timer-value" onclick="window.UI.openTimeEdit()"
+                        title="Antippen, um die Spielzeit zu korrigieren">00:00</button>
+                <button id="gk-indicator" class="gk-badge" onclick="window.UI.openGoalkeeperPicker()"
+                        title="Aktiver Torwart"></button>
+                <span id="sync-status" class="sync-badge sync-ok" title="Synchronisierung"></span>
+            </div>
+
+            <!-- Zeitkorrektur (z.B. wenn die App im Hintergrund weiterlief) -->
+            <div id="time-edit" class="time-edit" style="display:none;">
+                <label for="time-edit-input">Spielzeit auf</label>
+                <input type="text" id="time-edit-input" inputmode="numeric" placeholder="mm:ss" size="5">
+                <button onclick="window.UI.applyTimeEdit()" class="add-btn">Setzen</button>
+                <button onclick="window.UI.closeTimeEdit()" class="cancel-btn">Abbrechen</button>
             </div>
         </div>
 
@@ -33,14 +55,15 @@
             <button onclick="window.Timer.toggleGameTimer()" id="timer-btn" class="control-btn">▶️ Start</button>
             <button onclick="window.Timer.toggleEndHalfOrGame()" id="half-end-btn" class="control-btn">⏸️ Halbzeit</button>
             <button onclick="window.Stats.showStats()" class="control-btn">📊 Statistik</button>
+            <button onclick="window.Report.showCurrentReport()" class="control-btn">📄 Spielbericht</button>
             <button onclick="window.UI.togglePlayerManagement()" class="control-btn">👥 Spieler</button>
+            <button onclick="window.UI.openHistoryView()" class="control-btn">🕐 Verlauf</button>
             <button onclick="openArchiveModal()" class="control-btn">📚 Archiv</button>
             <button onclick="openWhatsAppModal()" class="control-btn" id="wa-connect-btn">💬 WA Connect</button>
             <button onclick="logoutUser()" class="control-btn" id="auth-logout-btn" style="display:none; background:var(--danger-color);">🚪 Logout</button>
             
             <div class="view-toggle-container">
-                <button onclick="window.UI.switchUIMode('classic')" id="btn-mode-classic" class="control-btn active-mode">📋 Classic</button>
-                <button onclick="window.UI.switchUIMode('thumb')" id="btn-mode-thumb" class="control-btn">📱 Mobile</button>
+                <button onclick="window.UI.switchUIMode('thumb')" id="btn-mode-thumb" class="control-btn active-mode">📱 Mobile</button>
                 <button onclick="window.UI.switchUIMode('court')" id="btn-mode-court" class="control-btn">🏟️ Court</button>
             </div>
         </div>
@@ -79,11 +102,99 @@
             <h2 id="auth-title">Login</h2>
             <div class="form-row" style="flex-direction: column; align-items: stretch;">
                 <input type="text" id="auth-username" placeholder="Username" style="margin-bottom: 10px;">
-                <input type="password" id="auth-password" placeholder="Password" style="margin-bottom: 20px;">
+                <input type="password" id="auth-password" placeholder="Password" style="margin-bottom: 10px;">
+                <input type="text" id="auth-code" placeholder="Einladungscode" style="margin-bottom: 10px; display: none;">
+                <p id="auth-hint" style="font-size: 0.85em; color: var(--text-muted); margin: 0 0 15px 0; text-align: center;"></p>
                 <button onclick="loginUser()" id="auth-submit-btn" class="add-btn" style="margin-bottom: 10px;">Login</button>
                 <button onclick="toggleAuthMode()" id="auth-toggle-btn" class="back-btn" style="background: transparent; border: 1px solid var(--border-color);">Need an account? Register</button>
             </div>
             <p id="auth-error-msg" style="color: var(--danger-color); text-align: center; margin-top: 15px;"></p>
+        </div>
+    </div>
+
+    <!-- Verlauf (auf dem Handy ist das Seitenpanel ausgeblendet) -->
+    <div id="history-view" class="overlay-view" style="display:none;">
+        <div class="overlay-content management-content glass-panel" style="max-width: 560px;">
+            <h2>🕐 Verlauf</h2>
+            <p class="gk-explain">Eintrag antippen, um ihn zu korrigieren oder zu löschen.</p>
+            <div id="history-view-list" class="history-scroll"></div>
+            <button onclick="window.UI.closeHistoryView()" class="back-btn">Schließen</button>
+        </div>
+    </div>
+
+    <!-- Aktion korrigieren -->
+    <div id="action-edit" class="overlay-view" style="display:none;">
+        <div class="overlay-content management-content glass-panel" style="max-width: 520px;">
+            <h2>Aktion korrigieren</h2>
+            <div id="action-edit-info" class="ae-info"></div>
+
+            <h3 class="ae-head">Auf welchen Spieler?</h3>
+            <div id="action-edit-players" class="ae-grid"></div>
+
+            <div id="action-edit-assist-wrap" style="display:none;">
+                <h3 class="ae-head">Assist</h3>
+                <div id="action-edit-assist" class="ae-grid"></div>
+            </div>
+
+            <div class="ae-actions">
+                <button onclick="window.UI.deleteEditedAction()" class="cancel-btn">🗑️ Aktion löschen</button>
+                <button onclick="window.UI.closeActionEdit()" class="back-btn">Abbrechen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Teamnamen -->
+    <div id="team-name-edit" class="overlay-view" style="display:none;">
+        <div class="overlay-content management-content glass-panel" style="max-width: 420px;">
+            <h2>Teams</h2>
+            <div class="form-row" style="flex-direction: column; align-items: stretch;">
+                <label class="field-label" for="input-team-heim">Heimmannschaft</label>
+                <input type="text" id="input-team-heim" placeholder="z.B. ESV" maxlength="40" style="margin-bottom: 14px;">
+                <label class="field-label" for="input-team-gast">Gastmannschaft</label>
+                <input type="text" id="input-team-gast" placeholder="z.B. TSV Musterdorf" maxlength="40" style="margin-bottom: 20px;">
+                <button onclick="window.UI.applyTeamNameEdit()" class="add-btn">Speichern</button>
+            </div>
+            <button onclick="window.UI.closeTeamNameEdit()" class="back-btn">Abbrechen</button>
+        </div>
+    </div>
+
+    <!-- Spielbericht -->
+    <div id="report-view" class="overlay-view" style="display:none;">
+        <div class="overlay-content report-panel">
+            <div class="report-toolbar">
+                <h2>📄 Spielbericht</h2>
+                <div class="report-actions">
+                    <button onclick="window.Report.printReport()" class="add-btn">🖨️ Drucken / Als PDF</button>
+                    <button onclick="window.Stats.exportAsCSV()" class="control-btn">⬇️ CSV</button>
+                    <button onclick="window.Report.closeReport()" class="control-btn">Schließen</button>
+                </div>
+            </div>
+            <div id="report-content"></div>
+        </div>
+    </div>
+
+    <!-- Torwart-Auswahl -->
+    <div id="gk-picker" class="overlay-view" style="display:none;">
+        <div class="overlay-content management-content glass-panel" style="max-width: 420px;">
+            <h2>🧤 Wer steht im Tor?</h2>
+            <p class="gk-explain">
+                Gegentore und Paraden werden dem hier gewählten Torwart zugerechnet.
+                So lässt sich die Fangquote auch bei zwei Keepern getrennt auswerten.
+            </p>
+            <div id="gk-picker-list" class="gk-list"></div>
+            <button onclick="window.UI.closeGoalkeeperPicker()" class="back-btn">Schließen</button>
+        </div>
+    </div>
+
+    <!-- Statistik -->
+    <div id="stats-view" class="overlay-view" style="display:none;">
+        <div class="overlay-content management-content glass-panel stats-panel">
+            <div class="stats-header">
+                <h2>📊 Statistik</h2>
+                <button onclick="window.Stats.exportAsCSV()" class="add-btn">⬇️ CSV Export</button>
+            </div>
+            <div id="stats-content"></div>
+            <button onclick="window.Stats.closeStats()" class="back-btn">Zurück zum Spiel</button>
         </div>
     </div>
 
@@ -207,9 +318,12 @@
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
     <script src="https://bernardo-castilho.github.io/DragDropTouch/DragDropTouch.js"></script>
+    <script src="js/sync.js"></script>
+    <script src="js/wakelock.js"></script>
     <script src="js/store.js"></script>
     <script src="js/timer.js"></script>
     <script src="js/stats.js"></script>
+    <script src="js/report.js"></script>
     <script src="js/whatsapp.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/app.js"></script>

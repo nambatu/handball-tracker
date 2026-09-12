@@ -1,0 +1,38 @@
+# Cloudflare Tunnel fuer den Handball Tracker
+#
+# Zielpfad auf dem Pi:  /etc/cloudflared/config.yml
+#
+# Der Tunnel baut eine AUSGEHENDE Verbindung zu Cloudflare auf. Am Router
+# muss kein Port geoeffnet werden, eine feste IP ist nicht noetig, und es
+# funktioniert auch bei DS-Lite-Anschluessen ohne eigene IPv4-Adresse.
+#
+# Einrichtung (siehe Deployment-Anleitung im Projekt):
+#   cloudflared tunnel login
+#   cloudflared tunnel create handball-tracker
+#   cloudflared tunnel route dns handball-tracker tracker.langschwerts.de
+#   sudo cloudflared service install
+#
+# <TUNNEL-ID> unten durch die ID ersetzen, die "tunnel create" ausgibt.
+
+tunnel: <TUNNEL-ID>
+credentials-file: /etc/cloudflared/<TUNNEL-ID>.json
+
+# Verbindungen zu Cloudflare offen halten; bei Abbruch zuegig neu aufbauen
+retries: 5
+grace-period: 30s
+
+ingress:
+  - hostname: tracker.langschwerts.de
+    service: http://127.0.0.1:3000
+    originRequest:
+      # Der Tracker haelt beim Sichern keine langen Verbindungen offen;
+      # kurze Timeouts decken Fehler schneller auf.
+      connectTimeout: 10s
+      noTLSVerify: false
+      # Cloudflare reicht die echte Client-IP im X-Forwarded-For weiter -
+      # dadurch trifft das Rate-Limit im Server den richtigen Absender.
+      httpHostHeader: tracker.langschwerts.de
+
+  # Alles, was zu keiner Regel passt, wird abgewiesen. Diese Zeile ist
+  # Pflicht und muss die letzte sein.
+  - service: http_status:404

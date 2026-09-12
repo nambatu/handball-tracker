@@ -12,6 +12,7 @@
     --highlight-color: #fbbf24; /* Amber 400 */
     --danger-color: #ef4444; /* Red 500 */
     --success-color: #10b981; /* Emerald 500 */
+    --warning-color: #f59e0b; /* Amber 500 */
     --border-color: rgba(255, 255, 255, 0.1);
     
     /* Button Farben */
@@ -545,22 +546,16 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 }
 
 .court-player-node {
-    width: 60px;
-    height: 60px;
-    background: var(--bg-color);
-    border: 2px solid var(--border-color);
-    border-radius: 50%;
+    width: 64px;
     display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 1.2rem;
-    font-weight: 700;
-    cursor: grab;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-    transition: border-color 0.2s;
     flex-direction: column;
-    z-index: 2;
-    transform: translate(-50%, 50%); /* Fix alignment with drop zones */
+    align-items: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    cursor: grab;
 }
 .court-player-node:active { cursor: grabbing; }
 .court-player-node span.name {
@@ -569,8 +564,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     margin-top: 2px;
 }
 .court-player-node:hover, .court-player-node.selected {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+    /* Hervorhebung sitzt am Kreis (.player-badge), nicht am Container -
+       sonst liegt ein rechteckiger Schein hinter dem runden Spieler. */
+    box-shadow: none;
 }
 .court-player-node.dragging { opacity: 0.5; }
 body.is-dragging-player .court-player-node { pointer-events: none; }
@@ -679,3 +675,824 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .thumb-action-btn.wide {
     grid-column: span 3;
 }
+/* =========================================
+   12. SYNC-STATUS, TOASTS & ZEITKORREKTUR
+   ========================================= */
+
+.sync-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    vertical-align: middle;
+    cursor: default;
+}
+
+.sync-badge .sync-icon { font-size: 0.85em; line-height: 1; }
+
+.sync-ok {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+}
+
+.sync-pending {
+    background: rgba(14, 165, 233, 0.15);
+    border-color: rgba(14, 165, 233, 0.35);
+    color: #7dd3fc;
+}
+
+.sync-pending .sync-icon {
+    display: inline-block;
+    animation: sync-spin 1.1s linear infinite;
+}
+
+@keyframes sync-spin {
+    to { transform: rotate(360deg); }
+}
+
+.sync-offline {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #fcd34d;
+}
+
+.sync-error {
+    background: rgba(239, 68, 68, 0.18);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: #fca5a5;
+}
+
+/* Die Spielzeit ist jetzt ein Button (antippen = korrigieren) */
+.timer-value {
+    background: transparent;
+    border: 1px dashed transparent;
+    color: inherit;
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    padding: 2px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.timer-value:hover,
+.timer-value:focus-visible {
+    border-color: var(--border-color);
+    background: rgba(255, 255, 255, 0.06);
+    outline: none;
+}
+
+.time-edit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+}
+
+.time-edit input {
+    width: 5.5em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    padding: 6px 8px;
+}
+
+.time-edit .add-btn,
+.time-edit .cancel-btn {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+}
+
+/* --- Toasts --- */
+#toast-container {
+    position: fixed;
+    left: 50%;
+    bottom: 90px;
+    transform: translateX(-50%);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    width: min(92vw, 460px);
+}
+
+.toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(30, 41, 59, 0.97);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--accent-color);
+    color: var(--text-color);
+    font-size: 0.9rem;
+    line-height: 1.35;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast.toast-in { opacity: 1; transform: translateY(0); }
+.toast.toast-out { opacity: 0; transform: translateY(8px); }
+
+.toast-success { border-left-color: var(--success-color); }
+.toast-warn    { border-left-color: var(--highlight-color); }
+.toast-error   { border-left-color: var(--danger-color); }
+
+.toast-text { flex: 1; }
+
+.toast-action {
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.toast-action:hover { background: rgba(255, 255, 255, 0.18); }
+
+.toast-close {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+}
+
+.toast-close:hover { color: var(--text-color); }
+
+@media (max-width: 600px) {
+    #toast-container { bottom: 76px; }
+    .sync-badge { margin-left: 8px; font-size: 0.72rem; padding: 2px 8px; }
+    .sync-badge .sync-text { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .toast { transition: none; }
+    .sync-pending .sync-icon { animation: none; }
+}
+
+/* =========================================
+   13. AKTIVER TORWART, STATISTIK, NEUE AKTIONSFARBEN
+   ========================================= */
+
+/* Fehlende Farbklassen fuer die neuen Aktionen */
+.action-button.orange { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-color: rgba(245, 158, 11, 0.45); }
+.court-action-btn.orange, .thumb-action-btn.orange { background: rgba(245, 158, 11, 0.2); border: 1px solid var(--warning-color); }
+
+/* --- Torwart-Anzeige im Header --- */
+.gk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 10px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    color: #fcd34d;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease;
+}
+
+.gk-badge:hover { background: rgba(245, 158, 11, 0.26); }
+
+.gk-badge.gk-missing {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+}
+
+.gk-caret { opacity: 0.65; font-size: 0.7em; }
+
+.gk-explain {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+    margin: 0 0 16px 0;
+}
+
+.gk-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+
+.gk-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 14px 16px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 1rem;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gk-option:hover { background: rgba(255, 255, 255, 0.07); }
+
+.gk-option.gk-active {
+    border-color: var(--warning-color);
+    background: rgba(245, 158, 11, 0.14);
+}
+
+.gk-radio { color: var(--warning-color); font-size: 1.1em; }
+.gk-hint { color: var(--text-muted); font-style: normal; font-size: 0.85em; }
+.gk-empty { color: var(--text-muted); font-size: 0.9rem; padding: 12px 0; }
+
+/* --- Statistik-Overlay --- */
+.stats-panel { max-width: 1200px; width: 96vw; }
+
+.stats-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.stats-header h2 { margin: 0; }
+
+#stats-content { max-height: 68vh; overflow-y: auto; margin: 16px 0; }
+
+#stats-content h3 {
+    margin: 22px 0 10px;
+    font-size: 1.05rem;
+    color: var(--accent-color);
+}
+
+#stats-content h3:first-child { margin-top: 0; }
+
+#stats-content h4 {
+    margin: 18px 0 8px;
+    font-size: 0.92rem;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.stats-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.22);
+}
+
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.stats-table th,
+.stats-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.stats-table thead th {
+    position: sticky;
+    top: 0;
+    background: rgba(15, 23, 42, 0.97);
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    z-index: 2;
+}
+
+.stats-table .col-name {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: rgba(15, 23, 42, 0.97);
+    z-index: 1;
+    min-width: 140px;
+}
+
+.stats-table thead .col-name { z-index: 3; }
+.stats-table tbody tr:hover td { background: rgba(255, 255, 255, 0.04); }
+.stats-table tbody tr:hover .col-name { background: rgba(30, 41, 59, 0.99); }
+
+.stats-table .num { font-weight: 500; }
+.stats-table .strong { font-weight: 800; }
+.stats-table .muted { color: rgba(148, 163, 184, 0.45); }
+
+.stats-table .q-good { color: #34d399; font-weight: 700; }
+.stats-table .q-mid  { color: #fbbf24; font-weight: 700; }
+.stats-table .q-low  { color: #f87171; font-weight: 700; }
+
+.stats-total td {
+    border-top: 2px solid var(--border-color);
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.stats-matrix { font-size: 0.8rem; }
+.stats-empty { color: var(--text-muted); font-size: 0.9rem; }
+
+.archive-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(0, 0, 0, 0.2);
+    margin-bottom: 5px;
+    border-radius: 8px;
+}
+
+@media (max-width: 600px) {
+    .gk-badge { margin-left: 6px; font-size: 0.72rem; padding: 2px 8px; }
+    .stats-table { font-size: 0.78rem; }
+    .stats-table th, .stats-table td { padding: 6px 7px; }
+    .stats-table .col-name { min-width: 110px; }
+    #stats-content { max-height: 62vh; }
+}
+
+/* =========================================
+   14. SPIELER-BADGE (runder Kreis mit Nummer)
+   ========================================= */
+/* Der Kreis wurde oval, weil er in Spalten-Flexboxen gestaucht wurde und
+   weil der Court-Knoten selbst ein Kreis war, der Avatar UND Name enthielt.
+   flex:0 0 auto plus aspect-ratio halten ihn jetzt in jedem Container rund. */
+
+.player-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--badge-size, 40px);
+    height: var(--badge-size, 40px);
+    min-width: var(--badge-size, 40px);
+    min-height: var(--badge-size, 40px);
+    aspect-ratio: 1 / 1;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--primary-color, #1e293b);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    line-height: 1;
+}
+
+.badge-number {
+    font-size: calc(var(--badge-size, 40px) * 0.42);
+    font-weight: 800;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+
+.badge-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+/* Bei Foto wandert die Nummer als kleiner Chip an den Rand */
+.badge-number-chip {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 3px;
+    border-radius: 9px;
+    background: var(--accent-color);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 0 2px var(--bg-color);
+}
+
+.badge-suspension {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(220, 38, 38, 0.88);
+    color: #fff;
+    font-size: calc(var(--badge-size, 40px) * 0.28);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.player-badge.is-suspended .badge-photo,
+.player-badge.is-suspended .badge-number { filter: grayscale(100%); opacity: 0.55; }
+
+/* Auswahl-Zustand sitzt jetzt am Kreis, nicht am Container */
+.court-player-node.selected .player-badge,
+.court-player-node:hover .player-badge {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.55);
+}
+.court-player-node .name {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    max-width: 64px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
+.thumb-btn .name { margin-top: 6px; }
+
+/* =========================================
+   15. TEAMNAMEN
+   ========================================= */
+
+.team-name-btn {
+    background: transparent;
+    border: 1px dashed transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    max-width: 12ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.team-name-btn:hover,
+.team-name-btn:focus-visible {
+    border-color: var(--border-color);
+    background: rgba(255, 255, 255, 0.06);
+    outline: none;
+}
+
+.field-label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 5px;
+}
+
+.archive-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* =========================================
+   16. SPIELBERICHT
+   ========================================= */
+/* Bewusst HELL, obwohl die App dunkel ist: der Bericht ist ein Dokument.
+   Was am Bildschirm steht, kommt so auch aus dem Drucker. */
+
+/* Die App stylt header, footer und section global (dunkles Panel mit
+   Unschaerfe). Ohne diesen Riegel faerbt sich der Berichtskopf dunkel ein
+   und jeder Abschnitt bekommt Panel-Optik. :where() haelt die Spezifitaet
+   bei null, damit die .rep-* Regeln weiter unten muehelos gewinnen. */
+.rep-sheet :where(header, footer, section) {
+    background: none;
+    backdrop-filter: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    display: block;
+    overflow: visible;
+    padding: 0;
+    z-index: auto;
+}
+.rep-sheet :where(section h3) {
+    background: none;
+    padding: 0;
+    border: 0;
+    text-align: left;
+    letter-spacing: normal;
+}
+
+.report-panel {
+    background: #f3f3f1;
+    max-width: 900px;
+    width: 96vw;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.report-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 14px 18px;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+.report-toolbar h2 { margin: 0; font-size: 1.05rem; color: var(--text-color); }
+.report-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+#report-content { overflow-y: auto; padding: 18px; }
+
+.rep-sheet {
+    background: #fff;
+    color: #0b0b0b;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 13px;
+    line-height: 1.45;
+    padding: 26px 30px 20px;
+    border-radius: 6px;
+    /* .overlay-content vererbt text-align:center in den Bericht hinein und
+       zentriert damit saemtliche Ueberschriften. Hier wieder geraderuecken. */
+    text-align: left;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+}
+
+.rep-head { border-bottom: 2px solid #0b0b0b; padding-bottom: 14px; margin-bottom: 18px; }
+.rep-teams { display: flex; align-items: center; justify-content: center; gap: 22px; }
+.rep-team { flex: 1; }
+.rep-team-right { text-align: right; }
+.rep-team-name { font-size: 19px; font-weight: 700; }
+.rep-score { display: flex; align-items: baseline; gap: 3px; }
+.rep-score-num { font-size: 46px; font-weight: 800; letter-spacing: -0.02em; }
+.rep-score-sep { font-size: 30px; color: #898781; }
+.rep-win .rep-score-num { color: #0ca30c; }
+.rep-loss .rep-score-num { color: #52514e; }
+.rep-submeta { text-align: center; color: #52514e; font-size: 12px; margin: 10px 0 0; }
+
+.rep-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 8px;
+    margin-bottom: 22px;
+}
+.rep-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 9px 11px;
+    background: #fcfcfb;
+    border: 1px solid #e1e0d9;
+    border-radius: 6px;
+}
+.rep-tile-label { font-size: 10.5px; color: #52514e; text-transform: uppercase; letter-spacing: 0.04em; }
+.rep-tile-value { font-size: 21px; font-weight: 700; }
+.rep-tile-sub { font-size: 10.5px; color: #898781; }
+
+.rep-block { margin: 22px 0; }
+.rep-block h2 {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0 0 9px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #e1e0d9;
+}
+.rep-block h3 { font-size: 12px; font-weight: 600; color: #52514e; margin: 16px 0 7px; }
+.rep-note { font-size: 11px; color: #898781; margin: 6px 0 0; }
+
+.rep-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.rep-table th, .rep-table td { padding: 5px 7px; text-align: center; border-bottom: 1px solid #f0efec; }
+.rep-table thead th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #52514e;
+    font-weight: 600;
+    border-bottom: 1px solid #c3c2b7;
+}
+.rep-table .rep-name { text-align: left; }
+.rep-table .rep-num { color: #898781; }
+.rep-table .rep-pos { color: #52514e; font-size: 11px; }
+.rep-table .rep-strong { font-weight: 700; }
+.rep-table .rep-dim { color: #c3c2b7; }
+.rep-table tfoot td { border-top: 1px solid #c3c2b7; font-weight: 700; background: #fcfcfb; }
+.rep-table-compact td, .rep-table-compact th { padding: 4px 6px; font-size: 11px; }
+
+.rep-q-good { color: #006300; font-weight: 700; }
+.rep-q-mid  { color: #8a5a00; font-weight: 700; }
+.rep-q-low  { color: #b32020; font-weight: 700; }
+
+.rep-figure { margin: 22px 0; }
+.rep-cap { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.rep-svg { width: 100%; height: auto; display: block; }
+.rep-legend { display: flex; gap: 16px; margin: 2px 0 8px; font-size: 11.5px; color: #52514e; }
+.rep-key { display: inline-flex; align-items: center; gap: 6px; }
+.rep-swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+.rep-goals { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 26px; font-size: 11.5px; }
+.rep-goals li {
+    display: grid;
+    grid-template-columns: 42px 44px 1fr;
+    gap: 6px;
+    padding: 3px 0 3px 7px;
+    border-left: 3px solid #86b6ef;
+    break-inside: avoid;
+    margin-bottom: 2px;
+}
+.rep-goals li.rep-goal-gast { border-left-color: #eb6834; }
+.rep-goals li.rep-goal-heim { border-left-color: #2a78d6; }
+.rep-goal-time { color: #898781; font-variant-numeric: tabular-nums; }
+.rep-goal-score { font-weight: 700; font-variant-numeric: tabular-nums; }
+.rep-goal-who { grid-column: 3; }
+.rep-goal-det { grid-column: 3; color: #898781; font-size: 10.5px; }
+
+.rep-glossary dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; font-size: 11.5px; }
+.rep-glossary dt { font-weight: 700; }
+.rep-glossary dd { margin: 0; color: #52514e; }
+
+.rep-foot { text-align: center; color: #898781; font-size: 10.5px; margin: 26px 0 0; }
+
+@media (max-width: 700px) {
+    .rep-sheet { padding: 16px 14px; font-size: 12px; }
+    .rep-score-num { font-size: 34px; }
+    .rep-team-name { font-size: 15px; }
+    .rep-goals { columns: 1; }
+    .rep-glossary dl { grid-template-columns: 1fr; }
+    .rep-glossary dd { margin-bottom: 6px; }
+    #report-content { padding: 10px; }
+}
+
+/* =========================================
+   17. DRUCK
+   ========================================= */
+
+@media print {
+    /* Alles ausser dem Bericht verschwindet */
+    body > *:not(#report-view) { display: none !important; }
+
+    html, body {
+        background: #fff !important;
+        overflow: visible !important;
+        height: auto !important;
+    }
+
+    #report-view {
+        display: block !important;
+        position: static !important;
+        inset: auto !important;
+        background: none !important;
+        backdrop-filter: none !important;
+    }
+
+    .report-panel {
+        position: static !important;
+        max-width: none;
+        width: auto;
+        max-height: none;
+        background: none;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    .report-toolbar { display: none !important; }
+
+    #report-content { overflow: visible !important; padding: 0 !important; max-height: none !important; }
+
+    .rep-sheet { box-shadow: none; border-radius: 0; padding: 0; font-size: 10.5pt; }
+
+    /* Abschnitte nicht mitten durchschneiden */
+    .rep-figure, .rep-block, .rep-table, .rep-kpis { break-inside: avoid; page-break-inside: avoid; }
+    .rep-break { break-before: page; page-break-before: always; }
+    .rep-table thead { display: table-header-group; }
+
+    a[href]:after { content: none !important; }
+}
+
+@page {
+    size: A4 portrait;
+    margin: 12mm;
+}
+
+/* =========================================
+   18. KORREKTUR & FEEDBACK
+   ========================================= */
+
+.history-entry.is-editable { cursor: pointer; }
+.history-entry.is-editable:active { background: rgba(255, 255, 255, 0.09); }
+.history-assist { color: var(--text-muted); }
+
+.ae-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+.ae-time { font-size: 0.82rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.ae-cur { font-size: 0.85rem; color: var(--text-muted); }
+
+.ae-head {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin: 16px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ae-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: 7px;
+    max-height: 34vh;
+    overflow-y: auto;
+}
+
+.ae-player {
+    padding: 11px 12px;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 0.92rem;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ae-player:hover { background: rgba(255, 255, 255, 0.08); }
+.ae-player.ae-active {
+    border-color: var(--accent-color);
+    background: rgba(14, 165, 233, 0.16);
+}
+
+.ae-actions {
+    display: flex;
+    gap: 9px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+.ae-actions button { flex: 1; min-width: 140px; }
+
+/* Erfassungs-Feedback: kurzes Aufblitzen, nicht im Weg */
+#feedback-overlay {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    z-index: 9000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #feedback-overlay { transition: opacity 0.1s linear; }
+}
+
+/* Im Homescreen-Betrieb gibt es keine Browserleiste - dvh rechnet das
+   korrekt, vh zaehlt auf iOS die eingeblendete Leiste faelschlich mit. */
+@supports (height: 100dvh) {
+    body { min-height: 100dvh; }
+    .overlay-view { height: 100dvh; }
+}
+
+.history-scroll {
+    max-height: 62vh;
+    overflow-y: auto;
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 18px;
+}
+.history-empty { padding: 18px; text-align: center; color: var(--text-muted); font-size: 0.9rem; }

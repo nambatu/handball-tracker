@@ -1,34 +1,83 @@
 // ===================================================================
 // STATS & CSV EXPORT
 // ===================================================================
+// Zentrale Idee: alle Auswertungen gehen durch buildStats(), damit die
+// Anzeige im Browser und der CSV-Export garantiert dieselben Zahlen
+// liefern - egal ob laufendes Spiel oder Archiv.
+// ===================================================================
 
-function getPlayerSummaryStats() {
-    const aktionen = window.Store.loadActions();
-    const spieler = window.Store.getSPIELER();
-    let summary = {};
-
-    spieler.forEach(s => {
-        summary[s.id] = { tore: 0, fehler: 0, paraden: 0, gesamtAktionen: 0 };
-    });
-
-    aktionen.forEach(action => {
-        if (!summary[action.spielerId]) return;
-        const type = action.typ;
-        if (type.includes("WurfTor")) summary[action.spielerId].tore++;
-        if (type.includes("Ballverlust")) summary[action.spielerId].fehler++;
-        if (type.includes("Parade")) summary[action.spielerId].paraden++;
-        summary[action.spielerId].gesamtAktionen++;
-    });
-
-    return summary;
+function esc(str) {
+    return (window.UI && window.UI.escapeHtml)
+        ? window.UI.escapeHtml(str)
+        : String(str === null || str === undefined ? '' : str);
 }
 
-function showStats_GetDetailedData() {
-    const aktionen = window.Store.loadActions();
-    const spieler = window.Store.getSPIELER();
-    let stats = {};
-    let allActionTypes = [];
+function fmtTime(seconds) {
+    return window.Timer ? window.Timer.formatTime(seconds) : "00:00";
+}
 
+/** Quote als Prozentwert; null, wenn es keine Grundgesamtheit gibt. */
+function quote(treffer, gesamt) {
+    if (!gesamt) return null;
+    return Math.round((treffer / gesamt) * 1000) / 10;
+}
+
+function fmtQuote(q) {
+    return q === null ? '–' : q.toFixed(1).replace('.', ',') + ' %';
+}
+
+// ===================================================================
+// KERNAUSWERTUNG
+// ===================================================================
+
+/**
+ * @param {Array} spieler
+ * @param {Array} aktionen
+ * @returns {{spieler: Object, torhueter: Object, team: Object, allActionTypes: Array}}
+ */
+function buildStats(spieler, aktionen) {
+    const isGuest = (name) => window.Store.isGuestTeam(name);
+
+    const perPlayer = {};
+    spieler.forEach(s => {
+        perPlayer[s.id] = {
+            id: s.id,
+            name: s.name,
+            nummer: s.nummer,
+            position: s.position,
+            istGast: isGuest(s.name),
+            playtimeSeconds: s.playtimeSeconds || 0,
+
+            tore: 0,
+            fehlwuerfe: 0,
+            assists: 0,
+            fehler: 0,            // Ballverluste
+            ballgewinne: 0,
+            siebenMeterRaus: 0,
+            siebenMeterTore: 0,
+            siebenMeterWuerfe: 0,
+            zeitstrafen: 0,
+            gelb: 0,
+            rot: 0,
+            blau: 0,
+
+            // Torwart
+            paraden: 0,
+            gegentore: 0,
+            paradenNachZone: {},
+            gegentoreNachZone: {},
+
+            aktionen: {}
+        };
+    });
+
+    const team = {
+        tore: 0, fehlwuerfe: 0, gegentore: 0, ballverluste: 0, ballgewinne: 0,
+        gegnerTore: 0, gegnerWuerfe: 0
+    };
+
+    // Alle vorkommenden Aktionstypen fuer die Detailmatrix
+    let allActionTypes = [];
     window.Store.HAUPTAKTIONEN.forEach(h => {
         if (h.category && window.Store.UNTERAKTIONEN[h.category]) {
             window.Store.UNTERAKTIONEN[h.category].forEach(u => {
@@ -38,172 +87,429 @@ function showStats_GetDetailedData() {
             allActionTypes.push(h.typ);
         }
     });
-
-    const storedTypes = [...new Set(aktionen.map(a => a.typ))];
-    allActionTypes = [...new Set([...allActionTypes, ...storedTypes])].sort();
-
-    spieler.forEach(s => {
-        stats[s.id] = { name: s.name, nummer: s.nummer, playtimeSeconds: s.playtimeSeconds || 0, aktionen: {} };
-        allActionTypes.forEach(typ => stats[s.id].aktionen[typ] = 0);
+    allActionTypes = [...new Set([...allActionTypes, ...aktionen.map(a => a.typ)])].sort();
+    Object.values(perPlayer).forEach(p => {
+        allActionTypes.forEach(t => { p.aktionen[t] = 0; });
     });
 
-    aktionen.forEach(action => {
-        if (stats[action.spielerId] && stats[action.spielerId].aktionen.hasOwnProperty(action.typ)) {
-            stats[action.spielerId].aktionen[action.typ]++;
+    /** Wurfzone aus dem zusammengesetzten Typ herausziehen, z.B. WurfTor_Kreis -> Kreis */
+    function zoneOf(typ) {
+        const parts = String(typ || '').split('_');
+        return parts.length > 1 ? parts.slice(1).join('_') : 'Ohne Angabe';
+    }
+
+    aktionen.forEach(a => {
+        const p = perPlayer[a.spielerId];
+        const typ = String(a.typ || '');
+
+        if (p && p.aktionen.hasOwnProperty(typ)) p.aktionen[typ]++;
+
+        const istGastAktion = p ? p.istGast : false;
+
+        if (typ.includes('WurfTor')) {
+            if (istGastAktion) {
+                team.gegnerTore++;
+                team.gegnerWuerfe++;
+                team.gegentore++;
+                // Gegentor dem Torwart zurechnen, der laut Aufzeichnung
+                // in diesem Moment im Tor stand.
+                const gk = a.torwartId ? perPlayer[a.torwartId] : null;
+                if (gk) {
+                    gk.gegentore++;
+                    const z = zoneOf(typ);
+                    gk.gegentoreNachZone[z] = (gk.gegentoreNachZone[z] || 0) + 1;
+                }
+            } else if (p) {
+                p.tore++;
+                team.tore++;
+                if (typ.includes('7Meter')) { p.siebenMeterTore++; p.siebenMeterWuerfe++; }
+            }
+        } else if (typ.includes('WurfOhneTor')) {
+            if (istGastAktion) {
+                team.gegnerWuerfe++;
+            } else if (p) {
+                p.fehlwuerfe++;
+                team.fehlwuerfe++;
+                if (typ.includes('7Meter')) p.siebenMeterWuerfe++;
+            }
+        } else if (typ.includes('Ballverlust')) {
+            if (p) p.fehler++;
+            if (!istGastAktion) team.ballverluste++;
+        } else if (typ.includes('Ballgewinn')) {
+            if (p) p.ballgewinne++;
+            if (!istGastAktion) team.ballgewinne++;
+        } else if (typ.includes('Parade')) {
+            if (p) {
+                p.paraden++;
+                const z = zoneOf(typ);
+                p.paradenNachZone[z] = (p.paradenNachZone[z] || 0) + 1;
+            }
+        } else if (typ.includes('SiebenMeterRaus')) {
+            if (p) p.siebenMeterRaus++;
+        } else if (typ.includes('Zeitstrafe')) {
+            if (p) p.zeitstrafen++;
+        } else if (typ.includes('Karte_Gelb')) {
+            if (p) p.gelb++;
+        } else if (typ.includes('Karte_Rot')) {
+            if (p) p.rot++;
+        } else if (typ.includes('Karte_Blau')) {
+            if (p) p.blau++;
         }
+
+        if (a.assistId && perPlayer[a.assistId]) perPlayer[a.assistId].assists++;
     });
 
-    return { stats: stats, allActionTypes: allActionTypes };
+    // Abgeleitete Quoten
+    Object.values(perPlayer).forEach(p => {
+        p.wuerfe = p.tore + p.fehlwuerfe;
+        p.wurfquote = quote(p.tore, p.wuerfe);
+        p.siebenMeterQuote = quote(p.siebenMeterTore, p.siebenMeterWuerfe);
+        p.wuerfeAufsTor = p.paraden + p.gegentore;
+        p.fangquote = quote(p.paraden, p.wuerfeAufsTor);
+    });
+
+    team.wuerfe = team.tore + team.fehlwuerfe;
+    team.wurfquote = quote(team.tore, team.wuerfe);
+
+    // Als Torhueter gilt, wer Paraden/Gegentore hat oder auf TW steht
+    const torhueter = {};
+    Object.values(perPlayer).forEach(p => {
+        if (p.istGast) return;
+        if (p.paraden > 0 || p.gegentore > 0 || p.position === 'TW') torhueter[p.id] = p;
+    });
+
+    return { spieler: perPlayer, torhueter: torhueter, team: team, allActionTypes: allActionTypes };
 }
 
-function showStats() {
-    const data = showStats_GetDetailedData();
-    const stats = data.stats;
-    const allActionTypes = data.allActionTypes;
+function currentStats() {
+    return buildStats(window.Store.getSPIELER(), window.Store.loadActions());
+}
 
-    let html = "<h2>Statistikübersicht</h2>";
-    html += "<table border='1' cellspacing='0' cellpadding='5' width='100%'>";
-    html += "<thead style='background:#f2f2f2;'><tr><th style='text-align:left;'>Spieler</th><th style='text-align:center;'>Spielzeit</th>";
-
-    allActionTypes.forEach(typ => {
-        html += `<th style='font-size:0.8em;'>${typ.replace('_', ' ')}</th>`;
+// Kompakte Zusammenfassung fuer die Spielerliste
+function getPlayerSummaryStats() {
+    const data = currentStats();
+    const summary = {};
+    Object.values(data.spieler).forEach(p => {
+        summary[p.id] = {
+            tore: p.tore,
+            fehler: p.fehler,
+            paraden: p.paraden,
+            gesamtAktionen: p.tore + p.fehlwuerfe + p.fehler + p.paraden + p.ballgewinne
+        };
     });
-    html += "</tr></thead><tbody>";
-
-    Object.values(stats).forEach(p => {
-        const pTime = window.Timer ? window.Timer.formatTime(p.playtimeSeconds) : "00:00";
-        html += `<tr><td style='font-weight:bold;'>#${p.nummer} ${p.name}</td>`;
-        html += `<td style='text-align:center;'>${pTime}</td>`;
-        allActionTypes.forEach(typ => {
-            const count = p.aktionen[typ] || 0;
-            const style = count > 0 ? "font-weight:bold;" : "color:#ccc;";
-            html += `<td style='text-align:center;${style}'>${count}</td>`;
-        });
-        html += "</tr>";
-    });
-    html += "</tbody></table>";
-
-    const win = window.open('', 'Statistik', 'width=1000,height=600');
-    if (win) {
-        win.document.write(`<html><head><title>Stats</title><style>body{font-family:sans-serif;padding:20px;}table{border-collapse:collapse;}td,th{border:1px solid #ddd;}</style></head><body>${html}<br><button onclick="window.Stats.exportAsCSV()">CSV Export</button></body></html>`);
-        win.document.close();
-    }
+    return summary;
 }
 
 function getHighLevelStats() {
-    const aktionen = window.Store.loadActions();
-    const spieler = window.Store.getSPIELER();
-    let stats = {};
-
-    spieler.forEach(s => {
-        stats[s.id] = {
-            name: s.name,
-            nummer: s.nummer,
-            tore: 0,
-            fehlwuerfe: 0,
-            assists: 0,
-            fehler: 0,
-            paraden: 0,
-            playtimeSeconds: s.playtimeSeconds || 0
-        };
-    });
-
-    aktionen.forEach(a => {
-        if (!stats[a.spielerId]) return;
-
-        const typ = a.typ;
-
-        if (typ.includes("WurfTor")) {
-            stats[a.spielerId].tore++;
-        }
-        else if (typ.includes("WurfOhneTor")) {
-            stats[a.spielerId].fehlwuerfe++;
-        }
-        else if (typ.includes("Ballverlust")) {
-            stats[a.spielerId].fehler++;
-        }
-        else if (typ.includes("Parade")) {
-            stats[a.spielerId].paraden++;
-        }
-
-        if (a.assistId && stats[a.assistId]) {
-            stats[a.assistId].assists++;
-        }
-    });
-
-    return stats;
+    return currentStats().spieler;
 }
 
-function exportAsCSV() {
-    const aktionen = window.Store.loadActions();
-    const spieler = window.Store.getSPIELER();
+// ===================================================================
+// ANZEIGE (In-Page-Overlay statt Popup)
+// ===================================================================
+// Das alte window.open() wurde auf dem Handy haeufig blockiert, und der
+// CSV-Button im Popup rief window.Stats auf - im Popup-Fenster gibt es
+// das Objekt aber gar nicht, der Button hat also nie funktioniert.
 
-    if (aktionen.length === 0) {
-        alert("Keine Daten zum Exportieren.");
-        return;
+function showStats() {
+    const data = currentStats();
+    const view = document.getElementById('stats-view');
+    const body = document.getElementById('stats-content');
+    if (!view || !body) return;
+
+    body.innerHTML = renderFieldTable(data) + renderKeeperTable(data) + renderMatrix(data);
+    view.style.display = 'flex';
+}
+
+function closeStats() {
+    const view = document.getElementById('stats-view');
+    if (view) view.style.display = 'none';
+}
+
+function renderFieldTable(data) {
+    const rows = Object.values(data.spieler)
+        .filter(p => !p.istGast)
+        .sort((a, b) => b.tore - a.tore || a.nummer - b.nummer);
+
+    let html = '<h3>Feldspieler</h3>';
+    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
+        + '<th class="col-name">Spieler</th><th>Einsatz</th><th>Tore</th><th>Würfe</th>'
+        + '<th>Quote</th><th>7m</th><th>Assists</th><th>Ballverl.</th><th>Ballgew.</th>'
+        + '<th>7m raus</th><th>2min</th><th>🟨</th><th>🟥</th><th>🟦</th></tr></thead><tbody>';
+
+    rows.forEach(p => {
+        html += '<tr>'
+            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
+            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
+            + `<td class="num strong">${p.tore}</td>`
+            + `<td class="num">${p.wuerfe}</td>`
+            + `<td class="num ${quoteClass(p.wurfquote)}">${fmtQuote(p.wurfquote)}</td>`
+            + `<td class="num">${p.siebenMeterWuerfe ? p.siebenMeterTore + '/' + p.siebenMeterWuerfe : '–'}</td>`
+            + `<td class="num">${p.assists}</td>`
+            + `<td class="num">${p.fehler}</td>`
+            + `<td class="num">${p.ballgewinne}</td>`
+            + `<td class="num">${p.siebenMeterRaus}</td>`
+            + `<td class="num">${p.zeitstrafen}</td>`
+            + `<td class="num">${p.gelb || ''}</td>`
+            + `<td class="num">${p.rot || ''}</td>`
+            + `<td class="num">${p.blau || ''}</td>`
+            + '</tr>';
+    });
+
+    const t = data.team;
+    html += `<tr class="stats-total"><td class="col-name">Team gesamt</td><td></td>`
+        + `<td class="num strong">${t.tore}</td><td class="num">${t.wuerfe}</td>`
+        + `<td class="num">${fmtQuote(t.wurfquote)}</td><td colspan="9"></td></tr>`;
+
+    html += '</tbody></table></div>';
+    return html;
+}
+
+function renderKeeperTable(data) {
+    const keepers = Object.values(data.torhueter).sort((a, b) => b.paraden - a.paraden);
+
+    let html = '<h3>Torhüter</h3>';
+
+    if (keepers.length === 0) {
+        return html + '<p class="stats-empty">Noch keine Torwart-Aktionen erfasst.</p>';
     }
 
-    let csv = "\uFEFF";
+    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
+        + '<th class="col-name">Torhüter</th><th>Einsatz</th><th>Paraden</th>'
+        + '<th>Gegentore</th><th>Würfe aufs Tor</th><th>Fangquote</th></tr></thead><tbody>';
+
+    keepers.forEach(p => {
+        html += '<tr>'
+            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
+            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
+            + `<td class="num strong">${p.paraden}</td>`
+            + `<td class="num">${p.gegentore}</td>`
+            + `<td class="num">${p.wuerfeAufsTor}</td>`
+            + `<td class="num ${quoteClass(p.fangquote, 30)}">${fmtQuote(p.fangquote)}</td>`
+            + '</tr>';
+    });
+    html += '</tbody></table></div>';
+
+    // Aufschluesselung nach Wurfzone
+    const zones = new Set();
+    keepers.forEach(p => {
+        Object.keys(p.paradenNachZone).forEach(z => zones.add(z));
+        Object.keys(p.gegentoreNachZone).forEach(z => zones.add(z));
+    });
+
+    if (zones.size > 0) {
+        const zoneList = [...zones].sort();
+        html += '<h4>Fangquote nach Wurfposition</h4>';
+        html += '<div class="stats-scroll"><table class="stats-table"><thead><tr><th class="col-name">Torhüter</th>';
+        zoneList.forEach(z => { html += `<th>${esc(zoneLabel(z))}</th>`; });
+        html += '</tr></thead><tbody>';
+        keepers.forEach(p => {
+            html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`;
+            zoneList.forEach(z => {
+                const hits = p.paradenNachZone[z] || 0;
+                const goals = p.gegentoreNachZone[z] || 0;
+                const total = hits + goals;
+                html += total
+                    ? `<td class="num" title="${hits} gehalten / ${total} Würfe">${hits}/${total}</td>`
+                    : '<td class="num muted">–</td>';
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+    }
+
+    return html;
+}
+
+function zoneLabel(typ) {
+    for (const key in window.Store.UNTERAKTIONEN) {
+        const found = window.Store.UNTERAKTIONEN[key].find(u => u.typ === typ);
+        if (found) return found.label;
+    }
+    return typ;
+}
+
+function renderMatrix(data) {
+    let html = '<h3>Alle Aktionen im Detail</h3>';
+    html += '<div class="stats-scroll"><table class="stats-table stats-matrix"><thead><tr>'
+        + '<th class="col-name">Spieler</th><th>Einsatz</th>';
+    data.allActionTypes.forEach(t => {
+        html += `<th title="${esc(t)}">${esc(t.replace(/_/g, ' '))}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    Object.values(data.spieler).forEach(p => {
+        html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
+            + `<td>${fmtTime(p.playtimeSeconds)}</td>`;
+        data.allActionTypes.forEach(t => {
+            const c = p.aktionen[t] || 0;
+            html += c > 0 ? `<td class="num strong">${c}</td>` : '<td class="num muted">0</td>';
+        });
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+}
+
+function quoteClass(q, goodAt) {
+    if (q === null) return 'muted';
+    const schwelle = goodAt || 50;
+    if (q >= schwelle) return 'q-good';
+    if (q >= schwelle * 0.6) return 'q-mid';
+    return 'q-low';
+}
+
+// ===================================================================
+// CSV-EXPORT
+// ===================================================================
+
+function csvCell(value) {
+    const s = String(value === null || value === undefined ? '' : value);
+    return '"' + s.replace(/"/g, '""') + '"';
+}
+
+function csvRow(cells) {
+    return cells.map(csvCell).join(',') + '\n';
+}
+
+function csvQuote(q) {
+    // Komma als Dezimaltrennzeichen, damit Excel (DE) die Zahl erkennt
+    return q === null ? '' : String(q).replace('.', ',');
+}
+
+/**
+ * Baut den kompletten Spielbericht. Wird von laufendem Spiel UND
+ * Archiv-Download genutzt, damit beide identisch aufgebaut sind.
+ */
+function buildCsv(spieler, aktionen) {
+    const data = buildStats(spieler, aktionen);
+    let csv = "﻿";
+
+    // --- 1. Feldspieler ---
     csv += "=== SPIELER STATISTIK ===\n";
-    csv += "Nr.,Name,Spielzeit,Tore,Assists,Fehlwürfe,Tech. Fehler,Paraden\n";
+    csv += csvRow(['Nr.', 'Name', 'Position', 'Spielzeit', 'Tore', 'Würfe', 'Wurfquote %',
+        '7m Tore', '7m Würfe', '7m Quote %', 'Assists', 'Ballverluste', 'Ballgewinne',
+        '7m herausgeholt', '2-Minuten', 'Gelbe Karte', 'Rote Karte', 'Blaue Karte']);
 
-    const summary = getHighLevelStats();
+    Object.values(data.spieler)
+        .filter(p => !p.istGast)
+        .sort((a, b) => b.tore - a.tore || a.nummer - b.nummer)
+        .forEach(p => {
+            csv += csvRow([p.nummer, p.name, p.position, fmtTime(p.playtimeSeconds),
+                p.tore, p.wuerfe, csvQuote(p.wurfquote),
+                p.siebenMeterTore, p.siebenMeterWuerfe, csvQuote(p.siebenMeterQuote),
+                p.assists, p.fehler, p.ballgewinne, p.siebenMeterRaus,
+                p.zeitstrafen, p.gelb, p.rot, p.blau]);
+        });
 
-    const sortedPlayerIds = Object.keys(summary).sort((a, b) => {
-        return summary[b].tore - summary[a].tore;
+    const t = data.team;
+    csv += csvRow(['', 'TEAM GESAMT', '', '', t.tore, t.wuerfe, csvQuote(t.wurfquote),
+        '', '', '', '', t.ballverluste, t.ballgewinne, '', '', '', '', '']);
+
+    // --- 2. Torhueter (Jakobs Wunsch: Quoten pro Keeper) ---
+    csv += "\n=== TORHÜTER ===\n";
+    const keepers = Object.values(data.torhueter).sort((a, b) => b.paraden - a.paraden);
+    if (keepers.length === 0) {
+        csv += "Keine Torwart-Aktionen erfasst\n";
+    } else {
+        csv += csvRow(['Nr.', 'Name', 'Spielzeit', 'Paraden', 'Gegentore', 'Würfe aufs Tor', 'Fangquote %']);
+        keepers.forEach(p => {
+            csv += csvRow([p.nummer, p.name, fmtTime(p.playtimeSeconds),
+                p.paraden, p.gegentore, p.wuerfeAufsTor, csvQuote(p.fangquote)]);
+        });
+
+        // Aufschluesselung nach Wurfzone
+        const zones = new Set();
+        keepers.forEach(p => {
+            Object.keys(p.paradenNachZone).forEach(z => zones.add(z));
+            Object.keys(p.gegentoreNachZone).forEach(z => zones.add(z));
+        });
+        if (zones.size > 0) {
+            const zoneList = [...zones].sort();
+            csv += "\n=== FANGQUOTE NACH WURFPOSITION ===\n";
+            csv += csvRow(['Nr.', 'Name', 'Kennzahl'].concat(zoneList.map(zoneLabel)));
+            keepers.forEach(p => {
+                csv += csvRow([p.nummer, p.name, 'Paraden'].concat(zoneList.map(z => p.paradenNachZone[z] || 0)));
+                csv += csvRow([p.nummer, p.name, 'Gegentore'].concat(zoneList.map(z => p.gegentoreNachZone[z] || 0)));
+                csv += csvRow([p.nummer, p.name, 'Quote %'].concat(zoneList.map(z => {
+                    const h = p.paradenNachZone[z] || 0;
+                    const g = p.gegentoreNachZone[z] || 0;
+                    return csvQuote(quote(h, h + g));
+                })));
+            });
+        }
+    }
+
+    // --- 3. Detailmatrix (bisher nur im Statistik-Fenster sichtbar) ---
+    csv += "\n=== ALLE AKTIONEN IM DETAIL ===\n";
+    csv += csvRow(['Nr.', 'Name', 'Spielzeit'].concat(data.allActionTypes.map(x => x.replace(/_/g, ' '))));
+    Object.values(data.spieler).forEach(p => {
+        csv += csvRow([p.nummer, p.name, fmtTime(p.playtimeSeconds)]
+            .concat(data.allActionTypes.map(typ => p.aktionen[typ] || 0)));
     });
 
-    sortedPlayerIds.forEach(id => {
-        const s = summary[id];
-        const pTime = window.Timer ? window.Timer.formatTime(s.playtimeSeconds) : "00:00";
-        csv += `${s.nummer},"${s.name}",${pTime},${s.tore},${s.assists},${s.fehlwuerfe},${s.fehler},${s.paraden}\n`;
-    });
+    // --- 4. Spielverlauf ---
+    csv += "\n=== SPIELVERLAUF ===\n";
+    csv += csvRow(['Halbzeit', 'Spielzeit', 'Spielstand', 'Nr.', 'Name', 'Aktion', 'Detail', 'Assist', 'Torhüter']);
 
-    csv += "\n";
-    csv += "=== SPIELVERLAUF ===\n";
-    csv += "Halbzeit,Spielzeit,Spielstand,Nr.,Name,Aktion,Detail,Assist\n";
+    const sorted = [...aktionen].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    let homeGoals = 0, guestGoals = 0;
 
-    const sortedActions = [...aktionen].sort((a, b) => a.timestamp - b.timestamp);
-
-    let homeGoals = 0;
-    let guestGoals = 0;
-
-    sortedActions.forEach(a => {
+    sorted.forEach(a => {
         const player = spieler.find(p => p.id === a.spielerId);
         const pName = player ? player.name : "Unbekannt";
         const pNum = player ? player.nummer : "?";
 
         if (a.typ && a.typ.includes("WurfTor")) {
-            if (window.Store.isGuestTeam(pName)) {
-                guestGoals++;
-            } else {
-                homeGoals++;
-            }
-        }
-
-        let timeString = "00:00";
-        if (window.Timer && typeof window.Timer.formatTime === "function") {
-            timeString = window.Timer.formatTime(parseInt(a.spielzeit));
+            if (window.Store.isGuestTeam(pName)) guestGoals++; else homeGoals++;
         }
 
         const assistPlayer = a.assistId ? spieler.find(p => p.id === a.assistId) : null;
-        const assistName = assistPlayer ? assistPlayer.name : "";
+        const keeper = a.torwartId ? spieler.find(p => p.id === a.torwartId) : null;
 
-        const cleanLabel = a.label;
-
-        csv += `${a.halbzeit},${timeString},"${homeGoals}:${guestGoals}",${pNum},"${pName}","${a.category}","${cleanLabel}","${assistName}"\n`;
+        csv += csvRow([
+            a.halbzeit,
+            fmtTime(parseInt(a.spielzeit, 10)),
+            `${homeGoals}:${guestGoals}`,
+            pNum,
+            pName,
+            a.category,
+            a.label,
+            assistPlayer ? assistPlayer.name : '',
+            keeper ? `#${keeper.nummer} ${keeper.name}` : ''
+        ]);
     });
 
+    return csv;
+}
+
+function downloadCsv(csv, filename) {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `handball_match_report_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", filename);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+function exportAsCSV() {
+    const aktionen = window.Store.loadActions();
+    if (aktionen.length === 0) {
+        if (window.Toast) window.Toast('Keine Daten zum Exportieren.', { type: 'warn' });
+        else alert('Keine Daten zum Exportieren.');
+        return;
+    }
+    const csv = buildCsv(window.Store.getSPIELER(), aktionen);
+    downloadCsv(csv, `handball_match_report_${new Date().toISOString().slice(0, 10)}.csv`);
+}
+
+// ===================================================================
+// ARCHIV
+// ===================================================================
 
 async function openArchiveModal() {
     document.getElementById('archive-view').style.display = 'flex';
@@ -219,112 +525,53 @@ async function openArchiveModal() {
         list.innerHTML = '';
         archives.forEach(a => {
             const li = document.createElement('li');
-            li.style.display = 'flex';
-            li.style.justifyContent = 'space-between';
-            li.style.alignItems = 'center';
-            li.style.padding = '12px 15px';
-            li.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
-            li.style.background = 'rgba(0,0,0,0.2)';
-            li.style.marginBottom = '5px';
-            li.style.borderRadius = '8px';
-            
+            li.className = 'archive-item';
+
             const d = new Date(a.date);
-            const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            
+            const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
             li.innerHTML = `
                 <div>
-                    <strong style="font-size: 1.1rem;">${dateStr}</strong>
-                    <div style="font-size: 0.85em; color: var(--text-muted);">${a.filename}</div>
+                    <strong style="font-size: 1.1rem;">${esc(dateStr)}</strong>
+                    <div style="font-size: 0.85em; color: var(--text-muted);">${esc(a.filename)}</div>
                 </div>
-                <button class="add-btn" onclick="window.Stats.downloadArchive('${a.filename}')">CSV Export</button>
+                <div class="archive-btns">
+                    <button class="add-btn js-report">📄 Bericht</button>
+                    <button class="control-btn js-csv">⬇️ CSV</button>
+                </div>
             `;
+            li.querySelector('.js-report').onclick = () => window.Report.showArchiveReport(a.filename);
+            li.querySelector('.js-csv').onclick = () => downloadArchive(a.filename);
             list.appendChild(li);
         });
-    } catch(e) {
-        list.innerHTML = '<li>Fehler beim Laden.</li>';
+    } catch (e) {
+        list.innerHTML = '<li>Fehler beim Laden (offline?).</li>';
     }
 }
 
 async function downloadArchive(filename) {
     try {
-        const res = await fetch('/api/archive/' + filename);
+        const res = await fetch('/api/archive/' + encodeURIComponent(filename));
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const data = await res.json();
-        const archSpieler = data.spieler || [];
-        const archAktionen = data.aktionen || [];
-
-        let csv = "\uFEFF";
-        csv += "=== SPIELER STATISTIK ===\n";
-        csv += "Nr.,Name,Spielzeit,Tore,Assists,Fehlwürfe,Tech. Fehler,Paraden\n";
-
-        let stats = {};
-        archSpieler.forEach(s => {
-            stats[s.id] = { name: s.name, nummer: s.nummer, playtimeSeconds: s.playtimeSeconds || 0, tore: 0, fehlwuerfe: 0, assists: 0, fehler: 0, paraden: 0 };
-        });
-
-        archAktionen.forEach(a => {
-            if (!stats[a.spielerId]) return;
-            const typ = a.typ || "";
-            if (typ.includes("WurfTor")) stats[a.spielerId].tore++;
-            else if (typ.includes("WurfOhneTor")) stats[a.spielerId].fehlwuerfe++;
-            else if (typ.includes("Ballverlust")) stats[a.spielerId].fehler++;
-            else if (typ.includes("Parade")) stats[a.spielerId].paraden++;
-            if (a.assistId && stats[a.assistId]) stats[a.assistId].assists++;
-        });
-
-        const sortedPlayerIds = Object.keys(stats).sort((a, b) => stats[b].tore - stats[a].tore);
-        sortedPlayerIds.forEach(id => {
-            const s = stats[id];
-            const pTime = window.Timer ? window.Timer.formatTime(s.playtimeSeconds) : "00:00";
-            csv += `${s.nummer},"${s.name}",${pTime},${s.tore},${s.assists},${s.fehlwuerfe},${s.fehler},${s.paraden}\n`;
-        });
-
-        csv += "\n=== SPIELVERLAUF ===\n";
-        csv += "Halbzeit,Spielzeit,Spielstand,Nr.,Name,Aktion,Detail,Assist\n";
-
-        const sortedActions = [...archAktionen].sort((a, b) => a.timestamp - b.timestamp);
-        let homeGoals = 0, guestGoals = 0;
-
-        sortedActions.forEach(a => {
-            const player = archSpieler.find(p => p.id === a.spielerId);
-            const pName = player ? player.name : "Unbekannt";
-            const pNum = player ? player.nummer : "?";
-
-            if (a.typ && a.typ.includes("WurfTor")) {
-                if (window.Store.isGuestTeam(pName)) guestGoals++;
-                else homeGoals++;
-            }
-
-            let timeString = "00:00";
-            if (window.Timer && typeof window.Timer.formatTime === "function") {
-                timeString = window.Timer.formatTime(parseInt(a.spielzeit));
-            }
-
-            const assistPlayer = a.assistId ? archSpieler.find(p => p.id === a.assistId) : null;
-            const assistName = assistPlayer ? assistPlayer.name : "";
-
-            csv += `${a.halbzeit},${timeString},"${homeGoals}:${guestGoals}",${pNum},"${pName}","${a.category}","${a.label}","${assistName}"\n`;
-        });
-
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", `${filename.replace('.json', '.csv')}`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    } catch(e) {
-        alert("Fehler beim Herunterladen des Archivs.");
+        const csv = buildCsv(data.spieler || [], data.aktionen || []);
+        downloadCsv(csv, filename.replace('.json', '.csv'));
+    } catch (e) {
+        if (window.Toast) window.Toast('Archiv konnte nicht geladen werden.', { type: 'error' });
+        else alert('Fehler beim Herunterladen des Archivs.');
     }
 }
 
 window.Stats = {
+    buildStats,
     getPlayerSummaryStats,
-    showStats,
-    exportAsCSV,
     getHighLevelStats,
-    downloadArchive
+    showStats,
+    closeStats,
+    exportAsCSV,
+    buildCsv,
+    downloadArchive,
+    quote
 };
 
 window.openArchiveModal = openArchiveModal;

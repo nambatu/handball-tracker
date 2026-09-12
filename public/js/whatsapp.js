@@ -27,15 +27,21 @@ async function broadcastEvent(action, player, assistId, scoreString) {
             const assistStr = assistId ? ` (Assist: ${spieler.find(p => p.id === assistId)?.name || 'Unbekannt'})` : '';
             messageStr = `🟢 *TOR!* #${player.nummer} ${player.name} trifft (${action.label})${assistStr}. Neuer Spielstand: *${scoreString}* (${timerStr})`;
         }
-    } else if (action.typ.includes("Ballverlust")) {
-        // Optional: Send turnovers? Often too chatty, maybe skip for now.
-        // messageStr = `🔴 *Ballverlust:* #${player.nummer} ${player.name} (${action.label}) (${timerStr})`;
+    } else if (action.typ.includes("Ballverlust") || action.typ.includes("Ballgewinn")) {
+        // Zu kleinteilig fuer den Ticker - wuerde die Gruppe zuspammen.
         return;
     } else if (action.typ.includes("Parade")) {
         messageStr = `🧤 *Starke Parade!* #${player.nummer} ${player.name} hält den Ball. (${timerStr})`;
-    } else if (action.typ.includes("Zeitstrafe") || action.typ.includes("Karte")) {
-        // You can add logic for other key events (cards, 2min) here
-        messageStr = `⚠️ *Aktion:* #${player.nummer} ${player.name} - ${action.label} (${timerStr})`;
+    } else if (action.typ.includes("Karte_Gelb")) {
+        messageStr = `🟨 *Gelbe Karte* für #${player.nummer} ${player.name}. (${timerStr})`;
+    } else if (action.typ.includes("Karte_Rot")) {
+        messageStr = `🟥 *ROTE KARTE!* #${player.nummer} ${player.name} muss vom Feld. (${timerStr})`;
+    } else if (action.typ.includes("Karte_Blau")) {
+        messageStr = `🟦 *BLAUE KARTE!* #${player.nummer} ${player.name} — Disqualifikation mit Bericht. (${timerStr})`;
+    } else if (action.typ.includes("Zeitstrafe")) {
+        messageStr = `⏱️ *2 Minuten* für #${player.nummer} ${player.name}. (${timerStr})`;
+    } else if (action.typ.includes("SiebenMeterRaus")) {
+        messageStr = `🎯 *Siebenmeter herausgeholt* von #${player.nummer} ${player.name}. (${timerStr})`;
     } else {
         return; // Don't send minor events like simple missed shots
     }

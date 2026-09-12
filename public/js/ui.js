@@ -12,7 +12,15 @@ let tempActionData = null;
 const feedbackOverlay = document.getElementById('feedback-overlay');
 const historyPanelElement = document.getElementById('history-panel');
 
-window.UI_MODE = localStorage.getItem('UI_MODE') || 'classic';
+// Die Classic-Ansicht ist aus dem Umschalter entfernt (der Code bleibt aber
+// liegen). Wer sie gespeichert hatte, landet automatisch auf Mobile.
+const HIDDEN_MODES = ['classic'];
+let storedMode = localStorage.getItem('UI_MODE') || 'thumb';
+if (HIDDEN_MODES.indexOf(storedMode) !== -1) {
+    storedMode = 'thumb';
+    try { localStorage.setItem('UI_MODE', storedMode); } catch (e) { /* egal */ }
+}
+window.UI_MODE = storedMode;
 
 function switchUIMode(mode) {
     window.UI_MODE = mode;
@@ -34,7 +42,129 @@ function switchUIMode(mode) {
 
 function updateUI() {
     renderDynamicView();
+    renderGoalkeeperBadge();
     if (window.Timer) window.Timer.updateTimerDisplay();
+}
+
+// ===================================================================
+// AKTIVER TORWART
+// ===================================================================
+
+function renderGoalkeeperBadge() {
+    const el = document.getElementById('gk-indicator');
+    if (!el) return;
+
+    const gk = window.Store.getActiveGoalkeeper();
+    if (!gk) {
+        el.innerHTML = '<span class="gk-icon">🧤</span><span class="gk-name">Kein Torwart</span>';
+        el.title = 'Kein Spieler auf Position TW. Gegentore lassen sich ohne Torwart nicht zuordnen.';
+        el.classList.add('gk-missing');
+    } else {
+        el.innerHTML = '<span class="gk-icon">🧤</span><span class="gk-name">#' + gk.nummer + ' '
+            + escapeHtml(String(gk.name).split(' ')[0]) + '</span><span class="gk-caret">▾</span>';
+        el.title = 'Im Tor: ' + gk.name + ' — antippen zum Wechseln. Gegentore und Paraden werden diesem Torwart zugerechnet.';
+        el.classList.remove('gk-missing');
+    }
+}
+
+function openGoalkeeperPicker() {
+    const box = document.getElementById('gk-picker');
+    const list = document.getElementById('gk-picker-list');
+    if (!box || !list) return;
+
+    const keepers = window.Store.getGoalkeepers();
+    const activeId = window.Store.getActiveGoalkeeperId();
+
+    list.innerHTML = '';
+
+    if (keepers.length === 0) {
+        list.innerHTML = '<p class="gk-empty">Kein Spieler hat die Position TW. '
+            + 'Bitte in der Spielerverwaltung einen Torwart anlegen.</p>';
+    } else {
+        keepers.forEach(function (p) {
+            const btn = document.createElement('button');
+            btn.className = 'gk-option' + (String(p.id) === String(activeId) ? ' gk-active' : '');
+            btn.innerHTML = '<span class="gk-radio">' + (String(p.id) === String(activeId) ? '●' : '○') + '</span>'
+                + '<strong>#' + p.nummer + '</strong> ' + escapeHtml(p.name)
+                + (p.position !== 'TW' ? ' <em class="gk-hint">(steht auf ' + escapeHtml(p.position) + ')</em>' : '');
+            btn.onclick = function () { selectGoalkeeper(p.id); };
+            list.appendChild(btn);
+        });
+    }
+
+    box.style.display = 'flex';
+}
+
+function closeGoalkeeperPicker() {
+    const box = document.getElementById('gk-picker');
+    if (box) box.style.display = 'none';
+}
+
+function selectGoalkeeper(playerId) {
+    if (window.Store.setActiveGoalkeeper(playerId)) {
+        const gk = window.Store.getActiveGoalkeeper();
+        closeGoalkeeperPicker();
+        renderGoalkeeperBadge();
+        if (window.Toast && gk) {
+            window.Toast('Im Tor: #' + gk.nummer + ' ' + gk.name, { type: 'success', duration: 2500 });
+        }
+    }
+}
+
+// ===================================================================
+// ERFASSUNGS-FEEDBACK
+// ===================================================================
+// #feedback-overlay stand seit jeher in HTML und CSS, wurde aber von
+// keiner Zeile Code angefasst. Am Spielfeldrand braucht man die
+// Rueckmeldung, dass der Tipper gesessen hat, ohne hinzusehen.
+
+const FEEDBACK_FARBEN = {
+    tor:     'rgba(16, 185, 129, 0.92)',
+    fehler:  'rgba(239, 68, 68, 0.92)',
+    parade:  'rgba(245, 158, 11, 0.92)',
+    strafe:  'rgba(234, 88, 12, 0.92)',
+    neutral: 'rgba(14, 165, 233, 0.92)'
+};
+
+function feedbackKindFor(actionType) {
+    const t = String(actionType || '');
+    if (t.includes('WurfTor')) return 'tor';
+    if (t.includes('Parade')) return 'parade';
+    if (t.includes('Ballverlust') || t.includes('WurfOhneTor')) return 'fehler';
+    if (t.includes('Zeitstrafe') || t.includes('Karte')) return 'strafe';
+    return 'neutral';
+}
+
+let feedbackTimer = null;
+
+/**
+ * Kurzes Aufblitzen plus Vibration.
+ * Die Vibration ist der Zusatz, nicht der Hauptkanal: iOS unterstuetzt
+ * navigator.vibrate gar nicht.
+ */
+function showFeedback(text, kind, vibratePattern) {
+    const el = document.getElementById('feedback-overlay');
+    if (el) {
+        el.textContent = text;
+        el.style.background = FEEDBACK_FARBEN[kind] || FEEDBACK_FARBEN.neutral;
+        el.classList.add('show');
+        clearTimeout(feedbackTimer);
+        feedbackTimer = setTimeout(() => el.classList.remove('show'), 550);
+    }
+
+    try {
+        if (navigator.vibrate) navigator.vibrate(vibratePattern || 35);
+    } catch (e) { /* nicht unterstuetzt - egal */ }
+}
+
+/** Spielernamen kommen aus Nutzereingaben und landen in innerHTML. */
+function escapeHtml(str) {
+    return String(str === null || str === undefined ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 function renderDynamicView() {
@@ -59,29 +189,29 @@ function renderDynamicView() {
 
 function getPlayerDisplayHtml(player, size = '40px') {
     const timerState = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0 };
-    let suspensionOverlay = '';
+
     let isSuspended = false;
-    
-    if (player.suspendedUntilGameTime !== null && timerState.spielzeitSekunden < player.suspendedUntilGameTime) {
+    let suspensionOverlay = '';
+    if (player.suspendedUntilGameTime !== null && player.suspendedUntilGameTime !== undefined
+        && timerState.spielzeitSekunden < player.suspendedUntilGameTime) {
         isSuspended = true;
         const remaining = player.suspendedUntilGameTime - timerState.spielzeitSekunden;
         const m = Math.floor(remaining / 60);
-        const s = remaining % 60;
-        suspensionOverlay = `<div style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(220,38,38,0.85); display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; font-size:12px; border-radius:50%; z-index:10;">${m}:${s<10?'0':''}${s}</div>`;
+        const sec = remaining % 60;
+        suspensionOverlay = `<span class="badge-suspension">${m}:${sec < 10 ? '0' : ''}${sec}</span>`;
     }
 
-    if (player.avatarUrl) {
-        return `<div style="position:relative; width:${size}; height:${size}; border-radius:50%; margin:0 auto; box-shadow:0 0 5px rgba(0,0,0,0.5);">
-            <img src="${player.avatarUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%; ${isSuspended ? 'filter: grayscale(100%); opacity:0.6;' : ''}">
-            ${suspensionOverlay}
-        </div>`;
-    } else {
-        const initials = player.name ? player.name.substring(0, 2).toUpperCase() : '?';
-        return `<div style="position:relative; width:${size}; height:${size}; background:var(--primary-color); border:2px solid white; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px; margin:0 auto; ${isSuspended ? 'filter: grayscale(100%); opacity:0.6;' : ''}">
-            ${initials}
-            ${suspensionOverlay}
-        </div>`;
-    }
+    // Die Trikotnummer steht IM Kreis, der Name nur darunter. Vorher standen
+    // Initialen im Kreis und der Vorname darunter - dieselbe Information zweimal.
+    // Nummern sind ausserdem eindeutig, Initialen kollidieren.
+    const inner = player.avatarUrl
+        ? `<img class="badge-photo" src="${escapeHtml(player.avatarUrl)}" alt="">
+           <span class="badge-number-chip">${escapeHtml(player.nummer)}</span>`
+        : `<span class="badge-number">${escapeHtml(player.nummer)}</span>`;
+
+    return `<span class="player-badge${isSuspended ? ' is-suspended' : ''}" style="--badge-size:${size}">
+        ${inner}${suspensionOverlay}
+    </span>`;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -144,7 +274,7 @@ function renderPlayerList() {
                 ${getPlayerDisplayHtml(player, '40px')}
                 <div class="player-info">
                     <span class="player-number">#${player.nummer}</span>
-                    <span class="player-name">${player.name} (${player.position})</span>
+                    <span class="player-name">${escapeHtml(player.name)} (${escapeHtml(player.position)})</span>
                 </div>
             </div>
             <div class="player-stats"> 
@@ -157,44 +287,129 @@ function renderPlayerList() {
     });
 }
 
-function renderHistory() {
-    if (!historyPanelElement) return;
+/**
+ * Baut die Verlaufseintraege in einen beliebigen Container.
+ * Wird zweimal gebraucht: fuer das Seitenpanel (breite Bildschirme) und
+ * fuer das Verlauf-Overlay - auf dem Handy ist das Panel per CSS
+ * ausgeblendet, und ohne das Overlay waere die Korrektur dort
+ * ueberhaupt nicht erreichbar.
+ */
+function buildHistoryInto(container, limit) {
+    if (!container) return;
+    container.innerHTML = '';
 
-    historyPanelElement.innerHTML = '<h3>Verlauf</h3>';
     const aktionen = window.Store.loadActions();
     const spieler = window.Store.getSPIELER();
 
-    // Create copy for displaying history
-    const historyActions = [...aktionen].reverse();
+    if (aktionen.length === 0) {
+        container.innerHTML = '<p class="history-empty">Noch keine Aktionen erfasst.</p>';
+        return;
+    }
 
-    const aktionenToShow = historyActions.slice(0, 25);
-
-    aktionenToShow.forEach(entry => {
+    [...aktionen].reverse().slice(0, limit || 25).forEach(entry => {
         const player = spieler.find(s => s.id === entry.spielerId);
         const playerNumber = player ? player.nummer : '?';
         const playerName = player ? player.name : 'Unbekannt';
 
         const assistPlayer = entry.assistId ? spieler.find(p => p.id === entry.assistId) : null;
-        const assistText = assistPlayer ? `<br><small style="color:#666">🅰️ Assist: ${assistPlayer.name}</small>` : '';
+        const assistText = assistPlayer
+            ? `<br><small class="history-assist">🅰️ Assist: ${escapeHtml(assistPlayer.name)}</small>` : '';
 
-        const entryElement = document.createElement('div');
-        entryElement.className = 'history-entry';
-
-        entryElement.innerHTML = `
+        const el = document.createElement('div');
+        el.className = 'history-entry is-editable';
+        el.title = 'Antippen zum Korrigieren';
+        el.onclick = () => openActionEdit(entry.id);
+        el.innerHTML = `
             <span class="history-time">${window.Timer ? window.Timer.formatTime(entry.spielzeit) : entry.spielzeit}</span>
             <span class="history-player">
-                <strong>${playerNumber} ${playerName}</strong>
+                <strong>${escapeHtml(playerNumber)} ${escapeHtml(playerName)}</strong>
                 ${assistText}
             </span>
-            <span class="history-action">${entry.label}</span>
+            <span class="history-action">${escapeHtml(entry.label)}</span>
         `;
-        historyPanelElement.appendChild(entryElement);
+        container.appendChild(el);
     });
+}
+
+function renderHistory() {
+    if (historyPanelElement) {
+        historyPanelElement.innerHTML = '<h3>Verlauf</h3>';
+        const box = document.createElement('div');
+        historyPanelElement.appendChild(box);
+        buildHistoryInto(box, 25);
+    }
+
+    // Overlay mitziehen, falls es gerade offen ist
+    const overlay = document.getElementById('history-view');
+    if (overlay && overlay.style.display === 'flex') {
+        buildHistoryInto(document.getElementById('history-view-list'), 200);
+    }
 
     updateScoreboard();
 }
 
+function openHistoryView() {
+    const box = document.getElementById('history-view');
+    if (!box) return;
+    buildHistoryInto(document.getElementById('history-view-list'), 200);
+    box.style.display = 'flex';
+}
+
+function closeHistoryView() {
+    const box = document.getElementById('history-view');
+    if (box) box.style.display = 'none';
+}
+
+// ===================================================================
+// TEAMNAMEN
+// ===================================================================
+
+function renderTeamNames() {
+    const names = window.Store.getTeamNames();
+    const heimEl = document.getElementById('team-name');
+    const gastEl = document.getElementById('guest-name');
+    if (heimEl) heimEl.textContent = names.heim;
+    if (gastEl) gastEl.textContent = names.gast;
+}
+
+function openTeamNameEdit() {
+    const box = document.getElementById('team-name-edit');
+    if (!box) return;
+    const names = window.Store.getTeamNames();
+    const heimInput = document.getElementById('input-team-heim');
+    const gastInput = document.getElementById('input-team-gast');
+    if (!heimInput || !gastInput) return;
+
+    heimInput.value = names.heim === 'HEIM' ? '' : names.heim;
+    gastInput.value = names.gast === 'GAST' ? '' : names.gast;
+
+    box.style.display = 'flex';
+    heimInput.focus();
+
+    const onKey = function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); applyTeamNameEdit(); }
+        if (e.key === 'Escape') { e.preventDefault(); closeTeamNameEdit(); }
+    };
+    heimInput.onkeydown = onKey;
+    gastInput.onkeydown = onKey;
+}
+
+function closeTeamNameEdit() {
+    const box = document.getElementById('team-name-edit');
+    if (box) box.style.display = 'none';
+}
+
+function applyTeamNameEdit() {
+    const heim = document.getElementById('input-team-heim').value;
+    const gast = document.getElementById('input-team-gast').value;
+    window.Store.setTeamNames(heim, gast);
+    renderTeamNames();
+    closeTeamNameEdit();
+    if (window.Toast) window.Toast('Teamnamen gespeichert.', { type: 'success', duration: 2500 });
+}
+
 function updateScoreboard() {
+    renderTeamNames();
     const aktionen = window.Store.loadActions();
     const spieler = window.Store.getSPIELER();
     let homeGoals = 0;
@@ -222,19 +437,19 @@ function updateScoreboard() {
 }
 
 function getAvailableActionsForPlayer(playerId, posClassFallback) {
-    if (!playerId) return window.Store.HAUPTAKTIONEN;
+    const all = window.Store.HAUPTAKTIONEN;
+    if (!playerId) return all.filter(a => !a.nurTorwart);
+
     const player = window.Store.getSPIELER().find(p => p.id === playerId);
-    if (!player) return window.Store.HAUPTAKTIONEN;
-    
-    let position = posClassFallback || player.position;
-    
-    let actions = window.Store.HAUPTAKTIONEN;
-    if (position === 'TW') {
-        actions = actions.filter(a => a.typ === 'Parade');
-    } else {
-        actions = actions.filter(a => a.typ !== 'Parade');
-    }
-    return actions;
+    if (!player) return all.filter(a => !a.nurTorwart);
+
+    const position = posClassFallback || player.position;
+
+    // Der Torwart konnte frueher AUSSCHLIESSLICH Paraden machen - Fehlpaesse,
+    // Zeitstrafen oder ein Tor ins leere Tor liessen sich gar nicht erfassen.
+    // Jetzt bekommt er alles, Feldspieler alles ausser der Parade.
+    if (position === 'TW') return all;
+    return all.filter(a => !a.nurTorwart);
 }
 
 function renderActionButtons() {
@@ -301,7 +516,7 @@ function selectPlayer(playerId) {
 
 function selectAction(actionType, category = null) {
     if (!selectedPlayerId) {
-        alert("Bitte zuerst einen Spieler auswählen!");
+        if (window.Toast) window.Toast("Bitte zuerst einen Spieler auswählen.", { type: "warn" });
         return;
     }
     const player = window.Store.getSPIELER().find(p => p.id === selectedPlayerId);
@@ -346,17 +561,26 @@ function resetActionSelection() {
 }
 
 function handleActionFlow(player, finalActionType, finalActionLabel, category) {
-    const timerState = window.Timer ? window.Timer.getTimerState() : { isTimerRunning: false };
+    const timerState = window.Timer ? window.Timer.getTimerState() : { isTimerRunning: false, spielzeitSekunden: 0 };
 
-    if (!timerState.isTimerRunning) {
-        alert("▶️ Der Spiel-Timer ist gestoppt oder pausiert. Bitte zuerst starten!");
-        return;
+    // Frueher wurde hier per alert() komplett blockiert. Damit liess sich
+    // vor dem Anwurf, in der Halbzeit oder nach Spielende nichts nachtragen.
+    // Jetzt wird erfasst und nur darauf hingewiesen - danebengetippt ist
+    // dank des Rueckgaengig-Toasts in zwei Sekunden behoben.
+    if (!timerState.isTimerRunning && window.Toast) {
+        window.Toast('Uhr läuft nicht — erfasst bei '
+            + (window.Timer ? window.Timer.formatTime(timerState.spielzeitSekunden) : '00:00') + '.',
+            { type: 'warn', duration: 3000 });
     }
 
     const isGoal = finalActionType.includes('WurfTor');
     const isEnemy = window.Store.isGuestTeam(player.name);
 
-    if (isGoal && !isEnemy) {
+    // Bei Siebenmeter und Gegenstoss gibt es praktisch nie einen Assist.
+    // Die Abfrage waere dort nur ein Klick mehr pro Tor.
+    const ohneAssist = finalActionType.includes('7Meter') || finalActionType.includes('Gegenstoss');
+
+    if (isGoal && !isEnemy && !ohneAssist) {
         tempActionData = {
             player: player,
             typ: finalActionType,
@@ -373,11 +597,20 @@ function executeSaveAction(player, actionType, actionLabel, category, assistId) 
     const aktionen = window.Store.loadActions();
     const timerState = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0, currentHalf: 1 };
 
+    // Torwart mitschreiben: bei einer Aktion DES Torwarts er selbst,
+    // sonst der gerade im Tor stehende Keeper. Nur so laesst sich spaeter
+    // ein Gegentor dem richtigen Torhueter zuordnen (Fangquote bei
+    // zwei Keepern getrennt berechenbar).
+    const torwartId = window.Store.isGoalkeeper(player)
+        ? player.id
+        : window.Store.getActiveGoalkeeperId();
+
     const newAction = {
         id: Date.now(),
         spielId: "current_match",
         spielerId: player.id,
         assistId: assistId,
+        torwartId: torwartId,
         typ: actionType,
         label: actionLabel,
         category: category || "Unbekannt",
@@ -397,6 +630,14 @@ function executeSaveAction(player, actionType, actionLabel, category, assistId) 
     renderHistory();
     updateScoreboard();
 
+    // Sofortige Rueckmeldung, dass der Tipper gesessen hat
+    const kind = feedbackKindFor(actionType);
+    const kurz = kind === 'tor' ? 'TOR'
+        : kind === 'parade' ? 'PARADE'
+        : kind === 'strafe' ? '2 MIN'
+        : '#' + player.nummer;
+    showFeedback(kurz, kind, kind === 'tor' ? [30, 40, 60] : 35);
+
     // Hook to broadcast to WhatsApp
     if (window.WhatsAppMod && typeof window.WhatsAppMod.broadcastEvent === 'function') {
         const homeScore = document.getElementById('score-home').innerText;
@@ -408,29 +649,261 @@ function executeSaveAction(player, actionType, actionLabel, category, assistId) 
     selectedPrimaryAction = null;
     selectedPrimaryActionCategory = null;
     updateUI();
+
+    // Rueckgaengig direkt dort, wo man gerade hingeschaut hat - statt
+    // unten den Undo-Knopf zu suchen und zwei Dialoge wegzuklicken.
+    if (window.Toast) {
+        window.Toast(`#${player.nummer} ${String(player.name).split(' ')[0]} · ${actionLabel}`, {
+            type: kind === 'tor' ? 'success' : (kind === 'fehler' ? 'warn' : 'info'),
+            duration: 6000,
+            actionLabel: 'Rückgängig',
+            onAction: () => removeActionById(newAction.id, true)
+        });
+    }
 }
 
-function undoLastAction() {
-    if (!confirm("Letzte Aktion rückgängig machen?")) return;
-
+/**
+ * Entfernt eine Aktion anhand ihrer ID - nicht "die letzte".
+ * Wichtig, weil der Toast auch dann noch stehen kann, wenn inzwischen
+ * eine weitere Aktion erfasst wurde.
+ */
+function removeActionById(actionId, mitWiederherstellen) {
     const aktionen = window.Store.loadActions();
-    if (aktionen.length === 0) {
-        alert("Keine Aktionen zum Löschen.");
-        return;
+    const idx = aktionen.findIndex(a => String(a.id) === String(actionId));
+    if (idx === -1) {
+        if (window.Toast) window.Toast('Aktion nicht mehr vorhanden.', { type: 'warn' });
+        return false;
     }
 
-    const lastAction = aktionen.pop();
+    const entfernt = aktionen.splice(idx, 1)[0];
     window.Store.saveActions(aktionen);
 
-    const player = window.Store.getSPIELER().find(s => s.id === lastAction.spielerId);
-    const actionLabel = lastAction.label || lastAction.typ;
+    if (entfernt.typ === 'Zeitstrafe' && window.Store.clearSuspension) {
+        window.Store.clearSuspension(entfernt.spielerId);
+    }
 
     updateActionCount();
     renderHistory();
     updateScoreboard();
     updateUI();
 
-    alert(`RÜCKGÄNGIG: ${player ? player.nummer : '?'} (${actionLabel})`);
+    if (mitWiederherstellen && window.Toast) {
+        const p = window.Store.getSPIELER().find(x => x.id === entfernt.spielerId);
+        window.Toast(`Zurückgenommen: ${p ? '#' + p.nummer + ' ' : ''}${entfernt.label}`, {
+            type: 'info',
+            duration: 6000,
+            actionLabel: 'Doch behalten',
+            onAction: () => restoreAction(entfernt, idx)
+        });
+    }
+    return true;
+}
+
+/** Macht ein Rueckgaengig wieder rueckgaengig. */
+function restoreAction(action, idx) {
+    const aktionen = window.Store.loadActions();
+    aktionen.splice(Math.min(idx, aktionen.length), 0, action);
+    window.Store.saveActions(aktionen);
+
+    if (action.typ === 'Zeitstrafe' && window.Store.applySuspension) {
+        window.Store.applySuspension(action.spielerId, action.spielzeit);
+    }
+
+    updateActionCount();
+    renderHistory();
+    updateScoreboard();
+    updateUI();
+    if (window.Toast) window.Toast('Wiederhergestellt.', { type: 'success', duration: 2500 });
+}
+
+function undoLastAction() {
+    const aktionen = window.Store.loadActions();
+    if (aktionen.length === 0) {
+        if (window.Toast) window.Toast('Keine Aktionen zum Zurücknehmen.', { type: 'warn' });
+        return;
+    }
+    // Kein confirm() mehr: das Zuruecknehmen ist selbst zuruecknehmbar,
+    // eine Sicherheitsabfrage davor waere nur ein Klick mehr im Spiel.
+    removeActionById(aktionen[aktionen.length - 1].id, true);
+}
+
+// ===================================================================
+// AKTION NACHTRAEGLICH KORRIGIEREN
+// ===================================================================
+// Bisher liess sich nur die LETZTE Aktion zuruecknehmen. Faellt einem
+// drei Aktionen spaeter auf, dass der falsche Spieler dranstand, musste
+// man alles dazwischen mit wegwerfen.
+
+let editingActionId = null;
+
+function openActionEdit(actionId) {
+    const aktionen = window.Store.loadActions();
+    const action = aktionen.find(a => String(a.id) === String(actionId));
+    if (!action) return;
+
+    editingActionId = actionId;
+    const box = document.getElementById('action-edit');
+    const info = document.getElementById('action-edit-info');
+    const list = document.getElementById('action-edit-players');
+    const assistWrap = document.getElementById('action-edit-assist-wrap');
+    const assistList = document.getElementById('action-edit-assist');
+    if (!box || !info || !list) return;
+
+    const spieler = window.Store.getSPIELER();
+    const p = spieler.find(x => x.id === action.spielerId);
+
+    info.innerHTML = '<span class="ae-time">'
+        + (window.Timer ? window.Timer.formatTime(action.spielzeit) : '') + '</span>'
+        + '<strong>' + escapeHtml(action.label) + '</strong>'
+        + '<span class="ae-cur">aktuell: '
+        + (p ? '#' + escapeHtml(p.nummer) + ' ' + escapeHtml(p.name) : 'Unbekannt') + '</span>';
+
+    list.innerHTML = '';
+    spieler.forEach(function (x) {
+        const btn = document.createElement('button');
+        btn.className = 'ae-player' + (x.id === action.spielerId ? ' ae-active' : '');
+        btn.innerHTML = '<strong>#' + escapeHtml(x.nummer) + '</strong> ' + escapeHtml(x.name);
+        btn.onclick = function () { reassignAction(actionId, x.id); };
+        list.appendChild(btn);
+    });
+
+    // Assist nur dort anbieten, wo er ueberhaupt Sinn ergibt
+    const istEigenesTor = action.typ && action.typ.indexOf('WurfTor') !== -1
+        && p && !window.Store.isGuestTeam(p.name);
+
+    if (assistWrap) assistWrap.style.display = istEigenesTor ? 'block' : 'none';
+    if (istEigenesTor && assistList) {
+        assistList.innerHTML = '';
+        const keiner = document.createElement('button');
+        keiner.className = 'ae-player' + (!action.assistId ? ' ae-active' : '');
+        keiner.textContent = 'Kein Assist';
+        keiner.onclick = function () { reassignAssist(actionId, null); };
+        assistList.appendChild(keiner);
+
+        spieler.forEach(function (x) {
+            if (x.id === action.spielerId || window.Store.isGuestTeam(x.name)) return;
+            const btn = document.createElement('button');
+            btn.className = 'ae-player' + (x.id === action.assistId ? ' ae-active' : '');
+            btn.innerHTML = '<strong>#' + escapeHtml(x.nummer) + '</strong> '
+                + escapeHtml(String(x.name).split(' ')[0]);
+            btn.onclick = function () { reassignAssist(actionId, x.id); };
+            assistList.appendChild(btn);
+        });
+    }
+
+    box.style.display = 'flex';
+}
+
+function closeActionEdit() {
+    const box = document.getElementById('action-edit');
+    if (box) box.style.display = 'none';
+    editingActionId = null;
+}
+
+function reassignAction(actionId, newPlayerId) {
+    const aktionen = window.Store.loadActions();
+    const action = aktionen.find(a => String(a.id) === String(actionId));
+    if (!action) return;
+
+    const alterSpieler = action.spielerId;
+    action.spielerId = newPlayerId;
+
+    // Torwart-Zuordnung mitziehen, sonst stimmt die Fangquote nicht mehr
+    const neu = window.Store.getSPIELER().find(x => x.id === newPlayerId);
+    if (window.Store.isGoalkeeper(neu)) action.torwartId = newPlayerId;
+
+    // Eine umgebuchte Zeitstrafe muss auch die Sperre mitnehmen
+    if (action.typ === 'Zeitstrafe') {
+        window.Store.clearSuspension(alterSpieler);
+        window.Store.applySuspension(newPlayerId, action.spielzeit);
+    }
+
+    window.Store.saveActions(aktionen);
+    updateActionCount();
+    renderHistory();
+    updateScoreboard();
+    updateUI();
+    closeActionEdit();
+    if (window.Toast && neu) {
+        window.Toast('Umgebucht auf #' + neu.nummer + ' ' + neu.name + '.', { type: 'success', duration: 3000 });
+    }
+}
+
+function reassignAssist(actionId, assistId) {
+    const aktionen = window.Store.loadActions();
+    const action = aktionen.find(a => String(a.id) === String(actionId));
+    if (!action) return;
+    action.assistId = assistId;
+    window.Store.saveActions(aktionen);
+    renderHistory();
+    closeActionEdit();
+    if (window.Toast) {
+        window.Toast(assistId ? 'Assist geändert.' : 'Assist entfernt.', { type: 'success', duration: 2500 });
+    }
+}
+
+function deleteEditedAction() {
+    if (!editingActionId) return;
+    const id = editingActionId;
+    closeActionEdit();
+    removeActionById(id, true);
+}
+
+// ===================================================================
+// ZEITKORREKTUR
+// ===================================================================
+
+function openTimeEdit() {
+    const box = document.getElementById('time-edit');
+    const input = document.getElementById('time-edit-input');
+    if (!box || !input) return;
+
+    const st = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0 };
+    input.value = window.Timer ? window.Timer.formatTime(st.spielzeitSekunden) : '00:00';
+    box.style.display = 'flex';
+    input.focus();
+    input.select();
+
+    input.onkeydown = function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); applyTimeEdit(); }
+        if (e.key === 'Escape') { e.preventDefault(); closeTimeEdit(); }
+    };
+}
+
+function closeTimeEdit() {
+    const box = document.getElementById('time-edit');
+    if (box) box.style.display = 'none';
+}
+
+function parseTimeInput(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+
+    // "12:34" oder "1234" oder "12" (= Minuten)
+    let m = raw.match(/^(\d{1,3}):([0-5]?\d)$/);
+    if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+
+    m = raw.match(/^(\d{1,3})$/);
+    if (m) return parseInt(m[1], 10) * 60;
+
+    return null;
+}
+
+function applyTimeEdit() {
+    const input = document.getElementById('time-edit-input');
+    if (!input) return;
+
+    const seconds = parseTimeInput(input.value);
+    if (seconds === null) {
+        if (window.Toast) window.Toast('Bitte im Format mm:ss eingeben, z.B. 23:40.', { type: 'error' });
+        return;
+    }
+
+    window.Timer.setGameTime(seconds);
+    closeTimeEdit();
+    if (window.Toast) {
+        window.Toast('Spielzeit auf ' + window.Timer.formatTime(seconds) + ' gesetzt.', { type: 'success' });
+    }
 }
 
 function updateActionCount() {
@@ -452,7 +925,7 @@ function showAssistOverlay() {
         const isEnemy = window.Store.isGuestTeam(p.name);
         if (p.id !== selectedPlayerId && !isEnemy) {
             const btn = document.createElement('button');
-            btn.innerHTML = `<strong>${p.nummer}</strong><br>${p.name}`;
+            btn.innerHTML = `<strong>${escapeHtml(p.nummer)}</strong><br>${escapeHtml(p.name)}`;
             btn.style.margin = "5px";
             btn.style.padding = "10px";
             btn.onclick = () => confirmAssist(p.id);
@@ -510,7 +983,7 @@ function renderRosterList() {
     spieler.forEach(p => {
         const li = document.createElement("li");
         li.innerHTML = `
-            <span>#${p.nummer} ${p.name} (${p.position})</span>
+            <span>#${escapeHtml(p.nummer)} ${escapeHtml(p.name)} (${escapeHtml(p.position)})</span>
             <button onclick="window.UI.removePlayer('${p.id}')">Löschen</button>
         `;
         rosterList.appendChild(li);
@@ -527,7 +1000,7 @@ async function addPlayer() {
     const number = parseInt(numEl.value);
 
     if (!name || isNaN(number)) {
-        alert("Bitte Name und Nummer angeben.");
+        if (window.Toast) window.Toast("Bitte Name und Nummer angeben.", { type: "warn" });
         return;
     }
     
@@ -545,7 +1018,7 @@ async function addPlayer() {
             if (res.ok && data.avatarUrl) {
                 avatarUrl = data.avatarUrl;
             } else {
-                alert("Fehler beim Avatar-Upload.");
+                if (window.Toast) window.Toast(data.error || "Avatar-Upload fehlgeschlagen.", { type: "error" });
             }
         } catch(e) {
             console.error("Upload failed", e);
@@ -588,17 +1061,17 @@ async function saveCurrentRosterAsTeam() {
     const nameInput = document.getElementById('new-team-name');
     const name = nameInput.value.trim();
     if (!name) {
-        alert("Bitte einen Teamnamen eingeben.");
+        if (window.Toast) window.Toast("Bitte einen Teamnamen eingeben.", { type: "warn" });
         return;
     }
     const players = window.Store.getSPIELER();
     if (players.length === 0) {
-        alert("Der Kader ist leer!");
+        if (window.Toast) window.Toast("Der Kader ist leer.", { type: "warn" });
         return;
     }
     
     await window.Store.saveTeam({ name, players });
-    alert(`Team "${name}" erfolgreich gespeichert!`);
+    if (window.Toast) window.Toast(`Team „${name}" gespeichert.`, { type: "success" });
     nameInput.value = "";
     await populateTeamsDropdown();
 }
@@ -607,7 +1080,7 @@ async function updateSelectedTeam() {
     const select = document.getElementById('team-select');
     const teamId = select.value;
     if (!teamId) {
-        alert("Bitte zuerst ein Team aus dem Dropdown auswählen.");
+        if (window.Toast) window.Toast("Bitte zuerst ein Team auswählen.", { type: "warn" });
         return;
     }
     
@@ -617,7 +1090,7 @@ async function updateSelectedTeam() {
 
     const players = window.Store.getSPIELER();
     if (players.length === 0) {
-        alert("Der aktuelle Kader ist leer!");
+        if (window.Toast) window.Toast("Der aktuelle Kader ist leer.", { type: "warn" });
         return;
     }
 
@@ -626,14 +1099,14 @@ async function updateSelectedTeam() {
     }
 
     await window.Store.saveTeam({ id: team.id, name: team.name, players });
-    alert(`Team "${team.name}" erfolgreich aktualisiert!`);
+    if (window.Toast) window.Toast(`Team „${team.name}" aktualisiert.`, { type: "success" });
 }
 
 async function loadTeam() {
     const select = document.getElementById('team-select');
     const teamId = select.value;
     if (!teamId) {
-        alert("Bitte zuerst ein Team auswählen.");
+        if (window.Toast) window.Toast("Bitte zuerst ein Team auswählen.", { type: "warn" });
         return;
     }
     
@@ -662,7 +1135,7 @@ async function loadTeam() {
         window.Store.addPlayerToStore(p.name, p.nummer, p.position);
     });
     
-    alert(`Team "${team.name}" geladen!`);
+    if (window.Toast) window.Toast(`Team „${team.name}" geladen.`, { type: "success" });
     renderRosterList();
 }
 
@@ -670,7 +1143,7 @@ async function deleteSelectedTeam() {
     const select = document.getElementById('team-select');
     const teamId = select.value;
     if (!teamId) {
-        alert("Bitte ein Team zum Löschen auswählen.");
+        if (window.Toast) window.Toast("Bitte ein Team zum Löschen auswählen.", { type: "warn" });
         return;
     }
     
@@ -706,8 +1179,8 @@ function renderThumbView(container) {
         const p = spieler.find(s => s.id === selectedPlayerId);
         topArea.innerHTML = `
             <div style="text-align:center;">
-                <h2 style="margin:0; color:var(--text-color);">#${p.nummer} ${p.name}</h2>
-                <div style="color:var(--text-muted);">${p.position}</div>
+                <h2 style="margin:0; color:var(--text-color);">#${escapeHtml(p.nummer)} ${escapeHtml(p.name)}</h2>
+                <div style="color:var(--text-muted);">${escapeHtml(p.position)}</div>
                 <button onclick="window.UI.selectPlayer('${p.id}')" style="margin-top:10px; background:transparent; border:1px solid var(--border-color); color:white; padding:5px 10px; border-radius:4px; cursor:pointer;">Abbrechen</button>
             </div>
         `;
@@ -717,7 +1190,7 @@ function renderThumbView(container) {
         spieler.forEach(p => {
             const btn = document.createElement('div');
             btn.className = 'thumb-btn';
-            btn.innerHTML = getPlayerDisplayHtml(p, '40px') + `<span class="name">${p.name.split(' ')[0]}</span>`;
+            btn.innerHTML = getPlayerDisplayHtml(p, '40px') + `<span class="name">${escapeHtml(p.name.split(' ')[0])}</span>`;
             btn.onclick = () => selectPlayer(p.id);
             gridArea.appendChild(btn);
         });
@@ -898,7 +1371,7 @@ function renderCourtView(container) {
         node.className = `court-player-node ${area === courtArea ? 'pos-' + posClass : ''}`;
         if(selectedPlayerId === player.id) node.classList.add('selected');
         
-        node.innerHTML = getPlayerDisplayHtml(player, '50px') + `<span class="name">${player.name.split(' ')[0]}</span>`;
+        node.innerHTML = getPlayerDisplayHtml(player, '50px') + `<span class="name">${escapeHtml(player.name.split(' ')[0])}</span>`;
         node.draggable = true;
         node.addEventListener('dragstart', (e) => handleDragStart(e, player.id));
         node.addEventListener('dragend', handleDragEnd);
@@ -964,9 +1437,19 @@ window.UI = {
     updateUI,
     switchUIMode,
     renderHistory,
+    openHistoryView,
+    closeHistoryView,
     updateScoreboard,
     undoLastAction,
     updateActionCount,
+    removeActionById,
+    restoreAction,
+    openActionEdit,
+    closeActionEdit,
+    reassignAction,
+    reassignAssist,
+    deleteEditedAction,
+    showFeedback,
     toggleSort,
     selectPlayer,
     selectAction,
@@ -981,5 +1464,18 @@ window.UI = {
     updateSelectedTeam,
     loadTeam,
     deleteSelectedTeam,
-    clearAllPlayers
+    clearAllPlayers,
+    openTimeEdit,
+    closeTimeEdit,
+    applyTimeEdit,
+    parseTimeInput,
+    renderGoalkeeperBadge,
+    renderTeamNames,
+    openTeamNameEdit,
+    closeTeamNameEdit,
+    applyTeamNameEdit,
+    openGoalkeeperPicker,
+    closeGoalkeeperPicker,
+    selectGoalkeeper,
+    escapeHtml
 };
