@@ -138,6 +138,11 @@ function stopDisplayLoop() {
 function tick() {
     updateTimerDisplay();
 
+    // Zeitstrafen sekundengenau mitlaufen lassen. Gezielt, nicht ueber
+    // einen kompletten Rerender - der wuerde jede Sekunde das Drag&Drop
+    // neu aufbauen und sichtbar flackern.
+    if (window.UI && window.UI.refreshSuspensions) window.UI.refreshSuspensions();
+
     const nowSeconds = elapsedSeconds();
     const delta = nowSeconds - lastPlaytimeSeconds;
     if (delta > 0 && window.Store && window.Store.tickPlaytime) {

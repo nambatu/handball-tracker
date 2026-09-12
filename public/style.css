@@ -9,6 +9,7 @@
     --text-muted: #94a3b8; /* Slate 400 */
     --accent-color: #0ea5e9;  /* Sky 500 */
     --accent-hover: #0284c7;  /* Sky 600 */
+    --accent-strong: #0369a1; /* Sky 700 - traegt weisse Schrift (5,4:1) */
     --highlight-color: #fbbf24; /* Amber 400 */
     --danger-color: #ef4444; /* Red 500 */
     --success-color: #10b981; /* Emerald 500 */
@@ -365,7 +366,7 @@ input, select {
 }
 input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 
-.add-btn { background: var(--accent-color); color: white; border: none; cursor: pointer; padding: 12px 20px; border-radius: 8px; font-weight: 600; transition: background 0.2s; }
+.add-btn { background: var(--accent-strong); color: white; border: none; cursor: pointer; padding: 12px 20px; border-radius: 8px; font-weight: 600; transition: background 0.2s; }
 .add-btn:hover { background: var(--accent-hover); }
 
 .cancel-btn { background: var(--danger-color); color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; }
@@ -377,24 +378,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 #roster-list button { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
 #roster-list button:hover { background: #ef4444; color: white; }
 
-#feedback-overlay {
-    position: fixed;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%) scale(0.9);
-    background: rgba(16, 185, 129, 0.9);
-    color: white;
-    padding: 30px 60px;
-    border-radius: 20px;
-    font-size: 2.5rem;
-    font-weight: 800;
-    pointer-events: none;
-    opacity: 0;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    z-index: 3000;
-    box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
-    backdrop-filter: blur(4px);
-}
-#feedback-overlay.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 
 /* =========================================
    7. UTILITIES
@@ -642,6 +625,18 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .court-action-btn.red, .thumb-action-btn.red { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger-color); }
 .court-action-btn.yellow, .thumb-action-btn.yellow { background: rgba(245, 158, 11, 0.2); border: 1px solid var(--warning-color); }
 .court-action-btn.sub-blue, .thumb-action-btn.sub-blue { background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; }
+/* Navigation ("Zurueck") statt Aktion. Hatte bisher gar keine eigene Regel
+   und erbte nur die 5%-Weiss-Fuellung von .thumb-btn - im Hallenlicht war
+   das praktisch unsichtbar. Bewusst deckend grau: klar als Button lesbar,
+   aber ohne wie eine weitere farbige Aktion auszusehen. */
+.court-action-btn.neutral, .thumb-action-btn.neutral {
+    background: #475569;            /* Text #f8fafc darauf = 7.3:1 */
+    border: 1px solid #94a3b8;
+    color: #f8fafc;
+}
+.court-action-btn.neutral:active, .thumb-action-btn.neutral:active {
+    background: #334155;
+}
 
 /* =========================================
    THUMB VIEW (MOBILE)
@@ -1257,9 +1252,18 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     gap: 12px;
     flex-wrap: wrap;
     padding: 14px 18px;
-    background: var(--panel-bg);
+    /* Deckend dunkel. var(--panel-bg) ist halbtransparent und wurde vom
+       hellen Berichtsbogen darunter aufgehellt - die weissen Knopfbeschriftungen
+       standen dann praktisch weiss auf weiss. */
+    background: #1e293b;
     border-bottom: 1px solid var(--border-color);
 }
+.report-toolbar .control-btn {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    color: #fff;
+}
+.report-toolbar .control-btn:hover { background: rgba(255, 255, 255, 0.2); }
 .report-toolbar h2 { margin: 0; font-size: 1.05rem; color: var(--text-color); }
 .report-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
@@ -1501,18 +1505,6 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 }
 .ae-actions button { flex: 1; min-width: 140px; }
 
-/* Erfassungs-Feedback: kurzes Aufblitzen, nicht im Weg */
-#feedback-overlay {
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    z-index: 9000;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    #feedback-overlay { transition: opacity 0.1s linear; }
-}
-
 /* Im Homescreen-Betrieb gibt es keine Browserleiste - dvh rechnet das
    korrekt, vh zaehlt auf iOS die eingeblendete Leiste faelschlich mit. */
 @supports (height: 100dvh) {
@@ -1529,3 +1521,59 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     margin-bottom: 18px;
 }
 .history-empty { padding: 18px; text-align: center; color: var(--text-muted); font-size: 0.9rem; }
+
+
+/* =========================================
+   19. TOUCH-ZIELE IM KOPFBEREICH
+   ========================================= */
+/* Torwart-Knopf, Spielzeit und Sync-Anzeige sassen in einer 20 px hohen
+   Zeile. Auf dem Handy trifft man das mit dem Finger schlicht nicht -
+   der Torwart-Wechsel wirkte dadurch "kaputt", obwohl er funktionierte.
+   Empfehlung fuer Touch-Ziele sind ~44 px. */
+
+.timer-display {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.gk-badge,
+.timer-value {
+    min-height: 34px;
+    padding: 6px 12px;
+}
+
+@media (max-width: 768px) {
+    .timer-display {
+        width: 100%;
+        gap: 8px;
+        row-gap: 10px;
+    }
+    .gk-badge,
+    .timer-value {
+        min-height: 44px;
+        padding: 10px 14px;
+        font-size: 0.9rem;
+    }
+    .gk-badge { flex: 0 0 auto; }
+    .sync-badge { min-height: 44px; padding: 0 12px; }
+    /* Antippbares wird nicht vom Doppeltipp-Zoom verzoegert */
+    .gk-badge, .timer-value, .team-name-btn, .control-btn,
+    .thumb-btn, .court-player-node, .history-entry { touch-action: manipulation; }
+}
+
+/* Aktionsmenü der Court-Ansicht: sitzt unter dem Feld, nicht darauf */
+.court-action-sheet {
+    position: static;
+    width: 100%;
+    max-width: none;
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+}
+.court-action-sheet .court-action-btn {
+    min-height: 52px;
+    font-size: 0.95rem;
+}

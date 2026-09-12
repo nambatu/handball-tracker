@@ -10,7 +10,6 @@ let currentSort = 'nummer';
 let tempActionData = null;
 let uhrHinweisGezeigt = false;
 
-const feedbackOverlay = document.getElementById('feedback-overlay');
 const historyPanelElement = document.getElementById('history-panel');
 
 // Die Classic-Ansicht ist aus dem Umschalter entfernt (der Code bleibt aber
@@ -44,6 +43,7 @@ function switchUIMode(mode) {
 function updateUI() {
     renderDynamicView();
     renderGoalkeeperBadge();
+    renderTeamNames();
     if (window.Timer) window.Timer.updateTimerDisplay();
 }
 
@@ -115,17 +115,12 @@ function selectGoalkeeper(playerId) {
 // ===================================================================
 // ERFASSUNGS-FEEDBACK
 // ===================================================================
-// #feedback-overlay stand seit jeher in HTML und CSS, wurde aber von
-// keiner Zeile Code angefasst. Am Spielfeldrand braucht man die
-// Rueckmeldung, dass der Tipper gesessen hat, ohne hinzusehen.
-
-const FEEDBACK_FARBEN = {
-    tor:     'rgba(16, 185, 129, 0.92)',
-    fehler:  'rgba(239, 68, 68, 0.92)',
-    parade:  'rgba(245, 158, 11, 0.92)',
-    strafe:  'rgba(234, 88, 12, 0.92)',
-    neutral: 'rgba(14, 165, 233, 0.92)'
-};
+// Das grosse Aufblitzen ueber dem halben Bildschirm hat im Spiel mehr
+// gestoert als geholfen - es verdeckte genau den Bereich, auf den man
+// als naechstes tippen will. Geblieben ist der kurze Vibrationsimpuls:
+// der bestaetigt den Tipper, ohne etwas zu verdecken.
+// (Auf iOS gibt es navigator.vibrate nicht - dort quittiert der
+// Rueckgaengig-Toast die Aktion.)
 
 function feedbackKindFor(actionType) {
     const t = String(actionType || '');
@@ -136,25 +131,9 @@ function feedbackKindFor(actionType) {
     return 'neutral';
 }
 
-let feedbackTimer = null;
-
-/**
- * Kurzes Aufblitzen plus Vibration.
- * Die Vibration ist der Zusatz, nicht der Hauptkanal: iOS unterstuetzt
- * navigator.vibrate gar nicht.
- */
-function showFeedback(text, kind, vibratePattern) {
-    const el = document.getElementById('feedback-overlay');
-    if (el) {
-        el.textContent = text;
-        el.style.background = FEEDBACK_FARBEN[kind] || FEEDBACK_FARBEN.neutral;
-        el.classList.add('show');
-        clearTimeout(feedbackTimer);
-        feedbackTimer = setTimeout(() => el.classList.remove('show'), 550);
-    }
-
+function pulseFeedback(kind) {
     try {
-        if (navigator.vibrate) navigator.vibrate(vibratePattern || 35);
+        if (navigator.vibrate) navigator.vibrate(kind === 'tor' ? [30, 40, 60] : 35);
     } catch (e) { /* nicht unterstuetzt - egal */ }
 }
 
@@ -166,6 +145,54 @@ function escapeHtml(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+/**
+ * Zieht die Zeitstrafen-Countdowns nach.
+ *
+ * Vorher lief die Anzeige nur weiter, wenn irgendetwas anderes ein
+ * Neuzeichnen ausloeste - im Stillstand blieb sie einfach stehen. Ein
+ * kompletter Rerender pro Sekunde kommt nicht in Frage: der wuerde das
+ * Drag&Drop neu aufbauen und flackern. Deshalb werden hier nur die
+ * betroffenen Kreise angefasst.
+ *
+ * @returns {boolean} true, wenn mindestens eine Strafe noch laeuft
+ */
+function refreshSuspensions() {
+    const st = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0 };
+    const jetzt = st.spielzeitSekunden;
+    const spieler = window.Store.getSPIELER();
+    let nochAktiv = false;
+
+    document.querySelectorAll('.player-badge[data-pid]').forEach(function (badge) {
+        const p = spieler.find(x => String(x.id) === badge.dataset.pid);
+        if (!p) return;
+
+        const bis = p.suspendedUntilGameTime;
+        const laeuft = bis !== null && bis !== undefined && jetzt < bis;
+        let overlay = badge.querySelector('.badge-suspension');
+
+        if (laeuft) {
+            nochAktiv = true;
+            const rest = bis - jetzt;
+            const m = Math.floor(rest / 60);
+            const sek = rest % 60;
+            const text = m + ':' + (sek < 10 ? '0' : '') + sek;
+
+            if (!overlay) {
+                overlay = document.createElement('span');
+                overlay.className = 'badge-suspension';
+                badge.appendChild(overlay);
+            }
+            if (overlay.textContent !== text) overlay.textContent = text;
+            badge.classList.add('is-suspended');
+        } else {
+            if (overlay) overlay.remove();
+            badge.classList.remove('is-suspended');
+        }
+    });
+
+    return nochAktiv;
 }
 
 function renderDynamicView() {
@@ -210,7 +237,7 @@ function getPlayerDisplayHtml(player, size = '40px') {
            <span class="badge-number-chip">${escapeHtml(player.nummer)}</span>`
         : `<span class="badge-number">${escapeHtml(player.nummer)}</span>`;
 
-    return `<span class="player-badge${isSuspended ? ' is-suspended' : ''}" style="--badge-size:${size}">
+    return `<span class="player-badge${isSuspended ? ' is-suspended' : ''}" data-pid="${escapeHtml(player.id)}" style="--badge-size:${size}">
         ${inner}${suspensionOverlay}
     </span>`;
 }
@@ -638,13 +665,8 @@ function executeSaveAction(player, actionType, actionLabel, category, assistId) 
     renderHistory();
     updateScoreboard();
 
-    // Sofortige Rueckmeldung, dass der Tipper gesessen hat
     const kind = feedbackKindFor(actionType);
-    const kurz = kind === 'tor' ? 'TOR'
-        : kind === 'parade' ? 'PARADE'
-        : kind === 'strafe' ? '2 MIN'
-        : '#' + player.nummer;
-    showFeedback(kurz, kind, kind === 'tor' ? [30, 40, 60] : 35);
+    pulseFeedback(kind);
 
     // Hook to broadcast to WhatsApp
     if (window.WhatsAppMod && typeof window.WhatsAppMod.broadcastEvent === 'function') {
@@ -1275,6 +1297,51 @@ function handleDrop(e, newPosition) {
     updateUI();
 }
 
+/**
+ * Tipp-Erkennung ueber Pointer-Events.
+ *
+ * Die Spielerkreise sind draggable, und der Drag&Drop-Polyfill fuer Touch
+ * haengt sich in die Touch-Events. Dadurch kam auf dem Handy mal ein Klick
+ * an und mal nicht - gefuehlt musste man neben den Kreis tippen. Pointer-
+ * Events laufen daran vorbei: kurz und ohne Bewegung = Tipp.
+ */
+
+// Die Sperre gegen den nachgeschobenen Klick MUSS global sein. Der Tipp
+// loest ein Neuzeichnen aus; der Browser schickt den Klick danach an den
+// frisch erzeugten Knoten, dessen eigene Sperre noch unberuehrt waere -
+// und der haette die Auswahl sofort wieder aufgehoben.
+let tapEchoBis = 0;
+
+function istTapEcho() {
+    return Date.now() < tapEchoBis;
+}
+
+function onTap(el, handler) {
+    let sx = 0, sy = 0, t0 = 0, bewegt = false;
+
+    el.addEventListener('pointerdown', function (e) {
+        sx = e.clientX; sy = e.clientY; t0 = Date.now(); bewegt = false;
+    });
+
+    el.addEventListener('pointermove', function (e) {
+        if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) bewegt = true;
+    });
+
+    el.addEventListener('pointerup', function (e) {
+        if (bewegt || !t0 || Date.now() - t0 > 700) return;
+        tapEchoBis = Date.now() + 500;
+        e.stopPropagation();
+        handler(e);
+    });
+
+    // Fallback fuer Maus ohne Pointer-Events und fuer synthetische Klicks
+    el.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (istTapEcho()) return;
+        handler(e);
+    });
+}
+
 function renderCourtView(container) {
     container.innerHTML = '';
     const spieler = window.Store.getSPIELER();
@@ -1286,12 +1353,12 @@ function renderCourtView(container) {
     if (guestPlayer) {
         const oppBtn = document.createElement('button');
         oppBtn.className = 'court-opponent-btn';
-        oppBtn.innerText = 'Gast / Gegner (' + guestPlayer.nummer + ')';
-        oppBtn.onclick = (e) => {
-            e.stopPropagation();
-            if(selectedPlayerId === guestPlayer.id) selectPlayer(guestPlayer.id);
-            else selectPlayer(guestPlayer.id);
-        };
+        // "Gast / Gegner (0)" war unbeholfen - die Trikotnummer des
+        // Pseudo-Spielers sagt niemandem etwas. Jetzt steht dort der
+        // eingestellte Gastname, sonst schlicht "Gegner".
+        const gastName = window.Store.getTeamNames().gast;
+        oppBtn.innerText = (gastName && gastName !== 'GAST') ? gastName : 'Gegner';
+        onTap(oppBtn, function () { selectPlayer(guestPlayer.id); });
         if(selectedPlayerId === guestPlayer.id) oppBtn.style.borderColor = 'white';
         opponentArea.appendChild(oppBtn);
         
@@ -1332,7 +1399,10 @@ function renderCourtView(container) {
     // 2. Active Court Area
     const courtArea = document.createElement('div');
     courtArea.className = 'court-active-area';
-    courtArea.onclick = () => { if(selectedPlayerId) selectPlayer(selectedPlayerId); };
+    courtArea.onclick = () => {
+        if (istTapEcho()) return;
+        if (selectedPlayerId) selectPlayer(selectedPlayerId);
+    };
     
     // Create Drop Zones for Court
     const positions = ['TW', 'LA', 'RL', 'RM', 'RR', 'RA', 'KM'];
@@ -1382,6 +1452,7 @@ function renderCourtView(container) {
         if (dz) dz.classList.add('is-occupied');
     });
 
+    let menuFuerUnten = null;
     const allRenderedPlayers = [...courtPlayers.map(cp => ({...cp, area: courtArea})), ...benchPlayers.map(bp => ({...bp, area: benchArea}))];
 
     allRenderedPlayers.forEach(({player, posClass, area}) => {
@@ -1400,24 +1471,16 @@ function renderCourtView(container) {
             node.addEventListener('drop', (e) => handleDrop(e, posClass));
         }
         
-        node.onclick = (e) => {
-            e.stopPropagation();
-            selectPlayer(player.id);
-        };
+        onTap(node, function () { selectPlayer(player.id); });
         
         area.appendChild(node);
         
         if (selectedPlayerId === player.id && area === courtArea) {
+            // Das Menue lag frueher absolut im Feld und verdeckte damit
+            // genau die unteren Spieler (Torwart, Aussen). Jetzt haengt es
+            // unter dem Feld und kann niemanden mehr zudecken.
             const menu = document.createElement('div');
-            menu.className = 'court-action-menu';
-            // Position as a fixed bottom sheet inside the court area
-            menu.style.position = 'absolute';
-            menu.style.bottom = '10px';
-            menu.style.left = '50%';
-            menu.style.transform = 'translateX(-50%)';
-            menu.style.width = '90%';
-            menu.style.maxWidth = '400px';
-            menu.style.zIndex = '1000';
+            menu.className = 'court-action-menu court-action-sheet';
             
             if (selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]) {
                 const subEvents = window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory];
@@ -1443,11 +1506,15 @@ function renderCourtView(container) {
                     menu.appendChild(btn);
                 });
             }
-            courtArea.appendChild(menu);
+            menuFuerUnten = menu;
         }
     });
-    
+
     container.appendChild(courtArea);
+    // Das Menue haengt UNTER dem Feld. Frueher lag es absolut positioniert
+    // darin und verdeckte genau die unteren Spieler - Torwart und Aussen
+    // waren dann nicht mehr antippbar.
+    if (menuFuerUnten) container.appendChild(menuFuerUnten);
     container.appendChild(benchArea);
 }
 
@@ -1467,7 +1534,8 @@ window.UI = {
     reassignAction,
     reassignAssist,
     deleteEditedAction,
-    showFeedback,
+    pulseFeedback,
+    refreshSuspensions,
     toggleSort,
     selectPlayer,
     selectAction,
