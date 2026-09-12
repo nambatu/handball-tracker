@@ -40,10 +40,31 @@ function switchUIMode(mode) {
     updateUI();
 }
 
+/**
+ * Neuzeichnen, ohne die Scrollposition zu verlieren.
+ *
+ * Beim Neuaufbau ist der View-Container kurz leer. Die Seite wird dadurch
+ * schlagartig kuerzer, der Browser kappt die Scrollposition auf 0 - und nach
+ * jeder erfassten Aktion stand man wieder ganz oben und musste sich zum Feld
+ * zurueckscrollen. Deshalb Position merken und direkt wieder setzen.
+ */
+function mitScrollposition(fn) {
+    const app = document.getElementById('app-container');
+    const y = window.scrollY || window.pageYOffset || 0;
+    const appTop = app ? app.scrollTop : 0;
+
+    fn();
+
+    if (app && app.scrollTop !== appTop) app.scrollTop = appTop;
+    if ((window.scrollY || window.pageYOffset || 0) !== y) window.scrollTo(0, y);
+}
+
 function updateUI() {
-    renderDynamicView();
-    renderGoalkeeperBadge();
-    renderTeamNames();
+    mitScrollposition(function () {
+        renderDynamicView();
+        renderGoalkeeperBadge();
+        renderTeamNames();
+    });
     if (window.Timer) window.Timer.updateTimerDisplay();
 }
 
@@ -340,6 +361,9 @@ function renderDynamicView() {
         container.innerHTML = '';
         renderCourtView(container);
     }
+
+    // Nach dem Neuaufbau stimmen die Masse wieder - Sheet nachziehen.
+    positionActionSheet();
 }
 
 function getPlayerDisplayHtml(player, size = '40px') {
