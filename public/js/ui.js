@@ -398,6 +398,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if(container) container.className = 'layout-' + window.UI_MODE;
     const btn = document.getElementById('btn-mode-' + window.UI_MODE);
     if(btn) btn.classList.add('active-mode');
+
+    // Enter legt den Spieler an. Auf dem Handy verdeckt die Tastatur den
+    // Hinzufuegen-Button; ohne das hier musste man nach jedem Namen erst
+    // die Tastatur schliessen und scrollen. Einen ganzen Kader einzugeben
+    // war damit eine Qual - und ohne <form> tat "Fertig" gar nichts.
+    ['input-name', 'input-number'].forEach(function (id) {
+        const feld = document.getElementById(id);
+        if (!feld) return;
+        feld.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            addPlayer();
+        });
+    });
 });
 
 function toggleSort(criteria) {
@@ -1212,6 +1226,11 @@ async function addPlayer() {
     numEl.value = "";
     if (avatarEl) avatarEl.value = "";
     renderRosterList();
+
+    // Kurze Rueckmeldung und Fokus zurueck ins Namensfeld: so laesst sich
+    // ein ganzer Kader am Stueck eintippen, ohne die Tastatur zu schliessen.
+    if (window.Toast) window.Toast(`#${number} ${name} hinzugefügt.`, { type: "success", duration: 2000 });
+    try { nameEl.focus({ preventScroll: true }); } catch (e) { nameEl.focus(); }
 }
 
 function removePlayer(playerId) {

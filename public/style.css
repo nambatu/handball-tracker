@@ -570,9 +570,18 @@ body.is-dragging-player .court-drop-zone .dz-label {
     background: rgba(0,0,0,0.3);
     border-radius: 8px;
     display: flex;
+    /* Umbruch statt seitlichem Scrollen: bei 9 oder 10 Auswechselspielern
+       musste man vorher blind wischen, um die hinteren zu sehen. Waagrechtes
+       Wischen kollidiert ausserdem mit dem Zurueck-Geste-Rand des Browsers
+       und funktioniert deshalb auf dem Handy oft gar nicht. */
+    flex-wrap: wrap;
+    align-content: flex-start;
     gap: 10px;
-    overflow-x: auto;
     min-height: 85px;
+    /* Notnagel fuer sehr grosse Kader: senkrecht scrollen laesst sich
+       zuverlaessig, und das Spielfeld bekommt nichts weggenommen. */
+    max-height: 40vh;
+    overflow-y: auto;
 }
 .court-bench-area.drag-over {
     background: rgba(255,255,255,0.1);
@@ -1657,4 +1666,40 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     min-height: 52px;
     font-size: 0.95rem;
     touch-action: manipulation;
+}
+
+/* =========================================
+   SPIELERVERWALTUNG - NEUEN SPIELER ANLEGEN
+   =========================================
+   Auf dem Handy stapeln sich Flex-Kinder ohne flex-basis zu je einer
+   eigenen Zeile. Name, Nummer, Position, Foto und Button ergaben damit
+   fuenf Zeilen - der Button lag 125 px unter dem Namensfeld und damit
+   hinter der eingeblendeten Tastatur. Zusammen mit dem fehlenden
+   Enter-Absenden liess sich auf dem Handy schlicht kein Spieler anlegen.
+   Jetzt: Name ganze Zeile, Nummer und Position nebeneinander, Button
+   direkt darunter - und Enter tut dasselbe wie der Button. */
+.add-player-row { gap: 10px; margin-bottom: 12px; }
+.add-player-row #input-name { flex: 1 1 100%; min-width: 0; }
+.add-player-row #input-number { flex: 1 1 70px; min-width: 0; }
+.add-player-row #input-position { flex: 2 1 110px; min-width: 0; }
+/* Der Button steht in DERSELBEN Zeile wie Nummer und Position, nicht
+   darunter. Sonst rutscht er auf kleinen Geraeten wieder in den Bereich,
+   den die Tastatur verdeckt. */
+.add-player-row .add-btn { flex: 1 1 100px; min-height: 48px; }
+
+.add-player-optional {
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 25px;
+}
+.add-player-optional label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.add-player-optional #input-avatar { flex: 1 1 180px; min-width: 0; font-size: 0.85rem; }
+
+@media (min-width: 769px) {
+    /* Auf dem Desktop ist Platz: alles in eine Zeile. */
+    .add-player-row #input-name { flex: 2 1 200px; }
+    .add-player-row .add-btn { flex: 0 0 auto; }
 }

@@ -241,9 +241,14 @@
 
             <div id="add-player-form">
                 <h3>Neuen Spieler hinzufügen</h3>
-                <div class="form-row">
-                    <input type="text" id="input-name" placeholder="Name" required>
-                    <input type="number" id="input-number" placeholder="Nr." min="1" required>
+                <!-- Reihenfolge ist Absicht: Name, Nummer, Position, dann sofort der
+                     Button. Das Dateifeld fuers Foto stand frueher dazwischen und hat
+                     den Button auf dem Handy hinter die Tastatur geschoben. -->
+                <div class="form-row add-player-row">
+                    <input type="text" id="input-name" placeholder="Name" autocomplete="off"
+                           enterkeyhint="done" required>
+                    <input type="number" id="input-number" placeholder="Nr." min="1"
+                           inputmode="numeric" enterkeyhint="done" required>
                     <select id="input-position">
                         <option value="TW">Torwart (TW)</option>
                         <option value="LA">Linksaußen (LA)</option>
@@ -254,8 +259,11 @@
                         <option value="K">Kreis (K)</option>
                         <option value="N/A">N/A</option>
                     </select>
-                    <input type="file" id="input-avatar" accept="image/*" style="width: 150px;">
                     <button onclick="window.UI.addPlayer()" class="add-btn">Hinzufügen</button>
+                </div>
+                <div class="form-row add-player-optional">
+                    <label for="input-avatar">Foto (optional)</label>
+                    <input type="file" id="input-avatar" accept="image/*">
                 </div>
             </div>
 
