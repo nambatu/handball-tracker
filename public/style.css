@@ -31,6 +31,12 @@
 body {
     display: flex;
     flex-direction: column;
+    /* height zusaetzlich zu min-height: nur gegen eine FESTE Hoehe kann
+       #app-container mit flex:1 den tatsaechlich uebrigen Platz ausrechnen.
+       Mit min-height allein waechst der Body mit seinem Inhalt, und weil
+       hier overflow:hidden steht, landete alles Ueberzaehlige unerreichbar
+       unterhalb des Bildschirms. */
+    height: 100vh;
     min-height: 100vh;
     font-family: 'Inter', sans-serif;
     margin: 0;
@@ -125,6 +131,13 @@ footer {
 #controls {
     display: flex;
     gap: 10px;
+    /* Ohne Umbruch werden die Buttons bei mittlerer Fensterbreite in eine
+       Zeile gezwaengt und stehen rechts aus dem Bild heraus - Logout und
+       die Ansichts-Umschaltung waren dort nicht mehr erreichbar, und die
+       ganze Seite liess sich seitlich schieben. */
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
 }
 
 .control-btn {
@@ -153,11 +166,23 @@ footer {
    ========================================= */
 #app-container {
     display: flex;
-    flex: 1;
+    flex: 1 1 auto;
     padding: 15px;
     gap: 15px;
-    height: calc(100vh - 150px);
+    /* Frueher: height: calc(100vh - 150px). Die 150 px waren geraten und
+       stimmten nie - der Kopfbereich ist je nach Fensterbreite 130 bis
+       280 px hoch, dazu kommt die Fusszeile. War die Summe groesser,
+       schob sich der untere Teil (Bank, Fusszeile) aus dem Bild, und
+       body{overflow:hidden} machte ihn unerreichbar: nichts liess sich
+       scrollen. Jetzt nimmt der Bereich einfach, was zwischen Kopf und
+       Fuss uebrig ist. */
+    min-height: 0;
+    overflow-y: auto;
 }
+
+/* Ohne min-height:0 weigert sich ein Flex-Kind, unter seine Inhaltshoehe
+   zu schrumpfen - dann hilft auch kein overflow weiter oben. */
+#dynamic-view-container { min-height: 0; }
 
 section {
     background: var(--panel-bg);
@@ -413,7 +438,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 }
 
 @media (max-width: 768px) {
-    body { overflow-y: auto; }
+    /* Auf dem Handy scrollt die ganze Seite, nicht nur der Mittelteil -
+       deshalb hier die feste Bildschirmhoehe wieder aufheben. */
+    body { height: auto; min-height: 100vh; overflow-y: auto; }
     #app-container { flex-direction: column; height: auto; overflow: visible; padding: 10px; }
     /* Fester Platz unter dem Feld, damit man es ueber das Aktions-Sheet
        schieben kann.
@@ -478,14 +505,23 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     position: relative;
     background: transparent;
     border: none;
-    overflow: hidden;
+    /* Senkrecht scrollbar statt abschneidend: passen Feld und Bank auf
+       einem flachen Fenster nicht zusammen, soll man an die Bank kommen -
+       vorher war sie einfach weggeschnitten. */
+    overflow-x: hidden;
+    overflow-y: auto;
+    /* Der Grundwert 20px stammt aus der nebeneinanderliegenden Classic-
+       Ansicht. Untereinander kam er ZUSAETZLICH zu den margins der
+       Bereiche und hat 40px verschluckt - genug, dass die letzte
+       Bankreihe angeschnitten war. */
+    gap: 10px;
 }
 
 .court-opponent-area {
     padding: 10px;
     background: rgba(0,0,0,0.3);
     border-radius: 8px;
-    margin-bottom: 10px;
+    /* Abstand kommt vom gap des Containers, nicht zusaetzlich von hier. */
     display: flex;
     justify-content: center;
 }
@@ -520,7 +556,10 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     border: 1px solid var(--border-color);
     overflow: hidden;
     background-image: radial-gradient(ellipse 45% 48% at 50% 100%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.04) 100%, transparent 100%);
-    min-height: 320px;
+    /* Auf flachen Fenstern darf das Feld weiter schrumpfen - sonst
+       nimmt es der Bank den Platz weg. Die Spielerpositionen sind in
+       Prozent, das Feld bleibt also in jeder Groesse benutzbar. */
+    min-height: clamp(260px, 38vh, 320px);
     max-height: 620px;
 }
 
@@ -565,7 +604,10 @@ body.is-dragging-player .court-drop-zone .dz-label {
 }
 
 .court-bench-area {
-    margin-top: 10px;
+    /* Die Bank wird NICHT geschrumpft. Sonst bekommt sie einen eigenen
+       kleinen Scrollbalken und die hinteren Spieler verschwinden wieder -
+       genau das Problem, das der Umbruch beseitigen sollte. */
+    flex: 0 0 auto;
     padding: 10px;
     background: rgba(0,0,0,0.3);
     border-radius: 8px;
@@ -578,10 +620,15 @@ body.is-dragging-player .court-drop-zone .dz-label {
     align-content: flex-start;
     gap: 10px;
     min-height: 85px;
-    /* Notnagel fuer sehr grosse Kader: senkrecht scrollen laesst sich
-       zuverlaessig, und das Spielfeld bekommt nichts weggenommen. */
-    max-height: 40vh;
+    /* Kein Deckel auf dem Handy: dort scrollt die ganze Seite, ein
+       zweiter Scrollbereich INNERHALB der Bank waere genau das
+       fummelige Gescrolle, das der Umbruch abschaffen sollte. */
     overflow-y: auto;
+}
+@media (min-width: 769px) {
+    /* Auf dem Desktop hat der Mittelteil eine feste Hoehe - hier braucht
+       die Bank einen Deckel, damit sie dem Feld nicht alles wegnimmt. */
+    .court-bench-area { max-height: 40vh; }
 }
 .court-bench-area.drag-over {
     background: rgba(255,255,255,0.1);
