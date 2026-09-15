@@ -70,6 +70,87 @@
     }
 
     // ---------------------------------------------------------------
+    // Zwei Staende zusammenfuehren
+    // ---------------------------------------------------------------
+    // Frueher wurde bei einem Konflikt (HTTP 409) der komplette lokale
+    // Stand durch den Serverstand ERSETZT. Was auf diesem Geraet gerade
+    // entstanden war, verschwand dabei kommentarlos: ein neu angelegter
+    // Spieler war nach "Zurueck zum Spiel" wieder weg - und in der Halle
+    // haetten es genauso gut die letzten Aktionen sein koennen.
+    //
+    // Jetzt wird vereinigt. Grundsatz: lieber ein Eintrag zu viel als
+    // einer zu wenig. Preis dafuer: eine Loeschung auf Geraet A kann
+    // zurueckkommen, solange Geraet B den Spieler noch kennt. Ein wieder
+    // aufgetauchter Spieler ist in zwei Sekunden geloescht - ein
+    // verlorenes Tor laesst sich nach dem Spiel nicht rekonstruieren.
+
+    function aktionsSchluessel(a) {
+        if (a && a.id !== undefined && a.id !== null) return 'id:' + a.id;
+        return [a && a.timestamp, a && a.spielerId, a && a.typ].join('|');
+    }
+
+    function merge(lokal, fern) {
+        // Bei Feldern, die es nur einmal gibt, gewinnt der juengere Stand.
+        const juenger = (fern.updatedAt || 0) >= (lokal.updatedAt || 0) ? fern : lokal;
+        const aelter = juenger === fern ? lokal : fern;
+
+        // Spieler ueber die id vereinigen. Bei gleicher id gewinnt die
+        // Fassung des juengeren Standes (Einsatzzeit, Zeitstrafe).
+        const spieler = [];
+        const stelleVonId = new Map();
+        [aelter, juenger].forEach(function (quelle) {
+            quelle.spieler.forEach(function (p) {
+                const key = String(p.id);
+                if (stelleVonId.has(key)) {
+                    spieler[stelleVonId.get(key)] = p;
+                } else {
+                    stelleVonId.set(key, spieler.length);
+                    spieler.push(p);
+                }
+            });
+        });
+
+        // Aktionen vereinigen und chronologisch ordnen.
+        const aktionen = fern.aktionen.slice();
+        const gesehen = new Set(aktionen.map(aktionsSchluessel));
+        lokal.aktionen.forEach(function (a) {
+            const key = aktionsSchluessel(a);
+            if (!gesehen.has(key)) {
+                gesehen.add(key);
+                aktionen.push(a);
+            }
+        });
+        aktionen.sort(function (a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+
+        return {
+            // Hoeher als beide Seiten, damit der zusammengefuehrte Stand
+            // beim naechsten Push gewinnt und nicht in einer 409-Schleife
+            // haengen bleibt.
+            rev: Math.max(lokal.rev || 0, fern.rev || 0) + 1,
+            updatedAt: Date.now(),
+            spieler: spieler,
+            aktionen: aktionen,
+            aktiverTorwartId: juenger.aktiverTorwartId,
+            teamHeim: juenger.teamHeim,
+            teamGast: juenger.teamGast
+        };
+    }
+
+    // Stillschweigend zusammenfuehren waere genauso verwirrend wie
+    // stillschweigend wegwerfen - also kurz sagen, was dazugekommen ist.
+    function meldeZusammenfuehrung(vorher, nachher) {
+        const neueSpieler = nachher.spieler.length - vorher.spieler.length;
+        const neueAktionen = nachher.aktionen.length - vorher.aktionen.length;
+        if (neueSpieler <= 0 && neueAktionen <= 0) return;
+        if (!window.Toast) return;
+        const teile = [];
+        if (neueSpieler > 0) teile.push('+' + neueSpieler + ' Spieler');
+        if (neueAktionen > 0) teile.push('+' + neueAktionen + (neueAktionen === 1 ? ' Aktion' : ' Aktionen'));
+        window.Toast('Stand eines anderen Geräts übernommen (' + teile.join(', ') + ').',
+            { type: 'warn', duration: 6000 });
+    }
+
+    // ---------------------------------------------------------------
     // localStorage (defensiv: kann im Privatmodus werfen oder voll sein)
     // ---------------------------------------------------------------
 
@@ -203,21 +284,22 @@
             });
 
             if (res.status === 409) {
-                // Serverstand ist neuer (anderes Geraet). Nur uebernehmen,
-                // wenn wir selbst nichts Neueres in der Hand haben.
+                // Serverstand ist neuer (anderes Geraet). NICHT ersetzen,
+                // sondern zusammenfuehren - sonst verliert dieses Geraet
+                // genau das, was gerade hier eingetragen wurde.
                 const data = await res.json().catch(function () { return {}; });
-                const remote = normalize(data.state);
-                if (remote.rev > state.rev) {
-                    state = remote;
-                    lastPushedRev = state.rev;
-                    writeLocal();
-                    notifyChange();
-                } else {
-                    lastPushedRev = Math.max(lastPushedRev, revAtPush);
-                }
+                const fern = normalize(data.state);
+                const vorher = state;
+                state = merge(state, fern);
+                writeLocal();
+                meldeZusammenfuehrung(vorher, state);
+                notifyChange();
                 firstDirtyAt = 0;
                 retryDelay = RETRY_BASE_MS;
                 setStatus({ online: true, error: null, lastSyncAt: Date.now() });
+                // Der vereinigte Stand ist neuer als beide Seiten und muss
+                // jetzt hoch, sonst kennt ihn nur dieses Geraet.
+                schedulePush();
             } else if (res.ok) {
                 lastPushedRev = Math.max(lastPushedRev, revAtPush);
                 writeLocal();
@@ -277,14 +359,25 @@
         }
 
         if (server) {
+            const ungesichert = state.rev > (lastPushedRev || 0);
             if (!local) {
                 // Frisches Geraet: Serverstand uebernehmen
                 state = server;
                 lastPushedRev = state.rev;
-            } else if (server.rev > state.rev) {
-                // Anderes Geraet war neuer
+            } else if (server.rev > state.rev && !ungesichert) {
+                // Anderes Geraet war neuer und wir haben nichts Offenes -
+                // hier geht nichts verloren.
                 state = server;
                 lastPushedRev = state.rev;
+            } else if (server.rev > state.rev) {
+                // Anderes Geraet war neuer, ABER hier liegen noch nicht
+                // uebertragene Aenderungen (z.B. in der Halle ohne Netz
+                // erfasst). Ersetzen wuerde sie wegwerfen.
+                const vorher = state;
+                state = merge(state, server);
+                lastPushedRev = 0;
+                meldeZusammenfuehrung(vorher, state);
+                console.log('[Sync] Lokaler und Serverstand zusammengefuehrt (rev ' + state.rev + ').');
             } else if (state.rev > server.rev) {
                 // Wir haben ungesicherte Aenderungen (z.B. offline erfasst)
                 console.log('[Sync] Lokaler Stand ist neuer (rev ' + state.rev + ' > ' + server.rev + ') - wird hochgeladen.');
