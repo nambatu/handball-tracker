@@ -20,7 +20,7 @@ async function broadcastEvent(action, player, assistId, scoreString) {
     // Formatting rules to make a nice ticker text
     if (action.typ.includes("WurfTor")) {
         const spieler = window.Store.getSPIELER();
-        const isEnemy = window.Store.isGuestTeam(player.name);
+        const isEnemy = window.Store.istGast(player);
         if (isEnemy) {
             messageStr = `⚽ *Tor für die Gäste!* Stand: ${scoreString} (${timerStr})`;
         } else {

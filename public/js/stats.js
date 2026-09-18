@@ -36,7 +36,9 @@ function fmtQuote(q) {
  * @returns {{spieler: Object, torhueter: Object, team: Object, allActionTypes: Array}}
  */
 function buildStats(spieler, aktionen) {
-    const isGuest = (name) => window.Store.isGuestTeam(name);
+    // Archivspiele koennen noch ohne team-Feld gespeichert sein - hier
+    // nachtragen, damit die Auswertung nicht auf den Namen zurueckfallen muss.
+    if (window.Store.migriereTeamFeld) window.Store.migriereTeamFeld(spieler);
 
     const perPlayer = {};
     spieler.forEach(s => {
@@ -45,7 +47,7 @@ function buildStats(spieler, aktionen) {
             name: s.name,
             nummer: s.nummer,
             position: s.position,
-            istGast: isGuest(s.name),
+            istGast: window.Store.istGast(s),
             playtimeSeconds: s.playtimeSeconds || 0,
 
             tore: 0,
@@ -472,7 +474,7 @@ function buildCsv(spieler, aktionen) {
         const pNum = player ? player.nummer : "?";
 
         if (a.typ && a.typ.includes("WurfTor")) {
-            if (window.Store.isGuestTeam(pName)) guestGoals++; else homeGoals++;
+            if (window.Store.istGast(player)) guestGoals++; else homeGoals++;
         }
 
         const assistPlayer = a.assistId ? spieler.find(p => p.id === a.assistId) : null;

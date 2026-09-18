@@ -67,10 +67,23 @@ async function loadInitialState(username) {
 
     if (state().spieler.length === 0) {
         state().spieler = [
-            { id: 'p1', name: "Gegner", nummer: 0, position: "N/A", playtimeSeconds: 0, suspendedUntilGameTime: null },
-            { id: 'p2', name: "Tom Tester", nummer: 22, position: "LA", playtimeSeconds: 0, suspendedUntilGameTime: null },
-            { id: 'p3', name: "Kai Keeper", nummer: 1, position: "TW", playtimeSeconds: 0, suspendedUntilGameTime: null },
+            { id: 'p1', name: "Gegner", nummer: 0, position: "N/A", team: 'gast', playtimeSeconds: 0, suspendedUntilGameTime: null },
+            { id: 'p2', name: "Tom Tester", nummer: 22, position: "LA", team: 'heim', playtimeSeconds: 0, suspendedUntilGameTime: null },
+            { id: 'p3', name: "Kai Keeper", nummer: 1, position: "TW", team: 'heim', playtimeSeconds: 0, suspendedUntilGameTime: null },
         ];
+        savePlayers();
+    } else if (migriereTeamFeld(state().spieler)) {
+        // Einmalig beim ersten Start nach der Umstellung.
+        console.log('[Store] team-Feld nachgetragen.');
+        savePlayers();
+    }
+
+    // Ohne Gegner-Eintrag laesst sich kein gegnerisches Tor erfassen.
+    if (!state().spieler.some(istGast)) {
+        state().spieler.unshift({
+            id: 'gast_' + Date.now(), name: 'Gegner', nummer: 0, position: 'N/A',
+            team: 'gast', playtimeSeconds: 0, suspendedUntilGameTime: null
+        });
         savePlayers();
     }
 }
@@ -94,11 +107,57 @@ function saveActions(aktionen) {
     window.Sync.touch();
 }
 
-// Helper: Ist es ein Gegner?
-function isGuestTeam(name) {
+// ---------------------------------------------------------------
+// Heim oder Gast
+// ---------------------------------------------------------------
+// Bis September 2026 wurde die Gegnerseite am NAMEN erkannt. Das war
+// fragil bis gefaehrlich: wer den Eintrag "Gegner" in "HC Musterdorf"
+// umbenannte, liess ab dem Moment alle gegnerischen Tore als eigene
+// zaehlen - lautlos, mitten im Spiel.
+//
+// Jetzt entscheidet das Feld `team`. Der Namensvergleich bleibt nur noch
+// als Rueckfall fuer Daten, die vor der Umstellung entstanden sind.
+
+function istGastName(name) {
     if (!name) return false;
-    const lowerName = name.toLowerCase().trim();
+    const lowerName = String(name).toLowerCase().trim();
     return lowerName === 'gegner' || lowerName === 'enemy' || lowerName === 'gast';
+}
+
+/**
+ * Gehoert dieser Spieler zur Gegnerseite?
+ * @param {object} p Spieler
+ */
+function istGast(p) {
+    if (!p) return false;
+    if (p.team === 'gast') return true;
+    if (p.team === 'heim') return false;
+    return istGastName(p.name);   // Altbestand ohne team-Feld
+}
+
+/**
+ * Alter Name, damit nichts bricht: nimmt einen Spieler ODER einen Namen.
+ * Neuer Code soll istGast(spieler) benutzen.
+ */
+function isGuestTeam(spielerOderName) {
+    if (spielerOderName && typeof spielerOderName === 'object') return istGast(spielerOderName);
+    return istGastName(spielerOderName);
+}
+
+/**
+ * Setzt das team-Feld bei allen Spielern, die es noch nicht haben.
+ * Laeuft ueber den laufenden Kader genauso wie ueber ein Archivspiel.
+ * @returns {boolean} true, wenn etwas geaendert wurde
+ */
+function migriereTeamFeld(spieler) {
+    let veraendert = false;
+    (spieler || []).forEach(function (p) {
+        if (p && p.team !== 'heim' && p.team !== 'gast') {
+            p.team = istGastName(p.name) ? 'gast' : 'heim';
+            veraendert = true;
+        }
+    });
+    return veraendert;
 }
 
 function addPlayerToStore(name, number, position, avatarUrl = null) {
@@ -107,6 +166,7 @@ function addPlayerToStore(name, number, position, avatarUrl = null) {
         name: name,
         nummer: number,
         position: position || "N/A",
+        team: 'heim',
         playtimeSeconds: 0,
         avatarUrl: avatarUrl,
         suspendedUntilGameTime: null
@@ -183,7 +243,7 @@ function isGoalkeeper(p) {
 
 /** Alle Torhueter des eigenen Teams (auch die auf der Bank). */
 function getGoalkeepers() {
-    return state().spieler.filter(p => !isGuestTeam(p.name) && (isGoalkeeper(p) || p.warTorwart));
+    return state().spieler.filter(p => !istGast(p) && (isGoalkeeper(p) || p.warTorwart));
 }
 
 /**
@@ -196,7 +256,7 @@ function getActiveGoalkeeper() {
         const chosen = s.spieler.find(p => String(p.id) === String(s.aktiverTorwartId));
         if (chosen) return chosen;
     }
-    return s.spieler.find(p => !isGuestTeam(p.name) && isGoalkeeper(p)) || null;
+    return s.spieler.find(p => !istGast(p) && isGoalkeeper(p)) || null;
 }
 
 function getActiveGoalkeeperId() {
@@ -219,7 +279,7 @@ function setActiveGoalkeeper(playerId) {
 }
 
 function isOnCourt(p) {
-    return !isGuestTeam(p.name)
+    return !istGast(p)
         && p.position !== 'Bank'
         && p.position !== 'N/A'
         && p.position !== 'Gast';
@@ -249,7 +309,7 @@ function getPlayersOnCourt() {
     const belegt = new Set();
     const aufDemFeld = [];
     state().spieler.forEach(p => {
-        if (isGuestTeam(p.name)) return;
+        if (istGast(p)) return;
         const pos = normalisiertePosition(p);
         if (COURT_POSITIONEN.indexOf(pos) === -1) return;
         if (belegt.has(pos)) return;
@@ -337,6 +397,9 @@ window.Store = {
     loadActions,
     saveActions,
     isGuestTeam,
+    istGast,
+    istGastName,
+    migriereTeamFeld,
     isOnCourt,
     getPlayersOnCourt,
     normalisiertePosition,

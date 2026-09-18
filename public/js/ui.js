@@ -289,7 +289,7 @@ function openActionSheet(playerId, posClass) {
     // Spieler weiter oben. Ohne Namen tippt man im Eifer auf den Falschen.
     const head = document.createElement('div');
     head.className = 'cas-head';
-    const istGast = window.Store.isGuestTeam(player.name);
+    const istGast = window.Store.istGast(player);
     const titel = istGast
         ? (window.Store.getTeamNames().gast && window.Store.getTeamNames().gast !== 'GAST'
             ? window.Store.getTeamNames().gast : 'Gegner')
@@ -612,7 +612,7 @@ function updateScoreboard() {
         if (action.typ && action.typ.includes('WurfTor')) {
             const player = spieler.find(p => p.id === action.spielerId);
             if (player) {
-                if (window.Store.isGuestTeam(player.name)) {
+                if (window.Store.istGast(player)) {
                     guestGoals++;
                 } else {
                     homeGoals++;
@@ -774,7 +774,7 @@ function handleActionFlow(player, finalActionType, finalActionLabel, category) {
     }
 
     const isGoal = finalActionType.includes('WurfTor');
-    const isEnemy = window.Store.isGuestTeam(player.name);
+    const isEnemy = window.Store.istGast(player);
 
     // Bei Siebenmeter und Gegenstoss gibt es praktisch nie einen Assist.
     // Die Abfrage waere dort nur ein Klick mehr pro Tor.
@@ -964,7 +964,7 @@ function openActionEdit(actionId) {
 
     // Assist nur dort anbieten, wo er ueberhaupt Sinn ergibt
     const istEigenesTor = action.typ && action.typ.indexOf('WurfTor') !== -1
-        && p && !window.Store.isGuestTeam(p.name);
+        && p && !window.Store.istGast(p);
 
     if (assistWrap) assistWrap.style.display = istEigenesTor ? 'block' : 'none';
     if (istEigenesTor && assistList) {
@@ -976,7 +976,7 @@ function openActionEdit(actionId) {
         assistList.appendChild(keiner);
 
         spieler.forEach(function (x) {
-            if (x.id === action.spielerId || window.Store.isGuestTeam(x.name)) return;
+            if (x.id === action.spielerId || window.Store.istGast(x)) return;
             const btn = document.createElement('button');
             btn.className = 'ae-player' + (x.id === action.assistId ? ' ae-active' : '');
             btn.innerHTML = '<strong>#' + escapeHtml(x.nummer) + '</strong> '
@@ -1055,6 +1055,9 @@ function openTimeEdit() {
 
     const st = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0 };
     input.value = window.Timer ? window.Timer.formatTime(st.spielzeitSekunden) : '00:00';
+    const hz = document.getElementById('time-edit-halbzeit');
+    if (hz && window.Timer) hz.value = String(window.Timer.getHalbzeitMinuten());
+
     box.style.display = 'flex';
     input.focus();
     input.select();
@@ -1166,6 +1169,12 @@ function setAssistAbfrage(aktiv) {
 function setHalbzeitLaenge(minuten) {
     if (!window.Timer) return;
     const m = window.Timer.setHalbzeitLaenge(minuten);
+    // Die Einstellung steht an zwei Stellen (Uhr und Verwaltung) - beide
+    // muessen denselben Wert zeigen, sonst glaubt man je nach Weg etwas anderes.
+    ['setting-halbzeit', 'time-edit-halbzeit'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.value = String(m);
+    });
     if (window.Toast) window.Toast(`Spielzeit auf 2 × ${m} Minuten gestellt.`, { type: 'success', duration: 3000 });
 }
 
@@ -1269,7 +1278,7 @@ function renderRosterList() {
     const spieler = window.Store.getSPIELER();
     spieler.forEach(p => {
         const li = document.createElement("li");
-        const istGast = window.Store.isGuestTeam(p.name);
+        const istGast = window.Store.istGast(p);
 
         if (String(p.id) === bearbeiteterSpieler) {
             // Bearbeiten statt loeschen und neu anlegen: die Aktionen haengen
@@ -1293,8 +1302,12 @@ function renderRosterList() {
                 });
             });
         } else {
+            // Der Gegner-Eintrag ist sichtbar als solcher markiert: er zaehlt
+            // die gegnerischen Tore und laesst sich deshalb nicht loeschen.
+            // Umbenennen ist seit der Umstellung auf das team-Feld gefahrlos.
             li.innerHTML = `
-                <span>#${escapeHtml(p.nummer)} ${escapeHtml(p.name)} (${escapeHtml(p.position)})</span>
+                <span>#${escapeHtml(p.nummer)} ${escapeHtml(p.name)} (${escapeHtml(p.position)})${
+                    istGast ? ' <span class="gast-marke">Gegnerseite</span>' : ''}</span>
                 <span class="roster-btns">
                     <button class="js-edit">Bearbeiten</button>
                     ${istGast ? '' : '<button class="js-del">Löschen</button>'}
@@ -1361,7 +1374,7 @@ function removePlayer(playerId) {
     // "Gegner" ist kein Spieler, sondern der Platzhalter, ueber den alle
     // gegnerischen Tore laufen. Ohne ihn passiert auf der Gegnerseite nichts
     // mehr - und der Spielstand bleibt einseitig stehen.
-    if (p && window.Store.isGuestTeam(p.name)) {
+    if (p && window.Store.istGast(p)) {
         if (window.Toast) window.Toast('„Gegner" wird zum Zählen der gegnerischen Tore gebraucht und kann nicht gelöscht werden.',
             { type: 'warn', duration: 6000 });
         return;
@@ -1651,7 +1664,7 @@ function renderCourtView(container) {
     // 1. Opponent Area
     const opponentArea = document.createElement('div');
     opponentArea.className = 'court-opponent-area';
-    const guestPlayer = spieler.find(p => window.Store.isGuestTeam(p.name));
+    const guestPlayer = spieler.find(p => window.Store.istGast(p));
     if (guestPlayer) {
         const oppBtn = document.createElement('button');
         oppBtn.className = 'court-opponent-btn';
@@ -1706,7 +1719,7 @@ function renderCourtView(container) {
     const benchPlayers = [];
 
     spieler.forEach(p => {
-        if (window.Store.isGuestTeam(p.name)) return; 
+        if (window.Store.istGast(p)) return; 
         
         let posClass = p.position;
         if(posClass === 'M') posClass = 'RM';

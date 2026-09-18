@@ -38,7 +38,11 @@ body {
        unterhalb des Bildschirms. */
     height: 100vh;
     min-height: 100vh;
-    font-family: 'Inter', sans-serif;
+    /* Systemschrift statt Google Fonts: laedt ohne Netz, ohne fremden
+       Server und ohne DSGVO-Frage - und sieht auf jedem Geraet nach dem
+       Geraet aus. */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                 "Helvetica Neue", Arial, sans-serif;
     margin: 0;
     padding: 0;
     background-color: var(--bg-color);
@@ -1817,3 +1821,34 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 
 .settings-box .setting-row + .setting-row { margin-top: 12px; }
 .settings-box select { flex: 1 1 200px; min-width: 0; }
+
+/* Zeitkorrektur: zwei Zeilen (laufende Zeit, Halbzeitlänge) */
+.time-edit { flex-direction: column; align-items: stretch; gap: 10px; }
+.time-edit-zeile {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.time-edit-zeile label { font-size: 0.85rem; color: var(--text-muted); flex: 0 0 auto; }
+.time-edit-zeile select { flex: 1 1 200px; min-width: 0; }
+@media (max-width: 768px) {
+    .time-edit-zeile button { flex: 1 1 auto; min-height: 44px; }
+    .time-edit-zeile select { flex: 1 1 100%; min-height: 44px; }
+}
+
+/* Kaderliste: der Gegner-Eintrag ist kein normaler Spieler */
+.gast-marke {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    margin-left: 6px;
+    vertical-align: middle;
+}

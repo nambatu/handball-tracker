@@ -5,9 +5,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Handball Ticker</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <meta name="theme-color" content="#0f172a">
     <meta name="description" content="Aktionen eines Handballspiels live erfassen — Tore, Paraden, Strafen — mit Statistik und Spielbericht.">
     <link rel="manifest" href="manifest.json">
@@ -17,7 +14,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260918">
 </head>
 
 <body>
@@ -44,11 +41,26 @@
             </div>
 
             <!-- Zeitkorrektur (z.B. wenn die App im Hintergrund weiterlief) -->
+            <!-- Beim Antippen der Uhr: laufende Zeit korrigieren UND die
+                 Halbzeitlaenge festlegen. Die Laenge stand zuerst nur in der
+                 Spielerverwaltung - dort sucht sie niemand. -->
             <div id="time-edit" class="time-edit" style="display:none;">
-                <label for="time-edit-input">Spielzeit auf</label>
-                <input type="text" id="time-edit-input" inputmode="numeric" placeholder="mm:ss" size="5">
-                <button onclick="window.UI.applyTimeEdit()" class="add-btn">Setzen</button>
-                <button onclick="window.UI.closeTimeEdit()" class="cancel-btn">Abbrechen</button>
+                <div class="time-edit-zeile">
+                    <label for="time-edit-input">Spielzeit auf</label>
+                    <input type="text" id="time-edit-input" inputmode="numeric" placeholder="mm:ss" size="5">
+                    <button onclick="window.UI.applyTimeEdit()" class="add-btn">Setzen</button>
+                    <button onclick="window.UI.closeTimeEdit()" class="cancel-btn">Abbrechen</button>
+                </div>
+                <div class="time-edit-zeile">
+                    <label for="time-edit-halbzeit">Halbzeit dauert</label>
+                    <select id="time-edit-halbzeit" onchange="window.UI.setHalbzeitLaenge(this.value)">
+                        <option value="30">2 × 30 Minuten (Erwachsene)</option>
+                        <option value="25">2 × 25 Minuten (A-/B-Jugend)</option>
+                        <option value="20">2 × 20 Minuten (C-/D-Jugend)</option>
+                        <option value="15">2 × 15 Minuten (E-/F-Jugend)</option>
+                        <option value="10">2 × 10 Minuten (Turnier)</option>
+                    </select>
+                </div>
             </div>
         </div>
 
@@ -341,16 +353,16 @@
         </div>
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="https://bernardo-castilho.github.io/DragDropTouch/DragDropTouch.js"></script>
-    <script src="js/sync.js"></script>
-    <script src="js/wakelock.js"></script>
-    <script src="js/store.js"></script>
-    <script src="js/timer.js"></script>
-    <script src="js/stats.js"></script>
-    <script src="js/report.js"></script>
-    <script src="js/whatsapp.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/app.js"></script>
+    <script src="vendor/touch-drag.js?v=20260918"></script>
+    <script src="js/sync.js?v=20260918"></script>
+    <script src="js/wakelock.js?v=20260918"></script>
+    <script src="js/store.js?v=20260918"></script>
+    <script src="js/timer.js?v=20260918"></script>
+    <script src="js/stats.js?v=20260918"></script>
+    <script src="js/report.js?v=20260918"></script>
+    <script src="js/whatsapp.js?v=20260918"></script>
+    <script src="js/ui.js?v=20260918"></script>
+    <script src="js/app.js?v=20260918"></script>
 
     <!-- Modal Logik Inline -->
     <script>

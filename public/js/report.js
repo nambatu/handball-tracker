@@ -80,7 +80,7 @@
         const pts = [{ t: 0, h: 0, g: 0 }];
         goals.forEach(a => {
             const p = spieler.find(x => x.id === a.spielerId);
-            if (p && window.Store.isGuestTeam(p.name)) g++; else h++;
+            if (p && window.Store.istGast(p)) g++; else h++;
             pts.push({ t: a.spielzeit || 0, h: h, g: g });
         });
 
@@ -304,7 +304,7 @@
         aktionen.forEach(a => {
             if (!a.typ || !a.typ.includes('WurfTor')) return;
             const p = spieler.find(x => x.id === a.spielerId);
-            const gast = p && window.Store.isGuestTeam(p.name);
+            const gast = p && window.Store.istGast(p);
             if (gast) gastTore++; else heimTore++;
             const half = (a.halbzeit === 2) ? 2 : 1;
             if (gast) hz[half].gast++; else hz[half].heim++;
@@ -480,7 +480,7 @@
             let tore = 0, fehl = 0, verl = 0, gew = 0;
             acts.forEach(a => {
                 const p = spieler.find(x => x.id === a.spielerId);
-                if (p && window.Store.isGuestTeam(p.name)) return;
+                if (p && window.Store.istGast(p)) return;
                 const t = a.typ || '';
                 if (t.includes('WurfTor')) tore++;
                 else if (t.includes('WurfOhneTor')) fehl++;
@@ -537,7 +537,7 @@
         let h = 0, g = 0;
         const items = goals.map(a => {
             const p = spieler.find(x => x.id === a.spielerId);
-            const isGast = p && window.Store.isGuestTeam(p.name);
+            const isGast = p && window.Store.istGast(p);
             if (isGast) g++; else h++;
             const assist = a.assistId ? spieler.find(x => x.id === a.assistId) : null;
             return `<li class="${isGast ? 'rep-goal-gast' : 'rep-goal-heim'}">
@@ -585,6 +585,8 @@
         const view = document.getElementById('report-view');
         const body = document.getElementById('report-content');
         if (!view || !body) return;
+        // Archivspiele koennen aus der Zeit vor dem team-Feld stammen.
+        if (window.Store && window.Store.migriereTeamFeld) window.Store.migriereTeamFeld(spieler);
         body.innerHTML = buildReport(spieler, aktionen, meta);
         view.style.display = 'flex';
         body.scrollTop = 0;

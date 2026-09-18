@@ -24,8 +24,45 @@ window.fetch = async function() {
 };
 
 window.onload = async () => {
+    registriereServiceWorker();
     checkAuthStatus();
 };
+
+/**
+ * Service Worker anmelden - damit sich die App in der Halle ohne Netz
+ * ueberhaupt oeffnen laesst.
+ *
+ * Braucht einen sicheren Kontext: ueber https (ngrok, spaeter der VPS)
+ * oder localhost. Ueber blankes http im WLAN passiert hier bewusst
+ * nichts, statt mit einer Fehlermeldung aufzufallen.
+ */
+function registriereServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    if (!window.isSecureContext) {
+        console.log('[App] Kein sicherer Kontext - Offline-Start nicht moeglich (http).');
+        return;
+    }
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+        // Ein wartendes Update sofort uebernehmen lassen. Ohne das laeuft
+        // nach einem Deploy noch tagelang die alte Fassung weiter.
+        if (reg.waiting) reg.waiting.postMessage('skipWaiting');
+        reg.addEventListener('updatefound', function () {
+            const neu = reg.installing;
+            if (!neu) return;
+            neu.addEventListener('statechange', function () {
+                if (neu.state === 'installed' && navigator.serviceWorker.controller) {
+                    neu.postMessage('skipWaiting');
+                    if (window.Toast) {
+                        window.Toast('Neue Version geladen. Beim nächsten Öffnen ist sie aktiv.',
+                            { type: 'success', duration: 6000 });
+                    }
+                }
+            });
+        });
+    }).catch(function (e) {
+        console.warn('[App] Service Worker nicht registrierbar:', e.message);
+    });
+}
 
 async function checkAuthStatus() {
     const token = localStorage.getItem('auth_token');
