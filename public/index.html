@@ -37,6 +37,7 @@
                 Spielzeit:
                 <button id="game-timer" class="timer-value" onclick="window.UI.openTimeEdit()"
                         title="Antippen, um die Spielzeit zu korrigieren">00:00</button>
+                <span id="timer-target" class="timer-target" title="Ende der laufenden Halbzeit">/ 30:00</span>
                 <button id="gk-indicator" class="gk-badge" onclick="window.UI.openGoalkeeperPicker()"
                         title="Aktiver Torwart"></button>
                 <span id="sync-status" class="sync-badge sync-ok" title="Synchronisierung"></span>
@@ -202,6 +203,7 @@
             </div>
             <div class="overlay-actions">
                 <button onclick="window.UI.confirmAssist(null)" class="cancel-btn">Kein Assist / Einzelaktion</button>
+                <button onclick="window.UI.assistAbfrageAus()" class="close-btn">Nicht mehr fragen</button>
                 <button onclick="window.UI.closeAssistOverlay()" class="close-btn">Abbrechen</button>
             </div>
         </div>
@@ -237,6 +239,23 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <h3 style="margin: 0;">Aktueller Kader (Live)</h3>
                 <button onclick="window.UI.clearAllPlayers()" class="cancel-btn" style="padding: 8px 12px; font-size: 0.9em;">Alle Spieler löschen</button>
+            </div>
+
+            <div id="einstellungen" class="settings-box">
+                <label class="setting-row">
+                    <input type="checkbox" id="setting-assist" onchange="window.UI.setAssistAbfrage(this.checked)">
+                    <span>Nach jedem Tor nach dem Vorlagengeber fragen</span>
+                </label>
+                <div class="setting-row">
+                    <label for="setting-halbzeit">Spielzeit</label>
+                    <select id="setting-halbzeit" onchange="window.UI.setHalbzeitLaenge(this.value)">
+                        <option value="30">2 × 30 Minuten (Erwachsene)</option>
+                        <option value="25">2 × 25 Minuten (A-/B-Jugend)</option>
+                        <option value="20">2 × 20 Minuten (C-/D-Jugend)</option>
+                        <option value="15">2 × 15 Minuten (E-/F-Jugend)</option>
+                        <option value="10">2 × 10 Minuten (Turnier)</option>
+                    </select>
+                </div>
             </div>
 
             <div id="add-player-form">

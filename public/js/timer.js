@@ -14,11 +14,19 @@
 const CLOCK_KEY = 'ht_clock_v2';
 const LEGACY_CLOCK_KEY = 'gameState';
 
+const STANDARD_HALBZEIT_SEKUNDEN = 30 * 60;
+
 let clock = {
     accumulatedMs: 0,   // gesicherte Spielzeit aus abgeschlossenen Laufphasen
     startedAt: null,    // Date.now() beim Start, null wenn pausiert
-    half: 1
+    half: 1,
+    // Laenge EINER Halbzeit. Liegt bewusst bei der Uhr und nicht im
+    // synchronisierten Spielstand: die Uhr gehoert zum Geraet, und eine
+    // D-Jugend spielt 2x20 waehrend die Erste daneben 2x30 spielt.
+    halbzeitSekunden: STANDARD_HALBZEIT_SEKUNDEN
 };
+
+let halbzeitHinweisFuer = 0;   // fuer welche Halbzeit schon gewarnt wurde
 
 let displayInterval = null;
 let lastPlaytimeSeconds = 0;
@@ -68,7 +76,8 @@ function loadGameState() {
         clock = {
             accumulatedMs: loaded.accumulatedMs,
             startedAt: loaded.startedAt || null,
-            half: loaded.half || 1
+            half: loaded.half || 1,
+            halbzeitSekunden: Number(loaded.halbzeitSekunden) || STANDARD_HALBZEIT_SEKUNDEN
         };
 
         // Die Uhr lief beim letzten Mal noch. Das ist der ehrliche Zustand
@@ -88,7 +97,8 @@ function loadGameState() {
         try {
             const legacy = JSON.parse(localStorage.getItem(LEGACY_CLOCK_KEY));
             if (legacy && typeof legacy.spielzeit === 'number') {
-                clock = { accumulatedMs: legacy.spielzeit * 1000, startedAt: null, half: legacy.halbzeit || 1 };
+                clock = { accumulatedMs: legacy.spielzeit * 1000, startedAt: null,
+                          half: legacy.halbzeit || 1, halbzeitSekunden: STANDARD_HALBZEIT_SEKUNDEN };
                 localStorage.removeItem(LEGACY_CLOCK_KEY);
                 saveGameState();
             }
@@ -104,9 +114,22 @@ function loadGameState() {
 // Anzeige
 // ---------------------------------------------------------------
 
+/** Spielzeit, bei der die laufende Halbzeit endet. */
+function halbzeitEndeSekunden() {
+    return clock.halbzeitSekunden * clock.half;
+}
+
 function updateTimerDisplay() {
     const timerEl = document.getElementById("game-timer");
     if (timerEl) timerEl.innerText = formatTime(elapsedSeconds());
+
+    // Das Ziel steht daneben, nicht in der Uhr: "24:10 / 30:00" laesst sich
+    // im Vorbeigehen ablesen, ohne nachzurechnen wie lange noch zu spielen ist.
+    const zielEl = document.getElementById("timer-target");
+    if (zielEl) {
+        zielEl.innerText = '/ ' + formatTime(halbzeitEndeSekunden());
+        zielEl.classList.toggle('is-over', elapsedSeconds() >= halbzeitEndeSekunden());
+    }
 
     const btn = document.getElementById("timer-btn");
     if (btn) btn.innerText = isRunning() ? "⏸️ Pause" : "▶️ Start";
@@ -137,6 +160,20 @@ function stopDisplayLoop() {
 
 function tick() {
     updateTimerDisplay();
+
+    // Einmal pro Halbzeit Bescheid geben. Die Uhr laeuft bewusst WEITER -
+    // wann abgepfiffen wird, entscheidet der Schiedsrichter, nicht die App.
+    if (isRunning() && halbzeitHinweisFuer !== clock.half
+        && elapsedSeconds() >= halbzeitEndeSekunden()) {
+        halbzeitHinweisFuer = clock.half;
+        if (window.Toast) {
+            window.Toast(
+                (clock.half === 1 ? 'Halbzeit' : 'Spielzeit') + ' erreicht ('
+                + formatTime(halbzeitEndeSekunden()) + '). Die Uhr läuft weiter.',
+                { type: 'warn', duration: 8000 }
+            );
+        }
+    }
 
     // Zeitstrafen sekundengenau mitlaufen lassen. Gezielt, nicht ueber
     // einen kompletten Rerender - der wuerde jede Sekunde das Drag&Drop
@@ -204,6 +241,7 @@ function toggleEndHalfOrGame() {
     if (clock.half === 1) {
         if (confirm("1. Halbzeit beenden?")) {
             clock.half = 2;
+            halbzeitHinweisFuer = 0;
         }
     } else {
         endGame();
@@ -256,7 +294,8 @@ async function endGame() {
     }));
     await window.Sync.reset({ spieler: resetSpieler, aktionen: [] });
 
-    clock = { accumulatedMs: 0, startedAt: null, half: 1 };
+    clock = { accumulatedMs: 0, startedAt: null, half: 1, halbzeitSekunden: clock.halbzeitSekunden };
+    halbzeitHinweisFuer = 0;
     lastPlaytimeSeconds = 0;
     stopDisplayLoop();
     saveGameState();
@@ -273,11 +312,30 @@ async function endGame() {
     }
 }
 
+/**
+ * Halbzeitlaenge in Minuten setzen (2x25, 2x30 ...).
+ * @param {number} minuten
+ */
+function setHalbzeitLaenge(minuten) {
+    const m = Math.max(1, Math.min(60, Math.round(Number(minuten) || 0)));
+    clock.halbzeitSekunden = m * 60;
+    halbzeitHinweisFuer = 0;
+    saveGameState();
+    updateTimerDisplay();
+    return m;
+}
+
+function getHalbzeitMinuten() {
+    return Math.round(clock.halbzeitSekunden / 60);
+}
+
 function getTimerState() {
     return {
         spielzeitSekunden: elapsedSeconds(),
         currentHalf: clock.half,
-        isTimerRunning: isRunning()
+        isTimerRunning: isRunning(),
+        halbzeitSekunden: clock.halbzeitSekunden,
+        halbzeitEndeSekunden: halbzeitEndeSekunden()
     };
 }
 
@@ -289,5 +347,7 @@ window.Timer = {
     toggleEndHalfOrGame,
     getTimerState,
     setGameTime,
-    elapsedSeconds
+    elapsedSeconds,
+    setHalbzeitLaenge,
+    getHalbzeitMinuten
 };

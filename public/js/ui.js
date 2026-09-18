@@ -780,7 +780,7 @@ function handleActionFlow(player, finalActionType, finalActionLabel, category) {
     // Die Abfrage waere dort nur ein Klick mehr pro Tor.
     const ohneAssist = finalActionType.includes('7Meter') || finalActionType.includes('Gegenstoss');
 
-    if (isGoal && !isEnemy && !ohneAssist) {
+    if (isGoal && !isEnemy && !ohneAssist && assistAbfrageAktiv()) {
         tempActionData = {
             player: player,
             typ: finalActionType,
@@ -1114,21 +1114,64 @@ function showAssistOverlay() {
     if (!overlay || !list) return;
 
     list.innerHTML = '';
-    const spieler = window.Store.getSPIELER();
 
-    spieler.forEach(p => {
-        const isEnemy = window.Store.isGuestTeam(p.name);
-        if (p.id !== selectedPlayerId && !isEnemy) {
-            const btn = document.createElement('button');
-            btn.innerHTML = `<strong>${escapeHtml(p.nummer)}</strong><br>${escapeHtml(p.name)}`;
-            btn.style.margin = "5px";
-            btn.style.padding = "10px";
-            btn.onclick = () => confirmAssist(p.id);
-            list.appendChild(btn);
-        }
+    // Nur wer gerade auf dem Feld steht, kann aufgelegt haben. Vorher stand
+    // hier der komplette Kader - man konnte einen Bankspieler als
+    // Vorlagengeber eintragen.
+    const aufDemFeld = window.Store.getPlayersOnCourt();
+
+    aufDemFeld.forEach(p => {
+        if (p.id === selectedPlayerId) return;
+        const btn = document.createElement('button');
+        btn.innerHTML = `<strong>${escapeHtml(p.nummer)}</strong><br>${escapeHtml(p.name)}`;
+        btn.style.margin = "5px";
+        btn.style.padding = "10px";
+        btn.onclick = () => confirmAssist(p.id);
+        list.appendChild(btn);
     });
 
+    if (!list.children.length) {
+        list.innerHTML = '<p style="color: var(--text-muted);">Kein weiterer Spieler auf dem Feld.</p>';
+    }
+
     overlay.style.display = 'flex';
+}
+
+// ---------------------------------------------------------------
+// Assist-Abfrage abschaltbar
+// ---------------------------------------------------------------
+// Beim Mitschreiben fuer den Ticker ist die Frage nach dem Vorlagengeber
+// ein Klick zu viel. Wer die Assists nicht auswertet, schaltet sie ab.
+
+const ASSIST_KEY = 'ht_assist_fragen';
+
+function assistAbfrageAktiv() {
+    try { return localStorage.getItem(ASSIST_KEY) !== 'aus'; } catch (e) { return true; }
+}
+
+function setAssistAbfrage(aktiv) {
+    try { localStorage.setItem(ASSIST_KEY, aktiv ? 'an' : 'aus'); } catch (e) { /* egal */ }
+    const box = document.getElementById('setting-assist');
+    if (box) box.checked = aktiv;
+    if (window.Toast) {
+        window.Toast(aktiv ? 'Assist wird wieder abgefragt.' : 'Assist wird nicht mehr abgefragt.',
+            { type: 'success', duration: 3000 });
+    }
+}
+
+/**
+ * Spielzeit umstellen. Liegt hier statt direkt am Timer, damit die
+ * Rueckmeldung an einer Stelle passiert und die Anzeige mitzieht.
+ */
+function setHalbzeitLaenge(minuten) {
+    if (!window.Timer) return;
+    const m = window.Timer.setHalbzeitLaenge(minuten);
+    if (window.Toast) window.Toast(`Spielzeit auf 2 × ${m} Minuten gestellt.`, { type: 'success', duration: 3000 });
+}
+
+function assistAbfrageAus() {
+    setAssistAbfrage(false);
+    confirmAssist(null);   // die laufende Aktion ohne Assist buchen
 }
 
 function closeAssistOverlay() {
@@ -1159,6 +1202,11 @@ async function togglePlayerManagement() {
     if (managementView.style.display === 'none' || managementView.style.display === '') {
         mainApp.style.display = 'none';
         managementView.style.display = 'block';
+        bearbeiteterSpieler = null;
+        const assistBox = document.getElementById('setting-assist');
+        if (assistBox) assistBox.checked = assistAbfrageAktiv();
+        const hzBox = document.getElementById('setting-halbzeit');
+        if (hzBox && window.Timer) hzBox.value = String(window.Timer.getHalbzeitMinuten());
         renderRosterList();
         await populateTeamsDropdown();
     } else {
@@ -1166,6 +1214,50 @@ async function togglePlayerManagement() {
         mainApp.style.display = 'flex';
         updateUI();
     }
+}
+
+// Welcher Spieler wird gerade bearbeitet (null = keiner)
+let bearbeiteterSpieler = null;
+
+const POSITIONS_AUSWAHL = [
+    ['TW', 'Torwart (TW)'], ['LA', 'Linksaußen (LA)'], ['RL', 'Rückraum Links (RL)'],
+    ['M', 'Mitte (RM)'], ['RR', 'Rückraum Rechts (RR)'], ['RA', 'Rechtsaußen (RA)'],
+    ['K', 'Kreis (K)'], ['N/A', 'Bank / keine Position']
+];
+
+function startEditPlayer(playerId) {
+    bearbeiteterSpieler = String(playerId);
+    renderRosterList();
+    const feld = document.getElementById('edit-name');
+    if (feld) { feld.focus(); feld.select(); }
+}
+
+function cancelEditPlayer() {
+    bearbeiteterSpieler = null;
+    renderRosterList();
+}
+
+function saveEditedPlayer(playerId) {
+    const name = document.getElementById('edit-name');
+    const nummer = document.getElementById('edit-nummer');
+    const position = document.getElementById('edit-position');
+    if (!name || !nummer || !position) return;
+
+    if (!String(name.value).trim() || String(nummer.value).trim() === '') {
+        if (window.Toast) window.Toast('Name und Nummer dürfen nicht leer sein.', { type: 'warn' });
+        return;
+    }
+
+    window.Store.updatePlayerData(playerId, {
+        name: name.value,
+        nummer: nummer.value,
+        position: position.value
+    });
+
+    bearbeiteterSpieler = null;
+    renderRosterList();
+    if (window.UI) updateUI();
+    if (window.Toast) window.Toast('Spieler geändert.', { type: 'success', duration: 2500 });
 }
 
 function renderRosterList() {
@@ -1177,10 +1269,41 @@ function renderRosterList() {
     const spieler = window.Store.getSPIELER();
     spieler.forEach(p => {
         const li = document.createElement("li");
-        li.innerHTML = `
-            <span>#${escapeHtml(p.nummer)} ${escapeHtml(p.name)} (${escapeHtml(p.position)})</span>
-            <button onclick="window.UI.removePlayer('${p.id}')">Löschen</button>
-        `;
+        const istGast = window.Store.isGuestTeam(p.name);
+
+        if (String(p.id) === bearbeiteterSpieler) {
+            // Bearbeiten statt loeschen und neu anlegen: die Aktionen haengen
+            // an der Spieler-id und waeren beim Neuanlegen alle weg.
+            const optionen = POSITIONS_AUSWAHL.map(([wert, text]) =>
+                `<option value="${wert}"${p.position === wert ? ' selected' : ''}>${escapeHtml(text)}</option>`).join('');
+            li.className = 'roster-edit';
+            li.innerHTML = `
+                <input type="number" id="edit-nummer" value="${escapeHtml(p.nummer)}" min="0" inputmode="numeric" aria-label="Nummer">
+                <input type="text" id="edit-name" value="${escapeHtml(p.name)}" aria-label="Name">
+                <select id="edit-position" aria-label="Position">${optionen}</select>
+                <button class="add-btn js-save">Speichern</button>
+                <button class="cancel-btn js-cancel">Abbrechen</button>
+            `;
+            li.querySelector('.js-save').onclick = () => saveEditedPlayer(p.id);
+            li.querySelector('.js-cancel').onclick = cancelEditPlayer;
+            li.querySelectorAll('input').forEach(el => {
+                el.addEventListener('keydown', e => {
+                    if (e.key === 'Enter') { e.preventDefault(); saveEditedPlayer(p.id); }
+                    if (e.key === 'Escape') { e.preventDefault(); cancelEditPlayer(); }
+                });
+            });
+        } else {
+            li.innerHTML = `
+                <span>#${escapeHtml(p.nummer)} ${escapeHtml(p.name)} (${escapeHtml(p.position)})</span>
+                <span class="roster-btns">
+                    <button class="js-edit">Bearbeiten</button>
+                    ${istGast ? '' : '<button class="js-del">Löschen</button>'}
+                </span>
+            `;
+            li.querySelector('.js-edit').onclick = () => startEditPlayer(p.id);
+            const del = li.querySelector('.js-del');
+            if (del) del.onclick = () => removePlayer(p.id);
+        }
         rosterList.appendChild(li);
     });
 }
@@ -1234,6 +1357,15 @@ async function addPlayer() {
 }
 
 function removePlayer(playerId) {
+    const p = window.Store.getSPIELER().find(x => String(x.id) === String(playerId));
+    // "Gegner" ist kein Spieler, sondern der Platzhalter, ueber den alle
+    // gegnerischen Tore laufen. Ohne ihn passiert auf der Gegnerseite nichts
+    // mehr - und der Spielstand bleibt einseitig stehen.
+    if (p && window.Store.isGuestTeam(p.name)) {
+        if (window.Toast) window.Toast('„Gegner" wird zum Zählen der gegnerischen Tore gebraucht und kann nicht gelöscht werden.',
+            { type: 'warn', duration: 6000 });
+        return;
+    }
     if (!confirm("Wirklich löschen?")) return;
     window.Store.removePlayerFromStore(playerId);
     if (selectedPlayerId && String(selectedPlayerId) === String(playerId)) {
@@ -1647,6 +1779,13 @@ window.UI = {
     resetActionSelection,
     confirmAssist,
     closeAssistOverlay,
+    assistAbfrageAus,
+    setAssistAbfrage,
+    setHalbzeitLaenge,
+    assistAbfrageAktiv,
+    saveEditedPlayer,
+    startEditPlayer,
+    cancelEditPlayer,
     togglePlayerManagement,
     addPlayer,
     removePlayer,

@@ -1750,3 +1750,70 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     .add-player-row #input-name { flex: 2 1 200px; }
     .add-player-row .add-btn { flex: 0 0 auto; }
 }
+
+/* Einstellungen in der Spielerverwaltung */
+.settings-box {
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px 15px;
+    margin-bottom: 20px;
+}
+.setting-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 0.95rem;
+}
+.setting-row input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 auto; }
+
+/* Kaderliste: Bearbeiten-Modus */
+.roster-btns { display: flex; gap: 8px; flex-shrink: 0; }
+.roster-edit {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+.roster-edit #edit-nummer { flex: 0 1 80px; min-width: 0; }
+.roster-edit #edit-name { flex: 2 1 140px; min-width: 0; }
+.roster-edit #edit-position { flex: 1 1 130px; min-width: 0; }
+.roster-edit button { flex: 0 0 auto; min-height: 44px; }
+@media (max-width: 768px) {
+    .roster-edit #edit-name { flex: 1 1 100%; }
+    .roster-edit button { flex: 1 1 calc(50% - 4px); }
+}
+
+/* Archivliste: Name, Zusatzzeile und vier Aktionen */
+.archive-item { flex-wrap: wrap; }
+.archive-info { min-width: 0; flex: 1 1 220px; }
+.archive-info strong { font-size: 1.05rem; display: block; }
+.archive-meta {
+    font-size: 0.83em;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+.archive-btns {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 0 0 auto;
+}
+.archive-btns button { min-height: 40px; }
+@media (max-width: 600px) {
+    .archive-btns { flex: 1 1 100%; }
+    .archive-btns button { flex: 1 1 auto; min-height: 44px; }
+}
+
+/* Ziel der laufenden Halbzeit neben der Uhr */
+.timer-target {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-left: 2px;
+}
+.timer-target.is-over { color: var(--warning-color); font-weight: 600; }
+
+.settings-box .setting-row + .setting-row { margin-top: 12px; }
+.settings-box select { flex: 1 1 200px; min-width: 0; }

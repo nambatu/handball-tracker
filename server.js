@@ -609,8 +609,20 @@ app.get('/api/archives', requireUser, (req, res) => {
         }
         const files = fs.readdirSync(paths.archives);
         const archives = files.filter(f => f.endsWith('.json')).map(f => {
-            const stat = fs.statSync(path.join(paths.archives, f));
-            return { filename: f, date: stat.mtime };
+            const voll = path.join(paths.archives, f);
+            const stat = fs.statSync(voll);
+            // Name, Gegner und Umfang mitgeben, damit die Liste ohne einen
+            // Extra-Request pro Spiel lesbar ist. Ein kaputtes Archiv soll
+            // die ganze Liste nicht sprengen.
+            let label = null, teamHeim = null, teamGast = null, aktionen = null;
+            try {
+                const d = JSON.parse(fs.readFileSync(voll, 'utf8'));
+                label = d.label || null;
+                teamHeim = d.teamHeim || null;
+                teamGast = d.teamGast || null;
+                aktionen = Array.isArray(d.aktionen) ? d.aktionen.length : null;
+            } catch (e) { /* unlesbar - trotzdem auflisten */ }
+            return { filename: f, date: stat.mtime, label, teamHeim, teamGast, aktionen };
         });
         archives.sort((a, b) => b.date - a.date);
         res.json(archives);
@@ -656,6 +668,60 @@ app.get('/api/archive/:filename', requireUser, (req, res) => {
         }
     } catch (e) {
         res.status(500).json({ error: 'Failed to read archive' });
+    }
+});
+
+/**
+ * Archiviertes Spiel loeschen.
+ * Gleiche Pfadpruefung wie beim Lesen: ohne resolveInside() liesse sich
+ * ueber "..%2F..%2Fusers.json" die Benutzerdatei loeschen.
+ */
+app.delete('/api/archive/:filename', requireUser, (req, res) => {
+    try {
+        const paths = getUserPaths(req.user.username);
+        const filepath = resolveInside(paths.archives, req.params.filename);
+        if (!filepath || !filepath.endsWith('.json')) {
+            return res.status(400).json({ error: 'Invalid filename' });
+        }
+        if (!fs.existsSync(filepath)) {
+            return res.status(404).json({ error: 'Archive not found' });
+        }
+        fs.unlinkSync(filepath);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete archive' });
+    }
+});
+
+/**
+ * Archiviertes Spiel benennen.
+ *
+ * Der Name wird IN die Datei geschrieben, die Datei selbst nicht umbenannt:
+ * der Dateiname traegt den Archivzeitpunkt und ist der Schluessel, ueber den
+ * Bericht und CSV das Spiel finden. Umbenennen wuerde Links brechen und
+ * Namenskollisionen erlauben.
+ */
+app.patch('/api/archive/:filename', requireUser, (req, res) => {
+    try {
+        const paths = getUserPaths(req.user.username);
+        const filepath = resolveInside(paths.archives, req.params.filename);
+        if (!filepath || !filepath.endsWith('.json')) {
+            return res.status(400).json({ error: 'Invalid filename' });
+        }
+        if (!fs.existsSync(filepath)) {
+            return res.status(404).json({ error: 'Archive not found' });
+        }
+
+        const roh = req.body && req.body.label;
+        const label = roh === null || roh === undefined ? null : String(roh).trim().slice(0, 120);
+
+        const data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
+        if (label) data.label = label; else delete data.label;
+        writeJsonAtomic(filepath, data);
+
+        res.json({ success: true, label: label || null });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to rename archive' });
     }
 });
 

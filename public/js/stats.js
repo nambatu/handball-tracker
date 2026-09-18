@@ -364,8 +364,19 @@ function quoteClass(q, goodAt) {
 // ===================================================================
 
 function csvCell(value) {
-    const s = String(value === null || value === undefined ? '' : value);
+    let s = String(value === null || value === undefined ? '' : value);
+    // Excel wertet jede Zelle, die mit = + @ oder - beginnt, als FORMEL aus
+    // und zeigt statt des Textes einen Fehler an. Genau daher kamen die
+    // "Error"-Zellen in den Abschnitts-Ueberschriften. Ein vorangestelltes
+    // Apostroph macht daraus wieder Text; Excel blendet es aus.
+    // Negative Zahlen bleiben Zahlen, die sollen gerechnet werden duerfen.
+    if (/^[=+@]/.test(s) || /^-[^\d.]/.test(s)) s = "'" + s;
     return '"' + s.replace(/"/g, '""') + '"';
+}
+
+// Abschnitts-Ueberschrift als eigene, sauber maskierte Zeile.
+function csvHeading(text) {
+    return csvRow(['## ' + text + ' ##']);
 }
 
 function csvRow(cells) {
@@ -386,7 +397,7 @@ function buildCsv(spieler, aktionen) {
     let csv = "﻿";
 
     // --- 1. Feldspieler ---
-    csv += "=== SPIELER STATISTIK ===\n";
+    csv += csvHeading("SPIELER STATISTIK");
     csv += csvRow(['Nr.', 'Name', 'Position', 'Spielzeit', 'Tore', 'Würfe', 'Wurfquote %',
         '7m Tore', '7m Würfe', '7m Quote %', 'Assists', 'Ballverluste', 'Ballgewinne',
         '7m herausgeholt', '2-Minuten', 'Gelbe Karte', 'Rote Karte', 'Blaue Karte']);
@@ -407,10 +418,10 @@ function buildCsv(spieler, aktionen) {
         '', '', '', '', t.ballverluste, t.ballgewinne, '', '', '', '', '']);
 
     // --- 2. Torhueter (Jakobs Wunsch: Quoten pro Keeper) ---
-    csv += "\n=== TORHÜTER ===\n";
+    csv += "\n" + csvHeading("TORHÜTER");
     const keepers = Object.values(data.torhueter).sort((a, b) => b.paraden - a.paraden);
     if (keepers.length === 0) {
-        csv += "Keine Torwart-Aktionen erfasst\n";
+        csv += csvRow(["Keine Torwart-Aktionen erfasst"]);
     } else {
         csv += csvRow(['Nr.', 'Name', 'Spielzeit', 'Paraden', 'Gegentore', 'Würfe aufs Tor', 'Fangquote %']);
         keepers.forEach(p => {
@@ -426,7 +437,7 @@ function buildCsv(spieler, aktionen) {
         });
         if (zones.size > 0) {
             const zoneList = [...zones].sort();
-            csv += "\n=== FANGQUOTE NACH WURFPOSITION ===\n";
+            csv += "\n" + csvHeading("FANGQUOTE NACH WURFPOSITION");
             csv += csvRow(['Nr.', 'Name', 'Kennzahl'].concat(zoneList.map(zoneLabel)));
             keepers.forEach(p => {
                 csv += csvRow([p.nummer, p.name, 'Paraden'].concat(zoneList.map(z => p.paradenNachZone[z] || 0)));
@@ -441,7 +452,7 @@ function buildCsv(spieler, aktionen) {
     }
 
     // --- 3. Detailmatrix (bisher nur im Statistik-Fenster sichtbar) ---
-    csv += "\n=== ALLE AKTIONEN IM DETAIL ===\n";
+    csv += "\n" + csvHeading("ALLE AKTIONEN IM DETAIL");
     csv += csvRow(['Nr.', 'Name', 'Spielzeit'].concat(data.allActionTypes.map(x => x.replace(/_/g, ' '))));
     Object.values(data.spieler).forEach(p => {
         csv += csvRow([p.nummer, p.name, fmtTime(p.playtimeSeconds)]
@@ -449,7 +460,7 @@ function buildCsv(spieler, aktionen) {
     });
 
     // --- 4. Spielverlauf ---
-    csv += "\n=== SPIELVERLAUF ===\n";
+    csv += "\n" + csvHeading("SPIELVERLAUF");
     csv += csvRow(['Halbzeit', 'Spielzeit', 'Spielstand', 'Nr.', 'Name', 'Aktion', 'Detail', 'Assist', 'Torhüter']);
 
     const sorted = [...aktionen].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
@@ -511,6 +522,78 @@ function exportAsCSV() {
 // ARCHIV
 // ===================================================================
 
+/**
+ * Eine Zeile der Archivliste.
+ *
+ * Ueberschrift ist der selbst vergebene Name, sonst die Paarung, sonst das
+ * Datum - nach einer Saison sagt "game-2026-09-06T12-16-19-150Z.json"
+ * naemlich niemandem mehr, welches Spiel das war.
+ */
+function archivZeile(a) {
+    const li = document.createElement('li');
+    li.className = 'archive-item';
+
+    const d = new Date(a.date);
+    const datum = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const paarung = (a.teamHeim || a.teamGast) ? `${a.teamHeim || 'Heim'} – ${a.teamGast || 'Gast'}` : null;
+
+    const titel = a.label || paarung || datum;
+    const zeile2 = [a.label ? paarung : null, datum,
+                    a.aktionen !== null && a.aktionen !== undefined ? a.aktionen + ' Aktionen' : null]
+                   .filter(Boolean).join(' · ');
+
+    li.innerHTML = `
+        <div class="archive-info">
+            <strong>${esc(titel)}</strong>
+            <div class="archive-meta">${esc(zeile2)}</div>
+        </div>
+        <div class="archive-btns">
+            <button class="add-btn js-report">📄 Bericht</button>
+            <button class="control-btn js-csv">⬇️ CSV</button>
+            <button class="control-btn js-rename" title="Spiel benennen">✏️</button>
+            <button class="cancel-btn js-del" title="Spiel löschen">🗑️</button>
+        </div>
+    `;
+    li.querySelector('.js-report').onclick = () => window.Report.showArchiveReport(a.filename);
+    li.querySelector('.js-csv').onclick = () => downloadArchive(a.filename);
+    li.querySelector('.js-rename').onclick = () => renameArchive(a);
+    li.querySelector('.js-del').onclick = () => deleteArchive(a);
+    return li;
+}
+
+async function renameArchive(a) {
+    const vorschlag = a.label || ((a.teamHeim || a.teamGast) ? `${a.teamHeim || 'Heim'} – ${a.teamGast || 'Gast'}` : '');
+    const name = prompt('Name für dieses Spiel (leer lassen zum Entfernen):', vorschlag);
+    if (name === null) return;   // abgebrochen
+    try {
+        const res = await fetch('/api/archive/' + encodeURIComponent(a.filename), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label: name })
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        if (window.Toast) window.Toast(name.trim() ? 'Spiel benannt.' : 'Name entfernt.', { type: 'success' });
+        openArchiveModal();
+    } catch (e) {
+        if (window.Toast) window.Toast('Umbenennen fehlgeschlagen.', { type: 'error' });
+    }
+}
+
+async function deleteArchive(a) {
+    const name = a.label || ((a.teamHeim || a.teamGast) ? `${a.teamHeim || 'Heim'} – ${a.teamGast || 'Gast'}` : a.filename);
+    // Bewusst mit Rueckfrage: ein archiviertes Spiel laesst sich nicht
+    // wiederherstellen, es liegt nur einmal auf dem Server.
+    if (!confirm(`„${name}" endgültig löschen?\n\nDas Spiel ist danach weg - auch der Bericht und der CSV-Export.`)) return;
+    try {
+        const res = await fetch('/api/archive/' + encodeURIComponent(a.filename), { method: 'DELETE' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        if (window.Toast) window.Toast('Spiel gelöscht.', { type: 'success' });
+        openArchiveModal();
+    } catch (e) {
+        if (window.Toast) window.Toast('Löschen fehlgeschlagen.', { type: 'error' });
+    }
+}
+
 async function openArchiveModal() {
     document.getElementById('archive-view').style.display = 'flex';
     const list = document.getElementById('archive-list');
@@ -523,27 +606,7 @@ async function openArchiveModal() {
             return;
         }
         list.innerHTML = '';
-        archives.forEach(a => {
-            const li = document.createElement('li');
-            li.className = 'archive-item';
-
-            const d = new Date(a.date);
-            const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            li.innerHTML = `
-                <div>
-                    <strong style="font-size: 1.1rem;">${esc(dateStr)}</strong>
-                    <div style="font-size: 0.85em; color: var(--text-muted);">${esc(a.filename)}</div>
-                </div>
-                <div class="archive-btns">
-                    <button class="add-btn js-report">📄 Bericht</button>
-                    <button class="control-btn js-csv">⬇️ CSV</button>
-                </div>
-            `;
-            li.querySelector('.js-report').onclick = () => window.Report.showArchiveReport(a.filename);
-            li.querySelector('.js-csv').onclick = () => downloadArchive(a.filename);
-            list.appendChild(li);
-        });
+        archives.forEach(a => list.appendChild(archivZeile(a)));
     } catch (e) {
         list.innerHTML = '<li>Fehler beim Laden (offline?).</li>';
     }
@@ -571,6 +634,8 @@ window.Stats = {
     exportAsCSV,
     buildCsv,
     downloadArchive,
+    renameArchive,
+    deleteArchive,
     quote
 };
 

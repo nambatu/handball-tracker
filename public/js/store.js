@@ -225,6 +225,55 @@ function isOnCourt(p) {
         && p.position !== 'Gast';
 }
 
+// Die sieben Plaetze auf dem Feld, in der Reihenfolge der Court-Ansicht.
+const COURT_POSITIONEN = ['TW', 'LA', 'RL', 'RM', 'RR', 'RA', 'KM'];
+
+function normalisiertePosition(p) {
+    let pos = p && p.position;
+    if (pos === 'M') pos = 'RM';
+    if (pos === 'K') pos = 'KM';
+    return pos;
+}
+
+/**
+ * Die Spieler, die gerade tatsaechlich auf dem Feld stehen.
+ *
+ * Regel wie in der Court-Ansicht: pro Position der erste passende Spieler,
+ * alle weiteren sitzen auf der Bank. isOnCourt() allein reicht dafuer NICHT -
+ * danach waere auch der zweite Rueckraum-Linke "auf dem Feld".
+ *
+ * Bewusst hier und nicht in der UI, damit Feldansicht und Assist-Auswahl
+ * nicht auseinanderlaufen koennen.
+ */
+function getPlayersOnCourt() {
+    const belegt = new Set();
+    const aufDemFeld = [];
+    state().spieler.forEach(p => {
+        if (isGuestTeam(p.name)) return;
+        const pos = normalisiertePosition(p);
+        if (COURT_POSITIONEN.indexOf(pos) === -1) return;
+        if (belegt.has(pos)) return;
+        belegt.add(pos);
+        aufDemFeld.push(p);
+    });
+    return aufDemFeld;
+}
+
+/**
+ * Stammdaten eines Spielers aendern (Nummer, Name, Position).
+ * Vorher blieb nur loeschen und neu anlegen - dabei gingen alle bereits
+ * erfassten Aktionen des Spielers verloren, weil sie an der id haengen.
+ */
+function updatePlayerData(playerId, felder) {
+    const player = state().spieler.find(p => String(p.id) === String(playerId));
+    if (!player) return false;
+    if (felder.name !== undefined && String(felder.name).trim()) player.name = String(felder.name).trim();
+    if (felder.nummer !== undefined && String(felder.nummer).trim() !== '') player.nummer = felder.nummer;
+    if (felder.position !== undefined && felder.position) player.position = felder.position;
+    savePlayers();
+    return true;
+}
+
 /**
  * Schreibt Einsatzzeit fort.
  *
@@ -289,6 +338,10 @@ window.Store = {
     saveActions,
     isGuestTeam,
     isOnCourt,
+    getPlayersOnCourt,
+    normalisiertePosition,
+    COURT_POSITIONEN,
+    updatePlayerData,
     addPlayerToStore,
     removePlayerFromStore,
     updatePlayerPosition,
