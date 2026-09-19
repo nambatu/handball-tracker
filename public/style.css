@@ -1636,7 +1636,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     .sync-badge { min-height: 44px; padding: 0 12px; }
     /* Antippbares wird nicht vom Doppeltipp-Zoom verzoegert */
     .gk-badge, .timer-value, .team-name-btn, .control-btn,
-    .thumb-btn, .court-player-node, .history-entry { touch-action: manipulation; }
+    .thumb-btn, .history-entry { touch-action: manipulation; }
 }
 
 /* =========================================
@@ -1852,3 +1852,26 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     margin-left: 6px;
     vertical-align: middle;
 }
+
+/* =========================================
+   ZIEHEN AUF DEM HANDY
+   =========================================
+   touch-action: none, und zwar zwingend.
+   Mit "manipulation" entscheidet der Browser beim ersten senkrechten
+   Millimeter, dass gescrollt wird - und gibt die Geste danach nicht mehr
+   her. preventDefault() im touchmove kommt dann zu spaet. Genau deshalb
+   liess sich ein Spieler nur noch waagrecht ziehen: waagrecht gibt es
+   hier nichts zu scrollen, senkrecht schon.
+   Preis: ein Wisch, der auf einem Spieler beginnt, scrollt die Seite
+   nicht mehr. Daneben angesetzt scrollt sie wie gewohnt. */
+.court-player-node { touch-action: none; }
+
+/* Ziel der Halbzeit: gleiche Schrift und Groesse wie die Uhr daneben,
+   nur ruhiger in der Farbe - sonst sieht die Zeile zusammengestueckelt aus. */
+.timer-target {
+    font: inherit;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    margin-left: 2px;
+}
+.timer-target.is-over { color: var(--warning-color); font-weight: 600; }

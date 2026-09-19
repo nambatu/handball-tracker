@@ -93,7 +93,10 @@ async function checkAuthStatus() {
                     { type: 'warn', duration: 7000 });
             }
         } else {
-            showAuthOverlay();
+            // Ohne Netz UND ohne gespeicherte Anmeldung kommt man nicht
+            // weiter - das aber bitte sagen, statt nur ein Anmeldeformular
+            // hinzustellen, in dem jeder Versuch stumm scheitert.
+            showAuthOverlay();   // zeigt selbst den Offline-Hinweis
         }
     }
 }
@@ -139,6 +142,17 @@ function showAuthOverlay() {
     document.getElementById('auth-overlay').style.display = 'flex';
     document.getElementById('app-container').style.display = 'none';
     document.getElementById('controls').style.display = 'none';
+
+    // Ohne Netz ist jeder Anmeldeversuch zwecklos - das gehoert hingeschrieben,
+    // statt den Nutzer stumm gegen ein Formular laufen zu lassen.
+    if (!navigator.onLine) {
+        const hinweis = document.getElementById('auth-error-msg');
+        if (hinweis) {
+            hinweis.style.color = 'var(--warning-color)';
+            hinweis.innerText = 'Keine Verbindung zum Server. Zum Anmelden brauchst du einmal Internet — '
+                + 'danach startet die App auch offline.';
+        }
+    }
 }
 
 function toggleAuthMode() {

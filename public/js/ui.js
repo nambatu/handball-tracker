@@ -72,6 +72,11 @@ function updateUI() {
 // AKTIVER TORWART
 // ===================================================================
 
+/**
+ * Die Anzeige in der Kopfzeile ist entfallen - der aktive Torwart ergibt
+ * sich aus Position TW. Die Funktion bleibt, weil sie beschriftet, wer
+ * gerade gewaehlt ist, sobald der Knopf irgendwo wieder auftaucht.
+ */
 function renderGoalkeeperBadge() {
     const el = document.getElementById('gk-indicator');
     if (!el) return;
@@ -1216,6 +1221,11 @@ async function togglePlayerManagement() {
         if (assistBox) assistBox.checked = assistAbfrageAktiv();
         const hzBox = document.getElementById('setting-halbzeit');
         if (hzBox && window.Timer) hzBox.value = String(window.Timer.getHalbzeitMinuten());
+        const gkBtn = document.getElementById('setting-gk');
+        if (gkBtn) {
+            const gk = window.Store.getActiveGoalkeeper();
+            gkBtn.innerText = gk ? `🧤 #${gk.nummer} ${String(gk.name).split(' ')[0]}` : 'Kein Torwart — wählen';
+        }
         renderRosterList();
         await populateTeamsDropdown();
     } else {

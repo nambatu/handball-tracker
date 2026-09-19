@@ -229,7 +229,25 @@ app.set('trust proxy', 1);
 app.use(express.json({ limit: '5mb' }));
 
 // Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, 'public')));
+//
+// Der Kopfzeilen-Stempel ist fuer den Service Worker: nur eine Seite MIT
+// diesem Stempel darf er als App-Huelle speichern. Ohne das legt er auch
+// eine Zwischenseite ab, die zwischen Browser und App haengt (die
+// ngrok-Warnseite, ein WLAN-Anmeldeportal) - und zeigt die dann offline
+// statt der App. Genau so ein Fall laesst sich sonst kaum finden, weil
+// online alles funktioniert.
+app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders: function (res, filePath) {
+        if (filePath.endsWith('index.html')) {
+            res.setHeader('X-App-Shell', 'handball-tracker');
+        }
+        // Der Service Worker selbst darf nie aus dem Cache kommen, sonst
+        // laesst sich eine kaputte Fassung nicht mehr ersetzen.
+        if (filePath.endsWith('sw.js')) {
+            res.setHeader('Cache-Control', 'no-cache');
+        }
+    }
+}));
 
 // Global state for WhatsApp
 let waClient = null;

@@ -20,7 +20,7 @@
 // offline passiert; ein zwischengespeicherter Spielstand waere genau die
 // Art von stillem Datenverlust, gegen die der Sync gebaut wurde.
 
-const CACHE = 'handball-tracker-v20260918';
+const CACHE = 'handball-tracker-v20260919';
 
 const SHELL = [
     './',
@@ -39,8 +39,36 @@ const SHELL = [
     'vendor/touch-drag.js',
     'icons/icon-192.png',
     'icons/icon-512.png',
+    'icons/icon-maskable-512.png',
     'icons/apple-touch-icon.png'
 ];
+
+// Nur eine Antwort MIT diesem Stempel ist wirklich unsere App.
+//
+// Ohne die Pruefung speichert der Worker auch alles, was sich zwischen
+// Browser und Server schiebt: die ngrok-Warnseite, ein WLAN-Anmelde-
+// portal, eine Fehlerseite des Proxys. Online faellt das nicht auf -
+// offline zeigt die App dann genau diese fremde Seite statt sich selbst.
+function istAppHuelle(res) {
+    return !!res && res.ok && res.headers.get('X-App-Shell') === 'handball-tracker';
+}
+
+// Wenn gar nichts Brauchbares da ist, lieber eine ehrliche Seite als eine
+// leere. Sonst steht man in der Halle vor einem weissen Bildschirm.
+function notseite() {
+    return new Response(
+        '<!doctype html><html lang="de"><meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+        '<title>Offline</title><style>body{font-family:system-ui,sans-serif;background:#0f172a;' +
+        'color:#f8fafc;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;' +
+        'padding:24px;text-align:center}div{max-width:22rem}h1{font-size:1.25rem;margin:0 0 12px}' +
+        'p{color:#94a3b8;line-height:1.6;margin:0 0 8px}</style>' +
+        '<div><h1>Keine Verbindung</h1>' +
+        '<p>Die App wurde auf diesem Gerät noch nicht vollständig gespeichert.</p>' +
+        '<p>Einmal mit Internet öffnen — danach startet sie auch in der Halle ohne Netz.</p></div></html>',
+        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    );
+}
 
 self.addEventListener('install', function (event) {
     event.waitUntil((async function () {
@@ -51,6 +79,11 @@ self.addEventListener('install', function (event) {
         await Promise.all(SHELL.map(async function (pfad) {
             try {
                 const res = await fetch(pfad, { cache: 'reload' });
+                const istSeite = pfad === 'index.html' || pfad === './';
+                if (istSeite && !istAppHuelle(res)) {
+                    console.warn('[SW] Startseite ohne Stempel - nicht gespeichert:', pfad);
+                    return;
+                }
                 if (res.ok) await cache.put(pfad, res);
             } catch (e) {
                 console.warn('[SW] nicht vorgeladen:', pfad);
@@ -87,15 +120,17 @@ self.addEventListener('fetch', function (event) {
         event.respondWith((async function () {
             try {
                 const netz = await fetch(req);
-                const cache = await caches.open(CACHE);
-                cache.put('index.html', netz.clone());
+                // Nur die echte App speichern - siehe istAppHuelle().
+                if (istAppHuelle(netz)) {
+                    const cache = await caches.open(CACHE);
+                    cache.put('index.html', netz.clone());
+                }
                 return netz;
             } catch (e) {
                 const cache = await caches.open(CACHE);
                 return (await cache.match('index.html', TREFFER))
                     || (await cache.match('./', TREFFER))
-                    || new Response('Offline und keine gespeicherte Fassung vorhanden.',
-                        { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+                    || notseite();
             }
         })());
         return;

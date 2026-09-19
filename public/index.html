@@ -14,7 +14,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=20260918">
+    <link rel="stylesheet" href="style.css?v=20260919">
 </head>
 
 <body>
@@ -35,8 +35,6 @@
                 <button id="game-timer" class="timer-value" onclick="window.UI.openTimeEdit()"
                         title="Antippen, um die Spielzeit zu korrigieren">00:00</button>
                 <span id="timer-target" class="timer-target" title="Ende der laufenden Halbzeit">/ 30:00</span>
-                <button id="gk-indicator" class="gk-badge" onclick="window.UI.openGoalkeeperPicker()"
-                        title="Aktiver Torwart"></button>
                 <span id="sync-status" class="sync-badge sync-ok" title="Synchronisierung"></span>
             </div>
 
@@ -259,6 +257,12 @@
                     <span>Nach jedem Tor nach dem Vorlagengeber fragen</span>
                 </label>
                 <div class="setting-row">
+                    <label>Torwart</label>
+                    <button onclick="window.UI.openGoalkeeperPicker()" class="add-btn" id="setting-gk">
+                        Aktiven Torwart wählen
+                    </button>
+                </div>
+                <div class="setting-row">
                     <label for="setting-halbzeit">Spielzeit</label>
                     <select id="setting-halbzeit" onchange="window.UI.setHalbzeitLaenge(this.value)">
                         <option value="30">2 × 30 Minuten (Erwachsene)</option>
@@ -353,16 +357,16 @@
         </div>
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="vendor/touch-drag.js?v=20260918"></script>
-    <script src="js/sync.js?v=20260918"></script>
-    <script src="js/wakelock.js?v=20260918"></script>
-    <script src="js/store.js?v=20260918"></script>
-    <script src="js/timer.js?v=20260918"></script>
-    <script src="js/stats.js?v=20260918"></script>
-    <script src="js/report.js?v=20260918"></script>
-    <script src="js/whatsapp.js?v=20260918"></script>
-    <script src="js/ui.js?v=20260918"></script>
-    <script src="js/app.js?v=20260918"></script>
+    <script src="vendor/touch-drag.js?v=20260919"></script>
+    <script src="js/sync.js?v=20260919"></script>
+    <script src="js/wakelock.js?v=20260919"></script>
+    <script src="js/store.js?v=20260919"></script>
+    <script src="js/timer.js?v=20260919"></script>
+    <script src="js/stats.js?v=20260919"></script>
+    <script src="js/report.js?v=20260919"></script>
+    <script src="js/whatsapp.js?v=20260919"></script>
+    <script src="js/ui.js?v=20260919"></script>
+    <script src="js/app.js?v=20260919"></script>
 
     <!-- Modal Logik Inline -->
     <script>
