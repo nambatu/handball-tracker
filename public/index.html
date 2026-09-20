@@ -14,7 +14,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=20260919">
+    <link rel="stylesheet" href="style.css?v=20260925">
 </head>
 
 <body>
@@ -36,6 +36,7 @@
                         title="Antippen, um die Spielzeit zu korrigieren">00:00</button>
                 <span id="timer-target" class="timer-target" title="Ende der laufenden Halbzeit">/ 30:00</span>
                 <span id="sync-status" class="sync-badge sync-ok" title="Synchronisierung"></span>
+                <span id="ticker-status" class="ticker-badge" style="display:none;" title="Ticker"></span>
             </div>
 
             <!-- Zeitkorrektur (z.B. wenn die App im Hintergrund weiterlief) -->
@@ -70,7 +71,7 @@
             <button onclick="window.UI.togglePlayerManagement()" class="control-btn">👥 Spieler</button>
             <button onclick="window.UI.openHistoryView()" class="control-btn">🕐 Verlauf</button>
             <button onclick="openArchiveModal()" class="control-btn">📚 Archiv</button>
-            <button onclick="openWhatsAppModal()" class="control-btn" id="wa-connect-btn">💬 WA Connect</button>
+            <button onclick="window.TickerUI.oeffne()" class="control-btn" id="ticker-btn">📡 Ticker</button>
             <button onclick="logoutUser()" class="control-btn" id="auth-logout-btn" style="display:none; background:var(--danger-color);">🚪 Logout</button>
             
             <div class="view-toggle-container">
@@ -314,32 +315,18 @@
         </div>
     </div>
 
-    <!-- WhatsApp Setup Modal -->
-    <div id="wa-setup-view" class="overlay-view" style="display:none;">
+    <!-- Ticker-Einstellungen. Der QR-Code steckt nicht mehr hier, sondern
+         im wa-gateway: eine gekoppelte Nummer fuer Tracker und
+         handball.net-Bot zusammen. -->
+    <div id="ticker-view" class="overlay-view" style="display:none;">
         <div class="overlay-content management-content glass-panel">
-            <h2>WhatsApp Bot Status</h2>
-            <div id="wa-status-box" style="text-align: center; padding: 20px;">
-                <p>Status: <strong id="wa-status-text">Prüfe Verbindung...</strong></p>
-                <img id="wa-qr-image" src="" alt="WhatsApp QR Code" style="display:none; margin: 15px auto; max-width: 250px; border-radius: 10px; border: 2px solid white;">
-                <p id="wa-help-text" style="font-size: 0.9em; color: var(--text-color); opacity: 0.7; margin-top: 10px;">
-                    Scanne den QR Code mit WhatsApp, um den Bot zu verbinden.
-                </p>
+            <h2>📡 WhatsApp-Ticker</h2>
+            <div id="ticker-body"></div>
+            <p id="ticker-meldung" class="ticker-meldung"></p>
+            <div class="ticker-fuss">
+                <button onclick="window.TickerUI.speichere()" id="ticker-speichern" class="add-btn">Speichern</button>
+                <button onclick="window.TickerUI.schliesse()" class="back-btn">Schließen</button>
             </div>
-
-            <div id="wa-start-form" style="display:none; text-align: center; margin-bottom: 20px;">
-                <p>Bitte Admin-Passwort eingeben, um Schreibrechte zu erhalten:</p>
-                <input type="password" id="wa-admin-password" placeholder="Admin Passwort"
-                    style="padding: 10px; margin-bottom: 10px; width: 80%;">
-                <br>
-                <button onclick="loginWhatsApp()" class="add-btn">Login</button>
-                <p id="wa-start-msg" style="color: red; margin-top: 10px;"></p>
-            </div>
-
-            <div id="wa-logout-section" style="display:none; text-align: center; margin-bottom: 20px;">
-                <button onclick="logoutWhatsApp()" class="cancel-btn">Bot Logout & Neu Starten</button>
-            </div>
-
-            <button onclick="closeWhatsAppModal()" class="back-btn" style="margin-top:20px;">Schließen</button>
         </div>
     </div>
 
@@ -357,145 +344,18 @@
         </div>
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="vendor/touch-drag.js?v=20260919"></script>
-    <script src="js/sync.js?v=20260919"></script>
-    <script src="js/wakelock.js?v=20260919"></script>
-    <script src="js/store.js?v=20260919"></script>
-    <script src="js/timer.js?v=20260919"></script>
-    <script src="js/stats.js?v=20260919"></script>
-    <script src="js/report.js?v=20260919"></script>
-    <script src="js/whatsapp.js?v=20260919"></script>
-    <script src="js/ui.js?v=20260919"></script>
-    <script src="js/app.js?v=20260919"></script>
+    <script src="vendor/touch-drag.js?v=20260925"></script>
+    <script src="js/sync.js?v=20260925"></script>
+    <script src="js/wakelock.js?v=20260925"></script>
+    <script src="js/store.js?v=20260925"></script>
+    <script src="js/timer.js?v=20260925"></script>
+    <script src="js/stats.js?v=20260925"></script>
+    <script src="js/report.js?v=20260925"></script>
+    <script src="js/whatsapp.js?v=20260925"></script>
+    <script src="js/tickerui.js?v=20260925"></script>
+    <script src="js/ui.js?v=20260925"></script>
+    <script src="js/app.js?v=20260925"></script>
 
-    <!-- Modal Logik Inline -->
-    <script>
-        function openWhatsAppModal() {
-            document.getElementById('wa-setup-view').style.display = 'flex';
-            checkBackendWhatsAppStatus();
-        }
-
-        function closeWhatsAppModal() {
-            document.getElementById('wa-setup-view').style.display = 'none';
-        }
-
-        async function checkBackendWhatsAppStatus() {
-            const statusText = document.getElementById('wa-status-text');
-            const waBtn = document.getElementById('wa-connect-btn');
-            const startForm = document.getElementById('wa-start-form');
-            const logoutSection = document.getElementById('wa-logout-section');
-
-            const pwd = sessionStorage.getItem('wa_admin_password');
-
-            if (!pwd) {
-                statusText.innerText = "🔒 Nicht eingeloggt";
-                statusText.style.color = "gray";
-                waBtn.innerText = "🔒 WA Login";
-                startForm.style.display = "block";
-                logoutSection.style.display = "none";
-                if (window.qrPollInterval) clearInterval(window.qrPollInterval);
-                return;
-            }
-
-            try {
-                const res = await fetch('/api/whatsapp/status', {
-                    headers: { 'Authorization': `Bearer ${pwd}` }
-                });
-
-                if (res.status === 401) {
-                    sessionStorage.removeItem('wa_admin_password');
-                    checkBackendWhatsAppStatus();
-                    return;
-                }
-
-                const data = await res.json();
-                const qrImg = document.getElementById('wa-qr-image');
-
-                if (data.authenticated) {
-                    statusText.innerText = "🟢 Verbunden & Online";
-                    statusText.style.color = "#4ade80";
-                    waBtn.innerText = "🟢 WA Online";
-                    startForm.style.display = "none";
-                    logoutSection.style.display = "block";
-                    qrImg.style.display = "none";
-                    if (window.qrPollInterval) clearInterval(window.qrPollInterval);
-                } else if (data.running) {
-                    statusText.innerText = "🟡 QR Scan benötigt";
-                    statusText.style.color = "#fbbf24";
-                    waBtn.innerText = "🟡 WA Scan QR";
-                    startForm.style.display = "none";
-                    logoutSection.style.display = "block";
-                    
-                    if (data.qr) {
-                        qrImg.src = data.qr;
-                        qrImg.style.display = "block";
-                    } else {
-                        qrImg.style.display = "none";
-                    }
-                    
-                    if (!window.qrPollInterval) {
-                        window.qrPollInterval = setInterval(checkBackendWhatsAppStatus, 3000);
-                    }
-                } else {
-                    statusText.innerText = "🔴 Backend Bot Gestoppt";
-                    statusText.style.color = "#f87171";
-                    waBtn.innerText = "🔴 WA Offline";
-                    startForm.style.display = "none";
-                    logoutSection.style.display = "block";
-                    qrImg.style.display = "none";
-                    if (window.qrPollInterval) clearInterval(window.qrPollInterval);
-                }
-            } catch (e) {
-                statusText.innerText = "Backend Server nicht erreichbar!";
-                statusText.style.color = "red";
-                console.error(e);
-            }
-        }
-
-        async function loginWhatsApp() {
-            const pwd = document.getElementById('wa-admin-password').value;
-            const msgEl = document.getElementById('wa-start-msg');
-            msgEl.innerText = "Prüfe Passwort...";
-            msgEl.style.color = "black";
-
-            try {
-                const res = await fetch('/api/whatsapp/status', {
-                    headers: { 'Authorization': `Bearer ${pwd}` }
-                });
-
-                if (res.ok) {
-                    msgEl.innerText = "Erfolgreich eingeloggt!";
-                    msgEl.style.color = "green";
-                    document.getElementById('wa-admin-password').value = "";
-                    sessionStorage.setItem('wa_admin_password', pwd);
-                    checkBackendWhatsAppStatus();
-                } else {
-                    msgEl.style.color = "red";
-                    msgEl.innerText = "Falsches Passwort";
-                }
-            } catch (e) {
-                msgEl.style.color = "red";
-                msgEl.innerText = "Netzwerkfehler";
-            }
-        }
-
-        async function logoutWhatsApp() {
-            const pwd = sessionStorage.getItem('wa_admin_password');
-            try {
-                await fetch('/api/whatsapp/logout', {
-                    method: 'POST',
-                    headers: { 
-                        'Authorization': `Bearer ${pwd}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ password: pwd })
-                });
-                checkBackendWhatsAppStatus();
-            } catch (e) {
-                console.error("Logout failed", e);
-            }
-        }
-    </script>
 </body>
 
 </html>

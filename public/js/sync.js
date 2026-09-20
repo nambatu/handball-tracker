@@ -21,6 +21,21 @@
     const RETRY_BASE_MS = 2000;
     const RETRY_MAX_MS = 30000;
 
+    // Zeitgrenzen fuer den Server. Ohne sie ist ein totes Netz schlimmer
+    // als gar keins: eine Anfrage, die weder ankommt noch scheitert,
+    // bleibt einfach offen. Beim Start hiesse das, dass die App ewig
+    // "Lade Spieler..." zeigt; beim Push, dass nach dem ersten Haenger nie
+    // wieder etwas gesichert wird, weil pushing dauerhaft true bleibt.
+    const START_GEDULD_MS = 4000;
+    const PUSH_GEDULD_MS = 15000;
+
+    function holen(url, optionen, ms) {
+        const abbruch = new AbortController();
+        const uhr = setTimeout(function () { abbruch.abort(); }, ms);
+        return fetch(url, Object.assign({}, optionen || {}, { signal: abbruch.signal }))
+            .finally(function () { clearTimeout(uhr); });
+    }
+
     let storageKey = 'ht_state_v2:anon';
     let state = emptyState();
     let lastPushedRev = 0;
@@ -42,18 +57,31 @@
     };
 
     function emptyState() {
-        return { rev: 0, updatedAt: 0, spieler: [], aktionen: [], aktiverTorwartId: null, teamHeim: null, teamGast: null };
+        return { rev: 0, updatedAt: 0, spielId: null, spieler: [], aktionen: [], tickerMarken: [], aktiverTorwartId: null, teamHeim: null, teamGast: null, halbzeitSekunden: null };
     }
 
     function normalize(raw) {
         return {
             rev: Number(raw && raw.rev) || 0,
             updatedAt: Number(raw && raw.updatedAt) || 0,
+            // Kennung des laufenden Spiels. Gebraucht fuer die Ticker-
+            // Zeitmarken: ohne sie hiesse die Marke in jedem Spiel gleich,
+            // und der Merkzettel auf dem Server wuerde sie ab dem zweiten
+            // Spiel als "schon getickert" abtun.
+            spielId: (raw && raw.spielId) || null,
             spieler: (raw && Array.isArray(raw.spieler)) ? raw.spieler : [],
             aktionen: (raw && Array.isArray(raw.aktionen)) ? raw.aktionen : [],
+            // Zeitmarken des Tickers ("Noch 5 Minuten"). Bewusst NICHT in
+            // aktionen: sie haengen an keinem Spieler und haetten in
+            // Verlauf, Statistik und CSV nichts zu suchen.
+            tickerMarken: (raw && Array.isArray(raw.tickerMarken)) ? raw.tickerMarken : [],
             aktiverTorwartId: (raw && raw.aktiverTorwartId) || null,
             teamHeim: (raw && raw.teamHeim) || null,
-            teamGast: (raw && raw.teamGast) || null
+            teamGast: (raw && raw.teamGast) || null,
+            // Der Server braucht die Halbzeitlaenge fuer die Ticker-Regel
+            // "letzte 5 Minuten". Ohne sie rechnet er mit 2x30 und die
+            // Regel greift bei 2x25 funf Minuten zu spaet.
+            halbzeitSekunden: Number(raw && raw.halbzeitSekunden) || null
         };
     }
 
@@ -61,11 +89,14 @@
         return {
             rev: state.rev,
             updatedAt: state.updatedAt,
+            spielId: state.spielId,
             spieler: state.spieler,
             aktionen: state.aktionen,
+            tickerMarken: state.tickerMarken,
             aktiverTorwartId: state.aktiverTorwartId,
             teamHeim: state.teamHeim,
-            teamGast: state.teamGast
+            teamGast: state.teamGast,
+            halbzeitSekunden: state.halbzeitSekunden
         };
     }
 
@@ -122,17 +153,28 @@
         });
         aktionen.sort(function (a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
 
+        // Zeitmarken genauso vereinigen: sie sind jede genau einmal da
+        // und haben eine feste id, doppelte kann es also nicht geben.
+        const marken = (fern.tickerMarken || []).slice();
+        const markenIds = new Set(marken.map(function (m) { return String(m.id); }));
+        (lokal.tickerMarken || []).forEach(function (m) {
+            if (!markenIds.has(String(m.id))) { markenIds.add(String(m.id)); marken.push(m); }
+        });
+
         return {
             // Hoeher als beide Seiten, damit der zusammengefuehrte Stand
             // beim naechsten Push gewinnt und nicht in einer 409-Schleife
             // haengen bleibt.
             rev: Math.max(lokal.rev || 0, fern.rev || 0) + 1,
             updatedAt: Date.now(),
+            spielId: juenger.spielId,
             spieler: spieler,
             aktionen: aktionen,
+            tickerMarken: marken,
             aktiverTorwartId: juenger.aktiverTorwartId,
             teamHeim: juenger.teamHeim,
-            teamGast: juenger.teamGast
+            teamGast: juenger.teamGast,
+            halbzeitSekunden: juenger.halbzeitSekunden
         };
     }
 
@@ -277,11 +319,11 @@
         setStatus({});
 
         try {
-            const res = await fetch('/api/state', {
+            const res = await holen('/api/state', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload())
-            });
+            }, PUSH_GEDULD_MS);
 
             if (res.status === 409) {
                 // Serverstand ist neuer (anderes Geraet). NICHT ersetzen,
@@ -301,6 +343,13 @@
                 // jetzt hoch, sonst kennt ihn nur dieses Geraet.
                 schedulePush();
             } else if (res.ok) {
+                // Der Server sagt in der Antwort, was der Ticker getan hat.
+                // Wichtig ist vor allem "ausgelassen": Aktionen, die zu
+                // lange her waren. Sonst glaubt die tickernde Person, die
+                // Gruppe haette alles bekommen.
+                res.json().then(function (d) {
+                    if (d && d.ticker && window.Ticker) window.Ticker.meldeLauf(d.ticker);
+                }).catch(function () { /* Antwort ohne Rumpf ist ok */ });
                 lastPushedRev = Math.max(lastPushedRev, revAtPush);
                 writeLocal();
                 firstDirtyAt = 0;
@@ -338,6 +387,48 @@
     // Oeffentliche API
     // ---------------------------------------------------------------
 
+    // Serverstand mit dem lokalen zusammenbringen. "hatteLokal" entscheidet,
+    // ob es hier ueberhaupt etwas zu schuetzen gibt.
+    function uebernimmServerstand(server, hatteLokal) {
+        const ungesichert = state.rev > (lastPushedRev || 0);
+        if (!hatteLokal) {
+            // Frisches Geraet: Serverstand uebernehmen
+            state = server;
+            lastPushedRev = state.rev;
+        } else if (server.rev > state.rev && !ungesichert) {
+            // Anderes Geraet war neuer und wir haben nichts Offenes -
+            // hier geht nichts verloren.
+            state = server;
+            lastPushedRev = state.rev;
+        } else if (server.rev > state.rev) {
+            // Anderes Geraet war neuer, ABER hier liegen noch nicht
+            // uebertragene Aenderungen (z.B. in der Halle ohne Netz
+            // erfasst). Ersetzen wuerde sie wegwerfen.
+            const vorher = state;
+            state = merge(state, server);
+            lastPushedRev = 0;
+            meldeZusammenfuehrung(vorher, state);
+            console.log('[Sync] Lokaler und Serverstand zusammengefuehrt (rev ' + state.rev + ').');
+        } else if (state.rev > server.rev) {
+            // Wir haben ungesicherte Aenderungen (z.B. offline erfasst)
+            console.log('[Sync] Lokaler Stand ist neuer (rev ' + state.rev + ' > ' + server.rev + ') - wird hochgeladen.');
+        } else {
+            lastPushedRev = state.rev;
+        }
+        setStatus({ online: true, error: null });
+    }
+
+    async function holeServerstand() {
+        try {
+            const res = await holen('/api/state', null, START_GEDULD_MS);
+            if (res.ok) return normalize(await res.json());
+        } catch (e) {
+            console.warn('[Sync] Server beim Start nicht erreichbar - arbeite lokal weiter.');
+            setStatus({ online: false });
+        }
+        return null;
+    }
+
     async function init(username) {
         storageKey = 'ht_state_v2:' + (username || 'anon');
 
@@ -349,43 +440,35 @@
             lastPushedRev = local.pushedRev;
         }
 
-        let server = null;
-        try {
-            const res = await fetch('/api/state');
-            if (res.ok) server = normalize(await res.json());
-        } catch (e) {
-            console.warn('[Sync] Server beim Start nicht erreichbar - arbeite lokal weiter.');
-            setStatus({ online: false });
+        if (local) {
+            // Es liegt ein vollstaendiger Stand auf dem Geraet. Damit laesst
+            // sich sofort weiterarbeiten - auf den Server zu warten heisst
+            // nur, in der Halle vier Sekunden lang "Lade Spieler..." zu
+            // lesen. Der Abgleich laeuft nach und zeichnet die Oberflaeche
+            // ueber onChange neu, wenn er etwas mitbringt.
+            initialised = true;
+            writeLocal();
+            setStatus({});
+            if (state.rev > lastPushedRev) schedulePush();
+
+            holeServerstand().then(function (server) {
+                if (!server) return;
+                const vorherRev = state.rev;
+                uebernimmServerstand(server, true);
+                writeLocal();
+                setStatus({});
+                if (state.rev !== vorherRev) notifyChange();
+                if (state.rev > lastPushedRev) schedulePush();
+            });
+
+            return state;
         }
 
-        if (server) {
-            const ungesichert = state.rev > (lastPushedRev || 0);
-            if (!local) {
-                // Frisches Geraet: Serverstand uebernehmen
-                state = server;
-                lastPushedRev = state.rev;
-            } else if (server.rev > state.rev && !ungesichert) {
-                // Anderes Geraet war neuer und wir haben nichts Offenes -
-                // hier geht nichts verloren.
-                state = server;
-                lastPushedRev = state.rev;
-            } else if (server.rev > state.rev) {
-                // Anderes Geraet war neuer, ABER hier liegen noch nicht
-                // uebertragene Aenderungen (z.B. in der Halle ohne Netz
-                // erfasst). Ersetzen wuerde sie wegwerfen.
-                const vorher = state;
-                state = merge(state, server);
-                lastPushedRev = 0;
-                meldeZusammenfuehrung(vorher, state);
-                console.log('[Sync] Lokaler und Serverstand zusammengefuehrt (rev ' + state.rev + ').');
-            } else if (state.rev > server.rev) {
-                // Wir haben ungesicherte Aenderungen (z.B. offline erfasst)
-                console.log('[Sync] Lokaler Stand ist neuer (rev ' + state.rev + ' > ' + server.rev + ') - wird hochgeladen.');
-            } else {
-                lastPushedRev = state.rev;
-            }
-            setStatus({ online: true, error: null });
-        }
+        // Kein lokaler Stand: hier MUSS gewartet werden. Sonst legt der
+        // Store seine drei Beispielspieler an und der Serverstand kommt
+        // Sekunden spaeter obendrauf - doppelte Mannschaft.
+        const server = await holeServerstand();
+        if (server) uebernimmServerstand(server, false);
 
         initialised = true;
         writeLocal();

@@ -7,10 +7,13 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 
-// whatsapp-web.js, puppeteer und qrcode werden absichtlich NICHT hier oben
-// geladen. Sie ziehen zusammen ein paar hundert MB an Abhaengigkeiten und
-// belegen auf dem Pi unnoetig Speicher, solange die Integration aus ist.
-// Das require passiert erst in initializeWhatsAppClient().
+const Ticker = require('./lib/tickerlauf');
+const TickerRouten = require('./lib/tickerrouten');
+
+// whatsapp-web.js gibt es hier nicht mehr. Die WhatsApp-Sitzung liegt im
+// eigenen Dienst wa-gateway: eine gekoppelte Nummer, ein Chromium, EINE
+// Sendewarteschlange fuer Tracker und handball.net-Bot zusammen. Der
+// Tracker fuehrt nur noch eine Outbox, aus der das Gateway abholt.
 
 // Die Daten gehoeren NICHT in den Projektordner: ein "git pull" oder ein
 // Neuaufsetzen wuerde sie sonst mitreissen. Auf dem Pi zeigt DATA_DIR auf
@@ -20,6 +23,22 @@ const DATA_DIR = process.env.DATA_DIR
     : path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SECRET_FILE = path.join(DATA_DIR, '.jwt_secret');
+
+// Die Outbox ist bewusst EINE fuer alle Benutzer: das Gateway kennt genau
+// eine Quelle, und die Zielgruppe steckt ohnehin in jedem Eintrag (chatId).
+// Ein Outbox-Endpunkt je Benutzer haette bedeutet, dass die Gateway-.env
+// bei jedem neuen Konto angefasst werden muss.
+const OUTBOX_FILE = path.join(DATA_DIR, 'ticker-outbox.json');
+const TICKER_TOKEN = process.env.TICKER_TOKEN || '';
+
+// Nur fuer die Gruppenauswahl in der Oberflaeche. Der Nachrichtenweg
+// laeuft ueber die Outbox und braucht das NICHT - deshalb ist es auch
+// kein Beinbruch, wenn der Tracker spaeter auf dem VPS steht und das
+// Gateway hinter CGNAT nicht erreichbar ist. Dann wird die Gruppen-ID
+// eben einmal von Hand eingetragen.
+const GATEWAY_URL = (process.env.GATEWAY_URL || '').replace(/\/$/, '');
+const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN || '';
+const GATEWAY_SESSION = process.env.GATEWAY_SESSION || 'default';
 
 try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -170,7 +189,9 @@ function getUserPaths(username) {
         state: path.join(dir, 'state.json'),
         teams: path.join(dir, 'teams.json'),
         archives: path.join(dir, 'archives'),
-        avatars: path.join(dir, 'avatars')
+        avatars: path.join(dir, 'avatars'),
+        ticker: path.join(dir, 'ticker.json'),
+        tickerMerk: path.join(dir, 'ticker-merk.json')
     };
 }
 
@@ -248,142 +269,6 @@ app.use(express.static(path.join(__dirname, 'public'), {
         }
     }
 }));
-
-// Global state for WhatsApp
-let waClient = null;
-let isAuthenticated = false;
-let isInitializing = false;
-let currentQRBase64 = null;
-
-// Initialize WhatsApp Client
-function initializeWhatsAppClient() {
-    if (waClient || isInitializing) {
-        console.log("Client is already initialized or initializing.");
-        return;
-    }
-
-    isInitializing = true;
-
-    // Erst hier laden - siehe Kommentar am Dateianfang.
-    let Client, LocalAuth, qrcodeTerminal, QRCode;
-    try {
-        ({ Client, LocalAuth } = require('whatsapp-web.js'));
-        qrcodeTerminal = require('qrcode-terminal');
-        QRCode = require('qrcode');
-    } catch (e) {
-        console.error('WhatsApp-Pakete nicht installiert - Integration bleibt aus.', e.message);
-        isInitializing = false;
-        return;
-    }
-
-    try {
-        waClient = new Client({
-            authStrategy: new LocalAuth(),
-            puppeteer: {
-                headless: true,
-                executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium',
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage', // Helps with Pi memory issues
-                    '--disable-gpu',
-                    '--no-zygote',
-                    '--single-process'
-                ],
-                timeout: 60000 // Give the Pi 60 seconds to boot the browser instead of the default 30
-            }
-        });
-
-        waClient.on('qr', async (qr) => {
-            console.log('\n======================================================');
-            console.log('                 WhatsApp Authentication Required                 ');
-            console.log('======================================================\n');
-            console.log('Please scan the QR code below with your WhatsApp app:\n');
-            qrcodeTerminal.generate(qr, { small: true });
-            console.log('\n======================================================\n');
-
-            try {
-                currentQRBase64 = await QRCode.toDataURL(qr);
-            } catch (e) {
-                console.error('Failed to generate QR DataURL', e);
-            }
-        });
-
-        waClient.on('ready', async () => {
-            console.log('WhatsApp Client is ready!');
-            isAuthenticated = true;
-            isInitializing = false;
-            currentQRBase64 = null;
-
-            // Print available groups to console to help user configure .env
-            try {
-                console.log('\n--- Fetching available groups for configuration... ---');
-                let chats = [];
-                let retries = 5;
-                while (retries > 0) {
-                    try {
-                        if (retries < 5) await new Promise(r => setTimeout(r, 3000));
-                        chats = await waClient.getChats();
-                        break;
-                    } catch (err) {
-                        retries--;
-                    }
-                }
-                if (chats.length > 0) {
-                    const groups = chats.filter(chat => chat.isGroup);
-                    console.log(`\nFound ${groups.length} groups. Here are their IDs. Copy the correct ID into your .env file as TARGET_GROUP_ID:\n`);
-                    groups.forEach(g => {
-                        console.log(`- "${g.name}":   ${g.id._serialized}`);
-                    });
-                    console.log('\n----------------------------------------------------\n');
-                }
-            } catch (e) {
-                console.error('Failed to pre-fetch groups for logging', e);
-            }
-        });
-
-        waClient.on('authenticated', () => {
-            console.log('WhatsApp Client is authenticated');
-            isAuthenticated = true;
-            isInitializing = false;
-        });
-
-        waClient.on('auth_failure', msg => {
-            console.error('WhatsApp AUTHENTICATION FAILURE', msg);
-            isAuthenticated = false;
-            isInitializing = false;
-        });
-
-        waClient.on('disconnected', async (reason) => {
-            console.log('WhatsApp Client was disconnected', reason);
-            isAuthenticated = false;
-            currentQRBase64 = null;
-
-            // WICHTIG: erst aufraeumen, sonst blockiert der Guard oben
-            // den Neustart und der Bot bleibt nach einem Abbruch tot.
-            try {
-                await waClient.destroy();
-            } catch (e) {
-                console.error('Failed to destroy WhatsApp client', e.message);
-            }
-            waClient = null;
-            isInitializing = false;
-
-            setTimeout(initializeWhatsAppClient, 5000);
-        });
-
-        console.log("Initializing WhatsApp Client...");
-        waClient.initialize().catch(err => {
-            console.error('Failed to initialize WhatsApp Client. Is Chromium installed?', err.message);
-            waClient = null;
-            isInitializing = false;
-        });
-    } catch (error) {
-        console.error("WhatsApp Client could not be created. Disabling WhatsApp integration.", error.message);
-        waClient = null;
-        isInitializing = false;
-    }
-}
 
 // ==========================================
 // API ENDPOINTS (AUTH)
@@ -475,67 +360,6 @@ app.get('/api/me', requireUser, (req, res) => {
 });
 
 // ==========================================
-// API ENDPOINTS (WHATSAPP)
-// ==========================================
-
-// Middleware for password protection
-function requireAdminPassword(req, res, next) {
-    const authHeader = req.headers.authorization;
-    const adminPassword = process.env.ADMIN_PASSWORD;
-
-    if (!adminPassword) {
-        return res.status(500).json({ error: 'Server misconfiguration: ADMIN_PASSWORD not set' });
-    }
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
-    }
-
-    const providedPassword = authHeader.split(' ')[1];
-
-    // Zeitkonstanter Vergleich, damit sich das Passwort nicht ueber
-    // Laufzeitunterschiede Zeichen fuer Zeichen erraten laesst.
-    const a = Buffer.from(String(providedPassword));
-    const b = Buffer.from(String(adminPassword));
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-        return res.status(401).json({ error: 'Unauthorized: Incorrect password' });
-    }
-
-    next();
-}
-
-const waLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, key: 'wa' });
-
-// 1. Get Authentication Status (Protected)
-app.get('/api/whatsapp/status', waLimiter, requireAdminPassword, (req, res) => {
-    res.json({
-        authenticated: isAuthenticated,
-        running: !!waClient,
-        qr: currentQRBase64
-    });
-});
-
-// 1b. Logout WhatsApp (Protected)
-app.post('/api/whatsapp/logout', requireAdminPassword, async (req, res) => {
-    if (waClient) {
-        try {
-            await waClient.logout();
-            await waClient.destroy();
-            waClient = null;
-            isAuthenticated = false;
-            isInitializing = false;
-            currentQRBase64 = null;
-            initializeWhatsAppClient();
-            res.json({ success: true, message: 'Logged out and re-initializing.' });
-        } catch (e) {
-            res.status(500).json({ error: 'Failed to logout' });
-        }
-    } else {
-        res.json({ success: true, message: 'Not running.' });
-    }
-});
-
-// ==========================================
 // GAME STATE API
 // ==========================================
 
@@ -598,17 +422,37 @@ app.post('/api/state', requireUser, (req, res) => {
             }
         }
 
-        writeJsonAtomic(paths.state, {
+        const neuerStand = {
             rev: incomingRev,
             updatedAt: Number(incoming.updatedAt) || Date.now(),
+            spielId: incoming.spielId || null,
             spieler: Array.isArray(incoming.spieler) ? incoming.spieler : [],
             aktionen: Array.isArray(incoming.aktionen) ? incoming.aktionen : [],
+            tickerMarken: Array.isArray(incoming.tickerMarken) ? incoming.tickerMarken : [],
             aktiverTorwartId: incoming.aktiverTorwartId || null,
             teamHeim: incoming.teamHeim || null,
-            teamGast: incoming.teamGast || null
-        });
+            teamGast: incoming.teamGast || null,
+            halbzeitSekunden: Number(incoming.halbzeitSekunden) || null
+        };
+        writeJsonAtomic(paths.state, neuerStand);
 
-        res.json({ success: true, rev: incomingRev });
+        // Der Ticker haengt HINTER dem Schreiben: geht hier etwas schief,
+        // ist der Spielstand trotzdem gesichert. Ein kaputter Ticker darf
+        // niemals einen State-Push scheitern lassen - das waere genau der
+        // stille Datenverlust, gegen den der ganze Sync gebaut ist.
+        let ticker = { aktiv: false, erzeugt: 0, ausgelassen: 0 };
+        try {
+            ticker = Ticker.lauf({
+                outbox: outbox,
+                konfiguration: Ticker.leseKonfiguration(paths.ticker),
+                merkzettelDatei: paths.tickerMerk,
+                state: neuerStand
+            });
+        } catch (e) {
+            console.error('[Ticker] Lauf fehlgeschlagen:', e.message);
+        }
+
+        res.json({ success: true, rev: incomingRev, ticker: ticker });
     } catch (e) {
         console.error('Failed to write state', e);
         res.status(500).json({ error: 'Failed to write state' });
@@ -839,31 +683,21 @@ app.get('/api/avatars/:username/:filename', (req, res) => {
     }
 });
 
-// 2. Send Message to the Hardcoded Bot Group (Protected)
-app.post('/api/whatsapp/send', requireAdminPassword, async (req, res) => {
-    if (!isAuthenticated || !waClient) {
-        return res.status(401).json({ error: 'WhatsApp client is not authenticated' });
-    }
+// ==========================================
+// TICKER
+// ==========================================
+// Die Routen liegen in lib/tickerrouten.js, damit im Test exakt derselbe
+// Code laeuft, der ausgeliefert wird. Der Vertrag mit dem Gateway ist die
+// Stelle, an der ein Nachbau im Test am meisten schaden wuerde.
 
-    const { message } = req.body;
-    const targetGroupId = process.env.TARGET_GROUP_ID;
+const outbox = Ticker.outboxFuer('global', OUTBOX_FILE);
 
-    if (!message) {
-        return res.status(400).json({ error: 'Missing message' });
-    }
-
-    if (!targetGroupId) {
-        return res.status(500).json({ error: 'TARGET_GROUP_ID is not configured in .env' });
-    }
-
-    try {
-        await waClient.sendMessage(targetGroupId, message);
-        console.log(`Sent message to group ${targetGroupId}: ${message}`);
-        res.json({ success: true });
-    } catch (error) {
-        console.error("Failed to send message", error);
-        res.status(500).json({ success: false, error: 'Failed to send WhatsApp message' });
-    }
+TickerRouten.registriere(app, {
+    outbox: outbox,
+    getUserPaths: getUserPaths,
+    requireUser: requireUser,
+    tickerToken: TICKER_TOKEN,
+    gateway: { url: GATEWAY_URL, token: GATEWAY_TOKEN, session: GATEWAY_SESSION }
 });
 
 // Fallback to index.html for single page app routing if used
@@ -884,16 +718,9 @@ app.get('/healthz', (req, res) => {
     res.status(dataOk ? 200 : 503).json({
         status: dataOk ? 'ok' : 'degraded',
         uptimeSeconds: Math.round(process.uptime()),
-        whatsapp: process.env.WHATSAPP_ENABLED === 'false' ? 'disabled' : (isAuthenticated ? 'online' : 'offline')
+        ticker: TICKER_TOKEN ? 'bereit' : 'ohne Token'
     });
 });
-
-// Start the headless bot immediately on boot
-if (process.env.WHATSAPP_ENABLED !== 'false') {
-    initializeWhatsAppClient();
-} else {
-    console.log('WhatsApp-Integration per .env deaktiviert (WHATSAPP_ENABLED=false).');
-}
 
 // Hinter dem Cloudflare-Tunnel soll der Server NUR lokal lauschen -
 // nach aussen geht ausschliesslich der Tunnel. HOST=0.0.0.0 oeffnet ihn

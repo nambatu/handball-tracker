@@ -119,6 +119,58 @@ function halbzeitEndeSekunden() {
     return clock.halbzeitSekunden * clock.half;
 }
 
+// ---------------------------------------------------------------
+// Zeitmarken fuer den Ticker
+// ---------------------------------------------------------------
+// "Noch 10 Minuten", "Noch 5 Minuten", "Letzte Minute" - nur am
+// Spielende, also in der zweiten Halbzeit.
+//
+// Warum hier und nicht auf dem Server: die Spieluhr laeuft lokal auf dem
+// tickernden Geraet. Der Server kennt sie gar nicht - er sieht nur die
+// Spielzeit, die an einer Aktion klebt, und faellt zwischen zwei Toren
+// in ein Loch. Also erzeugt die Uhr die Marke und schickt sie mit dem
+// naechsten Push; der Server macht daraus wie ueblich die Nachricht und
+// sorgt fuer Doppler-Sperre, Undo und Frischefenster.
+
+const ZEITMARKEN = [
+    { art: 'rest10', restSekunden: 600 },
+    { art: 'rest5', restSekunden: 300 },
+    { art: 'rest1', restSekunden: 60 }
+];
+
+function pruefeZeitmarken() {
+    if (!isRunning() || clock.half < 2) return;
+    if (!window.Sync || !window.Sync.getState) return;
+
+    const rest = halbzeitEndeSekunden() - elapsedSeconds();
+    // Nach dem Abpfiff-Zeitpunkt laeuft die Uhr weiter; dann ist nichts
+    // mehr "noch x Minuten" und es soll auch nichts mehr kommen.
+    if (rest <= 0) return;
+
+    const s = window.Sync.getState();
+    if (!Array.isArray(s.tickerMarken)) s.tickerMarken = [];
+
+    let neu = false;
+    ZEITMARKEN.forEach(function (m) {
+        if (rest > m.restSekunden) return;
+        // Feste id statt Zeitstempel: so kann dieselbe Marke auch nach
+        // einem Reload oder auf einem zweiten Geraet nicht doppelt
+        // entstehen - der Merkzettel auf dem Server erkennt sie wieder.
+        const id = 'marke:' + (s.spielId || 'spiel') + ':' + m.art + ':hz' + clock.half;
+        if (s.tickerMarken.some(function (x) { return x.id === id; })) return;
+        s.tickerMarken.push({
+            id: id,
+            art: m.art,
+            halbzeit: clock.half,
+            spielzeit: elapsedSeconds(),
+            timestamp: Date.now()
+        });
+        neu = true;
+    });
+
+    if (neu) window.Sync.touch();
+}
+
 function updateTimerDisplay() {
     const timerEl = document.getElementById("game-timer");
     if (timerEl) timerEl.innerText = formatTime(elapsedSeconds());
@@ -160,6 +212,7 @@ function stopDisplayLoop() {
 
 function tick() {
     updateTimerDisplay();
+    pruefeZeitmarken();
 
     // Einmal pro Halbzeit Bescheid geben. Die Uhr laeuft bewusst WEITER -
     // wann abgepfiffen wird, entscheidet der Schiedsrichter, nicht die App.
@@ -288,11 +341,34 @@ async function endGame() {
         return;
     }
 
+    // Schlusspfiff in den Ticker. Die Reihenfolge ist entscheidend: erst
+    // JETZT, nach dem gesicherten Archivieren, aber noch VOR dem
+    // Zuruecksetzen - der Server baut die Zusammenfassung aus genau dem
+    // Spielstand, der gleich geloescht wird.
+    try {
+        const s = window.Sync.getState();
+        if (!Array.isArray(s.tickerMarken)) s.tickerMarken = [];
+        const id = 'marke:' + (s.spielId || 'spiel') + ':ende';
+        if (!s.tickerMarken.some(function (m) { return m.id === id; })) {
+            s.tickerMarken.push({
+                id: id, art: 'ende', halbzeit: clock.half,
+                spielzeit: elapsedSeconds(), timestamp: Date.now()
+            });
+            window.Sync.touch();
+            await window.Sync.flush();
+        }
+    } catch (e) {
+        // Ohne Ticker endet das Spiel trotzdem. Das Archiv liegt bereits.
+        console.warn('[Ticker] Schlussnachricht nicht abgesetzt:', e && e.message);
+    }
+
     const resetSpieler = spieler.map(p => Object.assign({}, p, {
         playtimeSeconds: 0,
         suspendedUntilGameTime: null
     }));
-    await window.Sync.reset({ spieler: resetSpieler, aktionen: [] });
+    // Neue Spielkennung: daran haengen die Ticker-Zeitmarken, damit sie im
+    // naechsten Spiel nicht als "schon getickert" gelten.
+    await window.Sync.reset({ spieler: resetSpieler, aktionen: [], spielId: 'g' + Date.now() });
 
     clock = { accumulatedMs: 0, startedAt: null, half: 1, halbzeitSekunden: clock.halbzeitSekunden };
     halbzeitHinweisFuer = 0;
@@ -322,6 +398,20 @@ function setHalbzeitLaenge(minuten) {
     halbzeitHinweisFuer = 0;
     saveGameState();
     updateTimerDisplay();
+
+    // Auch in den Sync-Stand schreiben: der Server braucht die Laenge fuer
+    // die Ticker-Regel "letzte 5 Minuten". Die Spieluhr selbst bleibt
+    // bewusst lokal - sie laeuft auf dem Geraet, das tickt.
+    try {
+        if (window.Sync && window.Sync.getState) {
+            const s = window.Sync.getState();
+            if (s.halbzeitSekunden !== clock.halbzeitSekunden) {
+                s.halbzeitSekunden = clock.halbzeitSekunden;
+                window.Sync.touch();
+            }
+        }
+    } catch (e) { /* ohne Sync laeuft die Uhr trotzdem */ }
+
     return m;
 }
 

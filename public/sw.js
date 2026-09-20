@@ -20,7 +20,24 @@
 // offline passiert; ein zwischengespeicherter Spielstand waere genau die
 // Art von stillem Datenverlust, gegen die der Sync gebaut wurde.
 
-const CACHE = 'handball-tracker-v20260919';
+const CACHE = 'handball-tracker-v20260925';
+
+// Wie lange auf den Server gewartet wird, bevor der Cache uebernimmt.
+//
+// Das ist der Kern des Problems: ein Netz, das nichts mehr durchlaesst,
+// sagt das nicht. Die Anfrage scheitert nicht, sie HAENGT - und der
+// Browser zeigt derweil den blauen Startbildschirm der installierten App.
+// Ohne Zeitgrenze wartet er, bis das Netz zurueckkommt. Genau so war es.
+const NETZ_GEDULD_MS = 2000;
+
+function mitZeitgrenze(versprechen, ms) {
+    return Promise.race([
+        versprechen,
+        new Promise(function (_, ablehnen) {
+            setTimeout(function () { ablehnen(new Error('Zeitgrenze')); }, ms);
+        })
+    ]);
+}
 
 const SHELL = [
     './',
@@ -34,6 +51,7 @@ const SHELL = [
     'js/stats.js',
     'js/report.js',
     'js/whatsapp.js',
+    'js/tickerui.js',
     'js/ui.js',
     'js/app.js',
     'vendor/touch-drag.js',
@@ -107,6 +125,12 @@ self.addEventListener('activate', function (event) {
 // index.html mit "?v=..." drin, im Cache liegen sie ohne.
 const TREFFER = { ignoreSearch: true };
 
+function aktualisiereImHintergrund(req, cache) {
+    fetch(req).then(function (res) {
+        if (istAppHuelle(res)) cache.put('index.html', res.clone());
+    }).catch(function () { /* weiterhin kein Netz - nicht schlimm */ });
+}
+
 self.addEventListener('fetch', function (event) {
     const req = event.request;
     if (req.method !== 'GET') return;
@@ -118,19 +142,40 @@ self.addEventListener('fetch', function (event) {
 
     if (req.mode === 'navigate') {
         event.respondWith((async function () {
-            try {
-                const netz = await fetch(req);
-                // Nur die echte App speichern - siehe istAppHuelle().
-                if (istAppHuelle(netz)) {
-                    const cache = await caches.open(CACHE);
-                    cache.put('index.html', netz.clone());
+            const cache = await caches.open(CACHE);
+            const gespeichert = (await cache.match('index.html', TREFFER))
+                             || (await cache.match('./', TREFFER));
+
+            // Ohne gespeicherte Fassung bleibt nur das Netz - dann aber
+            // ohne Zeitgrenze, sonst landet man auf der Notseite, obwohl
+            // die Verbindung nur langsam ist.
+            if (!gespeichert) {
+                try {
+                    const netz = await fetch(req);
+                    if (istAppHuelle(netz)) cache.put('index.html', netz.clone());
+                    return netz;
+                } catch (e) {
+                    return notseite();
                 }
+            }
+
+            // Der Browser meldet selbst, dass kein Netz da ist: gar nicht
+            // erst fragen, sofort starten.
+            if (!self.navigator.onLine) {
+                aktualisiereImHintergrund(req, cache);
+                return gespeichert;
+            }
+
+            try {
+                const netz = await mitZeitgrenze(fetch(req), NETZ_GEDULD_MS);
+                if (istAppHuelle(netz)) cache.put('index.html', netz.clone());
                 return netz;
             } catch (e) {
-                const cache = await caches.open(CACHE);
-                return (await cache.match('index.html', TREFFER))
-                    || (await cache.match('./', TREFFER))
-                    || notseite();
+                // Kein Netz, oder es antwortet nicht schnell genug. Die App
+                // startet aus dem Cache; die Antwort vom Server wird - falls
+                // sie doch noch kommt - fuer den naechsten Start gespeichert.
+                aktualisiereImHintergrund(req, cache);
+                return gespeichert;
             }
         })());
         return;
@@ -146,7 +191,9 @@ self.addEventListener('fetch', function (event) {
         }).catch(function () { return null; });
 
         if (treffer) return treffer;
-        const netz = await ausDemNetz;
+        // Nichts gespeichert: aufs Netz warten, aber nicht endlos - eine
+        // haengende Datei wuerde den Start der App genauso blockieren.
+        const netz = await mitZeitgrenze(ausDemNetz, NETZ_GEDULD_MS * 3).catch(function () { return null; });
         return netz || new Response('', { status: 504 });
     })());
 });

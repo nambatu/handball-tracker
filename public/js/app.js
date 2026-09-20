@@ -64,6 +64,18 @@ function registriereServiceWorker() {
     });
 }
 
+// Ein totes Netz meldet sich nicht ab, es antwortet nur nie. Ohne
+// Zeitgrenze bleibt die App genau hier stehen - der Startbildschirm ist
+// dann alles, was man sieht. Nach vier Sekunden gilt der Server als nicht
+// erreichbar; der lokale Stand reicht zum Weiterspielen.
+const ANMELDE_GEDULD_MS = 4000;
+
+function frageServerNachAnmeldung() {
+    const abbruch = new AbortController();
+    const uhr = setTimeout(function () { abbruch.abort(); }, ANMELDE_GEDULD_MS);
+    return fetch('/api/me', { signal: abbruch.signal }).finally(function () { clearTimeout(uhr); });
+}
+
 async function checkAuthStatus() {
     const token = localStorage.getItem('auth_token');
     if (!token) {
@@ -71,8 +83,31 @@ async function checkAuthStatus() {
         return;
     }
 
+    // Token UND bekannter Name vorhanden: nicht erst den Server fragen.
+    // In der Halle heisst jede Rueckfrage Wartezeit vor einem leeren
+    // Bildschirm, und der lokale Stand traegt das Spiel ohnehin allein.
+    // Die Pruefung laeuft trotzdem - ein abgelaufenes Token fliegt dann
+    // ueber den 401-Weg raus, genau wie bei jeder anderen Anfrage auch.
+    const bekannterName = localStorage.getItem('auth_username');
+    if (bekannterName) {
+        enterApp(bekannterName);
+        frageServerNachAnmeldung().then(function (res) {
+            if (res.ok) return res.json().then(function (d) {
+                if (d && d.username) localStorage.setItem('auth_username', d.username);
+            });
+            if (res.status === 401 || res.status === 403) showAuthOverlay();
+        }).catch(function () {
+            console.warn('[App] Offline gestartet - arbeite mit lokalem Stand.');
+            if (window.Toast) {
+                window.Toast('Offline gestartet. Aktionen werden lokal gesichert und später übertragen.',
+                    { type: 'warn', duration: 7000 });
+            }
+        });
+        return;
+    }
+
     try {
-        const res = await fetch('/api/me');
+        const res = await frageServerNachAnmeldung();
         if (res.ok) {
             const data = await res.json();
             localStorage.setItem('auth_username', data.username);
@@ -82,22 +117,10 @@ async function checkAuthStatus() {
             showAuthOverlay();
         }
     } catch(e) {
-        // Netzwerkfehler, NICHT abgelehnt: In der Halle ohne Empfang muss
-        // die App trotzdem starten. Der lokale Stand reicht zum Weitertracken.
-        const cachedUser = localStorage.getItem('auth_username');
-        if (cachedUser) {
-            console.warn('[App] Offline gestartet - arbeite mit lokalem Stand.');
-            enterApp(cachedUser);
-            if (window.Toast) {
-                window.Toast('Offline gestartet. Aktionen werden lokal gesichert und spaeter uebertragen.',
-                    { type: 'warn', duration: 7000 });
-            }
-        } else {
-            // Ohne Netz UND ohne gespeicherte Anmeldung kommt man nicht
-            // weiter - das aber bitte sagen, statt nur ein Anmeldeformular
-            // hinzustellen, in dem jeder Versuch stumm scheitert.
-            showAuthOverlay();   // zeigt selbst den Offline-Hinweis
-        }
+        // Ohne Netz UND ohne gespeicherte Anmeldung kommt man nicht weiter -
+        // das aber bitte sagen, statt nur ein Anmeldeformular hinzustellen,
+        // in dem jeder Versuch stumm scheitert.
+        showAuthOverlay();   // zeigt selbst den Offline-Hinweis
     }
 }
 

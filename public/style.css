@@ -1875,3 +1875,225 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     margin-left: 2px;
 }
 .timer-target.is-over { color: var(--warning-color); font-weight: 600; }
+
+/* ===================================================================
+   TICKER
+   =================================================================== */
+
+/* Zustand im Kopf, direkt neben dem Sync-Zustand: die beiden gehoeren
+   zusammen. Sync sagt "ist gesichert", Ticker sagt "geht raus" - und
+   ohne Verbindung stimmt das eine, das andere nicht. */
+.ticker-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 8px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    vertical-align: middle;
+    cursor: default;
+}
+
+.ticker-aktiv {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.35);
+    color: #93c5fd;
+}
+
+.ticker-pause {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: #fcd34d;
+}
+
+/* --- Einstellansicht --- */
+
+.ticker-block {
+    margin-bottom: 22px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.ticker-block:last-child { border-bottom: none; }
+
+.ticker-block h3 {
+    margin: 0 0 10px;
+    font-size: 1rem;
+}
+
+.ticker-hinweis {
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+    margin: 8px 0 0;
+}
+
+.ticker-hinweis code {
+    font-size: 0.95em;
+    background: rgba(148, 163, 184, 0.14);
+    padding: 1px 5px;
+    border-radius: 4px;
+    /* Die Platzhalterliste ist lang; ohne das sprengt sie schmale
+       Bildschirme nach rechts. */
+    word-break: break-word;
+}
+
+.ticker-schalter {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    /* 44px, damit die Schalter auch mit Daumen am Spielfeldrand
+       treffbar sind - dieselbe Regel wie bei den Aktionsknoepfen. */
+    min-height: 44px;
+    cursor: pointer;
+}
+
+.ticker-schalter input { width: 20px; height: 20px; flex: 0 0 auto; }
+
+.ticker-haupt { font-size: 1.05rem; }
+
+.ticker-schalter-liste {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 2px 16px;
+}
+
+.ticker-gruppe-zeile {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.ticker-gruppe-zeile select {
+    flex: 1 1 200px;
+    min-height: 44px;
+    padding: 8px 10px;
+}
+
+.ticker-feld {
+    display: block;
+    margin-top: 12px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.ticker-feld input {
+    display: block;
+    width: 100%;
+    margin-top: 5px;
+    min-height: 44px;
+    padding: 8px 10px;
+    box-sizing: border-box;
+}
+
+.ticker-vorlage { margin-top: 14px; }
+
+.ticker-vorlage-kopf {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+
+.ticker-vorlage textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 10px;
+    font: inherit;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    resize: vertical;
+}
+
+.ticker-zurueck {
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 4px 2px;
+    text-decoration: underline;
+}
+
+/* Die Vorschau sieht aus wie eine Nachricht, nicht wie ein Formularfeld -
+   sonst liest man sie als Eingabe statt als Ergebnis. */
+.ticker-vorschau {
+    margin-top: 7px;
+    padding: 9px 12px;
+    border-radius: 10px 10px 10px 3px;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    font-size: 0.87rem;
+    line-height: 1.5;
+    min-height: 1.5em;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.ticker-vorschau-leer {
+    background: rgba(148, 163, 184, 0.1);
+    border-color: rgba(148, 163, 184, 0.22);
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ticker-meldung { margin: 10px 0 0; font-size: 0.88rem; }
+.ticker-ok { color: #6ee7b7; }
+.ticker-fehler { color: #fca5a5; }
+.ticker-laden { color: var(--text-muted); }
+
+.ticker-fuss {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+/* --- Sprueche an der Spielerzeile --- */
+
+.roster-ticker { flex-basis: 100%; }
+
+.ticker-spielerregeln {
+    margin: 10px 0 4px;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(148, 163, 184, 0.09);
+}
+
+.ticker-spielerzeile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+}
+
+.ticker-spielerzeile span { flex: 0 0 130px; color: var(--text-muted); }
+
+.ticker-spielerzeile input {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 40px;
+    padding: 7px 9px;
+}
+
+.ticker-spieler-vorschau {
+    margin: 10px 0;
+    font-size: 0.85rem;
+    color: #6ee7b7;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+@media (max-width: 600px) {
+    .ticker-spielerzeile { flex-wrap: wrap; }
+    .ticker-spielerzeile span { flex-basis: 100%; }
+    .ticker-badge { margin-left: 6px; font-size: 0.72rem; padding: 2px 8px; }
+    .ticker-badge .ticker-text { display: none; }
+}

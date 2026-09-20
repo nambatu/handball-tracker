@@ -838,12 +838,10 @@ function executeSaveAction(player, actionType, actionLabel, category, assistId) 
     const kind = feedbackKindFor(actionType);
     pulseFeedback(kind);
 
-    // Hook to broadcast to WhatsApp
-    if (window.WhatsAppMod && typeof window.WhatsAppMod.broadcastEvent === 'function') {
-        const homeScore = document.getElementById('score-home').innerText;
-        const guestScore = document.getElementById('score-guest').innerText;
-        window.WhatsAppMod.broadcastEvent(newAction, player, assistId, `${homeScore}:${guestScore}`);
-    }
+    // Hier wird NICHT mehr getickert. Die Nachricht entsteht serverseitig
+    // aus dem State-Push. Vom Browser aus zu feuern hiesse: jeder Reload
+    // tickert erneut, ein Undo kaeme zu spaet, und das Admin-Passwort
+    // muesste im sessionStorage jedes Trackenden liegen.
 
     selectedPlayerId = null;
     selectedPrimaryAction = null;
@@ -1315,14 +1313,23 @@ function renderRosterList() {
             // Der Gegner-Eintrag ist sichtbar als solcher markiert: er zaehlt
             // die gegnerischen Tore und laesst sich deshalb nicht loeschen.
             // Umbenennen ist seit der Umstellung auf das team-Feld gefahrlos.
+            // Ticker-Sprueche stehen bewusst hier und nicht in einem
+            // eigenen Regel-Editor: man stellt sie dort ein, wo man den
+            // Spieler ohnehin anfasst.
+            const hatSprueche = window.TickerUI && window.TickerUI.hatRegeln(p.id);
             li.innerHTML = `
                 <span>#${escapeHtml(p.nummer)} ${escapeHtml(p.name)} (${escapeHtml(p.position)})${
                     istGast ? ' <span class="gast-marke">Gegnerseite</span>' : ''}</span>
                 <span class="roster-btns">
+                    <button class="js-ticker" title="Eigener Ticker-Spruch">📡${hatSprueche ? ' ✓' : ''}</button>
                     <button class="js-edit">Bearbeiten</button>
                     ${istGast ? '' : '<button class="js-del">Löschen</button>'}
                 </span>
+                <div class="roster-ticker"></div>
             `;
+            li.querySelector('.js-ticker').onclick = () => {
+                if (window.TickerUI) window.TickerUI.toggleSpielerRegeln(p.id, li.querySelector('.roster-ticker'));
+            };
             li.querySelector('.js-edit').onclick = () => startEditPlayer(p.id);
             const del = li.querySelector('.js-del');
             if (del) del.onclick = () => removePlayer(p.id);
@@ -1810,6 +1817,7 @@ window.UI = {
     startEditPlayer,
     cancelEditPlayer,
     togglePlayerManagement,
+    renderRosterList,
     addPlayer,
     removePlayer,
     populateTeamsDropdown,
