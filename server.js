@@ -452,6 +452,20 @@ app.post('/api/state', requireUser, (req, res) => {
             console.error('[Ticker] Lauf fehlgeschlagen:', e.message);
         }
 
+        // Ausgelassene Aktionen waren bisher voellig stumm: der Ticker
+        // laesst alles aus, was aelter als TICKER_MAX_ALTER ist, und
+        // genau das passiert, wenn das Geraet in der Halle den Push erst
+        // nach einer Netzpause losbekommt. In der Gruppe fehlen dann
+        // Tore, und im Log stand nichts, was darauf hindeutet - man sucht
+        // den Fehler zwangslaeufig beim Gateway oder bei WhatsApp.
+        if (ticker.ausgelassen > 0 || ticker.zurueckgenommen > 0) {
+            console.warn(
+                `[Ticker] ${ticker.erzeugt} eingereiht, ${ticker.ausgelassen} zu alt `
+                + `(> ${Math.round((Number(process.env.TICKER_MAX_ALTER_MS) || 120000) / 1000)}s, nicht getickert), `
+                + `${ticker.zurueckgenommen || 0} zurueckgenommen.`
+            );
+        }
+
         res.json({ success: true, rev: incomingRev, ticker: ticker });
     } catch (e) {
         console.error('Failed to write state', e);
@@ -720,6 +734,38 @@ app.get('/healthz', (req, res) => {
         uptimeSeconds: Math.round(process.uptime()),
         ticker: TICKER_TOKEN ? 'bereit' : 'ohne Token'
     });
+});
+
+// ==========================================
+// FEHLERBEHANDLUNG
+// ==========================================
+// Ohne diese Middleware uebernimmt Express' Standardbehandlung und schreibt
+// zu JEDEM Fehler den vollen Stack nach stderr. Der haeufigste Fehler im
+// Betrieb ist "request aborted": das Geraet in der Halle bricht einen
+// laufenden State-Push ab (Browser zugeklappt, Netz weg, Tunnel neu
+// verbunden). Das ist kein Programmfehler - der Sync wiederholt den Push
+// von allein -, aber es hat die error.log mit neun Zeilen pro Vorfall
+// geflutet. Darin gehen die Zeilen unter, auf die es ankommt.
+app.use((err, req, res, next) => {
+    // raw-body erzeugt den Abbruch mit mehreren Kennzeichen; geprueft
+    // werden alle drei, weil je nach Pfad und Node-Version nicht immer
+    // dasselbe gesetzt ist. Lieber eine Zeile zu viel abgefangen als der
+    // Stack-Spam zurueck.
+    const abgebrochen = !!err && (
+        err.type === 'request.aborted'
+        || err.code === 'ECONNABORTED'
+        || err.message === 'request aborted'
+    );
+    if (abgebrochen) {
+        // Keine Antwort versuchen: die Gegenseite ist weg, der Socket ist
+        // zu. Ein res.json() hier provoziert nur ein zweites Ereignis.
+        console.warn(`[Netz] Anfrage abgebrochen: ${req.method} ${req.path} - der Client versucht es erneut.`);
+        return;
+    }
+    console.error(`[Fehler] ${req.method} ${req.path}:`, (err && err.message) || err);
+    if (err && err.stack) console.error(err.stack);
+    if (res.headersSent) return;
+    res.status((err && Number(err.status)) || 500).json({ error: 'Serverfehler' });
 });
 
 // Hinter dem Cloudflare-Tunnel soll der Server NUR lokal lauschen -
