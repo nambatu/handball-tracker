@@ -53,19 +53,21 @@
             document.body.classList.toggle('ansicht-' + n, n === name);
         });
         badgeUmhaengen(name === 'start');
+        // Wer die Spielansicht verlaesst, laesst nichts offen: kein Aktions-Sheet,
+        // kein Menue, keinen gewaehlten Spieler.
+        if (name !== 'spiel' && window.UI && window.UI.verlasseSpiel) window.UI.verlasseSpiel();
         if (name === 'start') starteUhr(); else stoppeUhr();
     }
 
     // Es gibt nur EINEN Sync-Zustand im Dokument (#sync-status, den zeichnet
-    // sync.js). Statt ihn zu verdoppeln, zieht er zwischen Spielkopf und
+    // sync.js). Statt ihn zu verdoppeln, zieht er zwischen Uhrzeile und
     // Startseite um - dann stimmt er an beiden Orten zwangslaeufig.
     function badgeUmhaengen(zurStartseite) {
         const badge = el('sync-status');
         if (!badge) return;
-        const ziel = zurStartseite ? el('start-sync-platz') : document.querySelector('.timer-display');
+        const ziel = zurStartseite ? el('start-sync-platz') : el('uhr-sync');
         if (!ziel || badge.parentNode === ziel) return;
-        if (zurStartseite) ziel.appendChild(badge);
-        else ziel.insertBefore(badge, el('ticker-status'));
+        ziel.appendChild(badge);
     }
 
     function zeige() {
@@ -418,7 +420,12 @@
 
         // Erst den Kader, dann die Spieldaten: beginneSpiel setzt zum Schluss
         // mit EINEM touch() alles auf einmal in den Sync.
-        if (mannschaft) window.Store.ladeMannschaft(mannschaft.players);
+        if (mannschaft) {
+            const r = window.Store.ladeMannschaft(mannschaft.players);
+            if (!r.ok) { zeigeFehler('Die Mannschaft lässt sich nicht laden: Im Spiel sind schon Aktionen erfasst.'); return; }
+        }
+        // Neues Spiel: die Wahl "ohne Uhr eintragen" vom letzten gilt nicht mehr
+        if (window.UI) window.UI.vergissUhrWahl();
         window.Store.beginneSpiel({
             spielName: el('start-spielname').value,
             teamHeim: el('start-team-heim').value,

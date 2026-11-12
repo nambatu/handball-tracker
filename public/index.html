@@ -16,102 +16,148 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=20261113">
+    <link rel="stylesheet" href="style.css?v=20261114">
 </head>
 
 <body class="ansicht-login">
 
-    <header>
-        <!-- Zurueck zur Startseite. Die Uhr laeuft dabei weiter, nichts wird zurueckgesetzt. -->
-        <button type="button" onclick="window.Start.zeige()" id="start-btn" class="control-btn zur-startseite"
-                title="Zur Startseite - die Uhr läuft weiter">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
-            Startseite
-        </button>
-        <div id="game-info">
-            <div class="scoreboard">
-                <button id="team-name" class="team-name-btn" onclick="window.UI.openTeamNameEdit()" title="Teamnamen ändern">HEIM</button>
-                <div class="score-container">
-                    <span id="score-home" class="score-number">0</span>
-                    <span class="score-divider">:</span>
-                    <span id="score-guest" class="score-number">0</span>
-                </div>
-                <button id="guest-name" class="team-name-btn" onclick="window.UI.openTeamNameEdit()" title="Teamnamen ändern">GAST</button>
-            </div>
-            <div class="timer-display">
-                Spielzeit:
-                <button id="game-timer" class="timer-value" onclick="window.UI.openTimeEdit()"
-                        title="Antippen, um die Spielzeit zu korrigieren">00:00</button>
-                <span id="timer-target" class="timer-target" title="Ende der laufenden Halbzeit">/ 30:00</span>
-                <span id="sync-status" class="sync-badge sync-ok" title="Synchronisierung"></span>
-                <span id="ticker-status" class="ticker-badge" hidden title="Ticker"></span>
+    <!-- SPIELANSICHT: nur das Spielfeld. Kopfzeile (Stand), Uhrzeile, Feld mit Bank.
+         Alles andere (Statistik, Verlauf, Kader ...) liegt im Menue und oeffnet als
+         Overlay ueber dem Spiel. Die Ansicht schaltet window.Start ueber body.ansicht-spiel. -->
+    <div id="spiel-view" class="spiel">
+        <header class="spiel-kopf">
+            <div class="kopf-oben">
+                <!-- Zurueck zur Startseite. Die Uhr laeuft dabei weiter, nichts wird zurueckgesetzt. -->
+                <button type="button" onclick="window.Start.zeige()" id="start-btn" class="kopf-knopf kopf-zurueck"
+                        aria-label="Zur Startseite" title="Zur Startseite - die Uhr läuft weiter">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg>
+                </button>
+                <!-- Der ganze Stand ist EIN Knopf: Antippen zeigt die vollen Namen -->
+                <button type="button" id="spielstand" class="spielstand" onclick="window.UI.openSpielInfo()"
+                        aria-label="Spielstand - Antippen zeigt die vollen Namen">
+                    <span id="team-name" class="sb-name sb-heim">HEIM</span>
+                    <span class="sb-stand">
+                        <span id="score-home" class="score-number">0</span>
+                        <span class="score-divider">:</span>
+                        <span id="score-guest" class="score-number">0</span>
+                    </span>
+                    <span id="guest-name" class="sb-name sb-gast">GAST</span>
+                </button>
+                <button type="button" id="menue-btn" class="kopf-knopf kopf-menue" onclick="window.UI.openMenue()"
+                        aria-haspopup="dialog" aria-label="Menü">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                         stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+                    <span class="kopf-menue-text">Menü</span>
+                </button>
             </div>
 
-            <!-- Zeitkorrektur (z.B. wenn die App im Hintergrund weiterlief) -->
-            <!-- Beim Antippen der Uhr: laufende Zeit korrigieren UND die
-                 Halbzeitlaenge festlegen. Die Laenge stand zuerst nur in der
-                 Spielerverwaltung - dort sucht sie niemand. -->
-            <div id="time-edit" class="time-edit" style="display:none;">
-                <div class="time-edit-zeile">
-                    <label for="time-edit-input">Spielzeit auf</label>
-                    <input type="text" id="time-edit-input" inputmode="numeric" placeholder="mm:ss" size="5">
-                    <button onclick="window.UI.applyTimeEdit()" class="add-btn">Setzen</button>
-                    <button onclick="window.UI.closeTimeEdit()" class="cancel-btn">Abbrechen</button>
-                </div>
-                <div class="time-edit-zeile">
-                    <label for="time-edit-halbzeit">Halbzeit dauert</label>
-                    <select id="time-edit-halbzeit" onchange="window.UI.setHalbzeitLaenge(this.value)">
-                        <option value="30">2 × 30 Minuten (Erwachsene)</option>
-                        <option value="25">2 × 25 Minuten (A-/B-Jugend)</option>
-                        <option value="20">2 × 20 Minuten (C-/D-Jugend)</option>
-                        <option value="15">2 × 15 Minuten (E-/F-Jugend)</option>
-                        <option value="10">2 × 10 Minuten (Turnier)</option>
-                    </select>
-                </div>
+            <div class="kopf-uhr">
+                <!-- Zeit antippen = korrigieren (App lief im Hintergrund, Schiedsrichteruhr weicht ab) -->
+                <button type="button" id="uhr-block" class="uhr-block" onclick="window.UI.openTimeEdit()"
+                        aria-label="Spielzeit korrigieren" title="Antippen, um die Spielzeit zu korrigieren">
+                    <span class="uhr-zahlen">
+                        <span id="game-timer" class="timer-value">00:00</span>
+                        <span id="timer-target" class="timer-target" title="Ende der laufenden Halbzeit">/ 30:00</span>
+                    </span>
+                    <span id="half-indicator" class="uhr-hz">1. Hz</span>
+                </button>
+                <!-- Der Sync-Punkt wohnt hier (sync.js zeichnet ihn, start.js zieht ihn auf die Startseite um) -->
+                <span id="uhr-sync" class="uhr-sync"><span id="sync-status" class="sync-badge sync-ok" title="Synchronisierung"></span></span>
+                <button type="button" onclick="window.Timer.toggleGameTimer()" id="timer-btn" class="uhr-knopf primaer">Uhr starten</button>
+            </div>
+        </header>
+
+        <main id="app-container">
+            <div id="dynamic-view-container"></div>
+        </main>
+    </div>
+
+    <!-- Menue: Bottom-Sheet (quer: Dialog). Ganz unten, abgesetzt: Spiel beenden. -->
+    <div id="menue" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="menue-titel">
+        <div class="sheet-panel">
+            <div class="sheet-kopf">
+                <h2 id="menue-titel" class="sheet-titel">Menü</h2>
+                <button type="button" id="menue-zu" class="sheet-zu" onclick="window.UI.closeMenue()" aria-label="Menü schließen">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                         stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
+            </div>
+            <div class="menue-liste">
+                <button type="button" class="menue-eintrag" data-menue="halbzeit" onclick="window.UI.menueWahl('halbzeit')">
+                    <span id="menue-halbzeit-text">Halbzeit beenden</span>
+                </button>
+                <button type="button" class="menue-eintrag" data-menue="statistik" onclick="window.UI.menueWahl('statistik')">Statistik</button>
+                <button type="button" class="menue-eintrag" data-menue="bericht" onclick="window.UI.menueWahl('bericht')">Spielbericht</button>
+                <button type="button" class="menue-eintrag" data-menue="verlauf" onclick="window.UI.menueWahl('verlauf')">
+                    <span>Verlauf</span>
+                    <span class="menue-zusatz"><span id="action-count">0</span> Aktionen</span>
+                </button>
+                <button type="button" class="menue-eintrag" data-menue="kader" onclick="window.UI.menueWahl('kader')">Kader</button>
+                <button type="button" class="menue-eintrag" data-menue="ticker" id="ticker-btn" onclick="window.UI.menueWahl('ticker')">
+                    <span>Ticker</span>
+                    <span id="ticker-status" class="ticker-badge" hidden title="Ticker"></span>
+                </button>
+                <button type="button" class="menue-eintrag" data-menue="archiv" onclick="window.UI.menueWahl('archiv')">Archiv</button>
+                <button type="button" class="menue-eintrag menue-gefahr" data-menue="beenden" onclick="window.UI.menueWahl('beenden')">Spiel beenden und archivieren</button>
             </div>
         </div>
+    </div>
 
-        <div id="controls">
-            <button onclick="window.Timer.toggleGameTimer()" id="timer-btn" class="control-btn primaer">Uhr starten</button>
-            <button onclick="window.Timer.toggleEndHalfOrGame()" id="half-end-btn" class="control-btn">Halbzeit</button>
-            <button onclick="window.Stats.showStats()" class="control-btn">Statistik</button>
-            <button onclick="window.Report.showCurrentReport()" class="control-btn">Spielbericht</button>
-            <button onclick="window.UI.togglePlayerManagement()" class="control-btn">Spieler</button>
-            <button onclick="window.UI.openHistoryView()" class="control-btn">Verlauf</button>
-            <button onclick="openArchiveModal()" class="control-btn">Archiv</button>
-            <button onclick="window.TickerUI.oeffne()" class="control-btn" id="ticker-btn">Ticker</button>
-
-            <div class="view-toggle-container">
-                <button onclick="window.UI.switchUIMode('thumb')" id="btn-mode-thumb" class="control-btn active-mode">Liste</button>
-                <button onclick="window.UI.switchUIMode('court')" id="btn-mode-court" class="control-btn">Feld</button>
+    <!-- Voller Name der Teams und des Spiels (die Namen im Stand sind gekuerzt) -->
+    <div id="spiel-info" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="spiel-info-titel">
+        <div class="sheet-panel">
+            <div class="sheet-kopf">
+                <h2 id="spiel-info-titel" class="sheet-titel">Spiel</h2>
+                <button type="button" class="sheet-zu" onclick="window.UI.closeSpielInfo()" aria-label="Schließen">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                         stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
             </div>
+            <dl class="info-liste">
+                <dt>Spiel</dt><dd id="info-spielname">-</dd>
+                <dt>Heim</dt><dd id="info-heim">-</dd>
+                <dt>Gast</dt><dd id="info-gast">-</dd>
+            </dl>
+            <button type="button" class="btn btn-block" onclick="window.UI.spielInfoNamenAendern()">Namen ändern</button>
         </div>
-    </header>
+    </div>
 
-    <main id="app-container" class="layout-classic">
-        
-        <!-- DYNAMIC VIEW AREA -->
-        <div id="dynamic-view-container">
-            <section id="player-list">
-                <h3>Lade Spieler...</h3>
-            </section>
-            <section id="action-panel">
-                <h3>Aktion (Nach Spieler-Wahl)</h3>
-            </section>
+    <!-- Aktion trotz stehender Uhr: Der erste Versuch fragt nach, die Wahl "ohne Uhr" gilt fuer dieses Spiel -->
+    <div id="uhr-hinweis" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="uhr-hinweis-titel">
+        <div class="sheet-panel">
+            <h2 id="uhr-hinweis-titel" class="sheet-titel">Die Uhr läuft noch nicht</h2>
+            <p class="sheet-text">Die Aktion würde bei 00:00 eingetragen. Soll die Uhr jetzt starten?</p>
+            <button type="button" class="btn btn-primary btn-block" onclick="window.UI.uhrHinweisWahl(true)">Uhr starten und eintragen</button>
+            <button type="button" class="btn btn-block" onclick="window.UI.uhrHinweisWahl(false)">Ohne Uhr eintragen</button>
         </div>
+    </div>
 
-        <section id="history-panel">
-            <h3>Verlauf</h3>
-            <div id="history-content">
+    <!-- Zeitkorrektur: laufende Zeit setzen UND die Halbzeitlaenge festlegen -->
+    <div id="time-edit" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="time-edit-titel">
+        <div class="sheet-panel">
+            <div class="sheet-kopf">
+                <h2 id="time-edit-titel" class="sheet-titel">Spielzeit</h2>
+                <button type="button" class="sheet-zu" onclick="window.UI.closeTimeEdit()" aria-label="Schließen">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                         stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                </button>
             </div>
-        </section>
-
-    </main>
-
-    <footer>
-        <p>Gesamt Aktionen: <span id="action-count">0</span></p>
-    </footer>
+            <label class="feld-label" for="time-edit-input">Spielzeit auf</label>
+            <div class="zeit-zeile">
+                <input type="text" id="time-edit-input" class="feld" inputmode="numeric" placeholder="mm:ss" size="5">
+                <button type="button" onclick="window.UI.applyTimeEdit()" class="btn btn-primary">Setzen</button>
+            </div>
+            <label class="feld-label" for="time-edit-halbzeit">Halbzeit dauert</label>
+            <select id="time-edit-halbzeit" class="feld" onchange="window.UI.setHalbzeitLaenge(this.value)">
+                <option value="30">2 × 30 Minuten (Erwachsene)</option>
+                <option value="25">2 × 25 Minuten (A-/B-Jugend)</option>
+                <option value="20">2 × 20 Minuten (C-/D-Jugend)</option>
+                <option value="15">2 × 15 Minuten (E-/F-Jugend)</option>
+                <option value="10">2 × 10 Minuten (Turnier)</option>
+            </select>
+        </div>
+    </div>
 
     <!-- ANMELDUNG: ganzer Bildschirm, kein Overlay ueber dem Spiel -->
     <div id="auth-overlay" class="auth-screen" style="display:none;">
@@ -437,21 +483,21 @@
         </div>
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="vendor/touch-drag.js?v=20261113"></script>
-    <script src="js/config.js?v=20261113"></script>
-    <script src="vendor/supabase.js?v=20261113"></script>
-    <script src="js/api.js?v=20261113"></script>
-    <script src="js/sync.js?v=20261113"></script>
-    <script src="js/wakelock.js?v=20261113"></script>
-    <script src="js/store.js?v=20261113"></script>
-    <script src="js/timer.js?v=20261113"></script>
-    <script src="js/stats.js?v=20261113"></script>
-    <script src="js/report.js?v=20261113"></script>
-    <script src="js/whatsapp.js?v=20261113"></script>
-    <script src="js/tickerui.js?v=20261113"></script>
-    <script src="js/ui.js?v=20261113"></script>
-    <script src="js/start.js?v=20261113"></script>
-    <script src="js/app.js?v=20261113"></script>
+    <script src="vendor/touch-drag.js?v=20261114"></script>
+    <script src="js/config.js?v=20261114"></script>
+    <script src="vendor/supabase.js?v=20261114"></script>
+    <script src="js/api.js?v=20261114"></script>
+    <script src="js/sync.js?v=20261114"></script>
+    <script src="js/wakelock.js?v=20261114"></script>
+    <script src="js/store.js?v=20261114"></script>
+    <script src="js/timer.js?v=20261114"></script>
+    <script src="js/stats.js?v=20261114"></script>
+    <script src="js/report.js?v=20261114"></script>
+    <script src="js/whatsapp.js?v=20261114"></script>
+    <script src="js/tickerui.js?v=20261114"></script>
+    <script src="js/ui.js?v=20261114"></script>
+    <script src="js/start.js?v=20261114"></script>
+    <script src="js/app.js?v=20261114"></script>
 
 </body>
 

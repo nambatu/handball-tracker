@@ -183,19 +183,16 @@ function updateTimerDisplay() {
         zielEl.classList.toggle('is-over', elapsedSeconds() >= halbzeitEndeSekunden());
     }
 
+    // Eine Uhrtaste fuer beides: "Uhr starten" solange sie steht (dann ist sie
+    // die Hauptaktion in Blau), "Pause" waehrend sie laeuft.
     const btn = document.getElementById("timer-btn");
-    if (btn) btn.innerText = isRunning() ? "Uhr pausieren" : "Uhr starten";
-
-    const endBtn = document.getElementById("half-end-btn");
-    if (endBtn) {
-        if (clock.half === 2) {
-            endBtn.innerText = "Spiel beenden";
-            endBtn.classList.add('end-game');
-        } else {
-            endBtn.innerText = "Halbzeit";
-            endBtn.classList.remove('end-game');
-        }
+    if (btn) {
+        btn.textContent = isRunning() ? "Pause" : "Uhr starten";
+        btn.classList.toggle('primaer', !isRunning());
     }
+
+    const hzEl = document.getElementById("half-indicator");
+    if (hzEl) hzEl.textContent = clock.half + ". Hz";
 }
 
 function startDisplayLoop() {
@@ -288,19 +285,23 @@ function setGameTime(seconds) {
     if (window.UI) window.UI.updateUI();
 }
 
-function toggleEndHalfOrGame() {
+/**
+ * Erste Halbzeit beenden. Die Uhr haelt an, die zweite Halbzeit beginnt mit
+ * dem naechsten Druck auf "Uhr starten". Das Spiel selbst beendet nur
+ * endGame() - ueber das Menue, bewusst nicht mehr als Knopf in der Kopfzeile,
+ * wo er mit der Uhr verwechselt werden konnte.
+ */
+function halbzeitBeenden() {
+    if (clock.half !== 1) return;
     if (isRunning()) toggleGameTimer();
 
-    if (clock.half === 1) {
-        if (confirm("1. Halbzeit beenden?")) {
-            clock.half = 2;
-            halbzeitHinweisFuer = 0;
-        }
-    } else {
-        endGame();
+    if (confirm("1. Halbzeit beenden?")) {
+        clock.half = 2;
+        halbzeitHinweisFuer = 0;
     }
     saveGameState();
 
+    updateTimerDisplay();
     if (window.UI) window.UI.updateUI();
 }
 
@@ -401,6 +402,7 @@ async function endGame() {
     saveGameState();
 
     if (window.UI) {
+        window.UI.vergissUhrWahl();
         window.UI.updateActionCount();
         window.UI.renderHistory();
         window.UI.updateUI();
@@ -459,7 +461,7 @@ window.Timer = {
     updateTimerDisplay,
     toggleGameTimer,
     loadGameState,
-    toggleEndHalfOrGame,
+    halbzeitBeenden,
     endGame,
     getTimerState,
     setGameTime,

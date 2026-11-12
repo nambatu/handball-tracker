@@ -69,94 +69,10 @@ body {
 }
 
 /* =========================================
-   2. HEADER & SCOREBOARD
+   2. KNOEPFE DER OVERLAYS
    ========================================= */
-header, footer {
-    background: var(--header-bg);
-    border-bottom: 1px solid var(--border-color);
-    padding: 12px 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 15px;
-    z-index: 100;
-}
-
-footer {
-    border-top: 1px solid var(--border-color);
-    border-bottom: none;
-}
-
-#game-info {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-}
-
-.scoreboard {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    background: rgba(0, 0, 0, 0.3);
-    padding: 8px 20px;
-    border-radius: 12px;
-    margin-bottom: 5px;
-    border: 1px solid var(--border-color);
-}
-
-#team-name, #guest-name {
-    font-weight: 700;
-    font-size: 1.2rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
-#guest-name { color: var(--text-muted); }
-
-.score-container {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.score-number {
-    font-size: 2.2rem;
-    font-weight: 800;
-    color: var(--text-color);
-    background: var(--raised-bg);
-    border: 1px solid var(--border-color);
-    padding: 4px 16px;
-    border-radius: var(--radius);
-    min-width: 55px;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-}
-
-.timer-display {
-    font-size: 1rem;
-    color: var(--text-muted);
-    font-weight: 600;
-}
-
-#game-timer {
-    color: var(--accent-color);
-    font-variant-numeric: tabular-nums;
-}
-
-/* Header Buttons */
-#controls {
-    display: flex;
-    gap: 10px;
-    /* Ohne Umbruch werden die Buttons bei mittlerer Fensterbreite in eine
-       Zeile gezwaengt und stehen rechts aus dem Bild heraus - Logout und
-       die Ansichts-Umschaltung waren dort nicht mehr erreichbar, und die
-       ganze Seite liess sich seitlich schieben. */
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    min-width: 0;
-}
-
+/* Die Spielansicht hat eigene Knoepfe (Abschnitt 21). .control-btn steckt
+   noch in der Werkzeugleiste des Spielberichts. */
 .control-btn {
     padding: 10px 16px;
     min-height: var(--touch);
@@ -169,156 +85,14 @@ footer {
     border-radius: var(--radius);
     transition: background 0.15s ease;
 }
-
 .control-btn:hover { background: #262c35; }
-
 .control-btn:active { background: #2c333d; }
 
-/* Die eine Hauptaktion im Spielkopf: die Uhr */
-.control-btn.primaer {
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
-    color: #fff;
-}
-.control-btn.primaer:hover { background: var(--accent-hover); }
-/* Zurueck zur Startseite: Text statt Knopf-Optik */
-.control-btn.zur-startseite {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--abstand-2);
-    background: transparent;
-}
-
-/* =========================================
-   3. HAUPTLAYOUT (3 SPALTEN)
-   ========================================= */
-#app-container {
-    display: flex;
-    flex: 1 1 auto;
-    padding: 15px;
-    gap: 15px;
-    /* Frueher: height: calc(100vh - 150px). Die 150 px waren geraten und
-       stimmten nie - der Kopfbereich ist je nach Fensterbreite 130 bis
-       280 px hoch, dazu kommt die Fusszeile. War die Summe groesser,
-       schob sich der untere Teil (Bank, Fusszeile) aus dem Bild, und
-       body{overflow:hidden} machte ihn unerreichbar: nichts liess sich
-       scrollen. Jetzt nimmt der Bereich einfach, was zwischen Kopf und
-       Fuss uebrig ist. */
-    min-height: 0;
-    overflow-y: auto;
-}
-
-/* Ohne min-height:0 weigert sich ein Flex-Kind, unter seine Inhaltshoehe
-   zu schrumpfen - dann hilft auch kein overflow weiter oben. */
-#dynamic-view-container { min-height: 0; }
-
-section {
-    background: var(--panel-bg);
-    border-radius: var(--radius);
-    border: 1px solid var(--border-color);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-section h3 {
-    margin: 0;
-    padding: 15px;
-    background: rgba(0,0,0,0.2);
-    font-size: 1.05rem;
-    font-weight: 700;
-    border-bottom: 1px solid var(--border-color);
-    text-align: center;
-    letter-spacing: 0.5px;
-    color: var(--text-muted);
-}
-
-#player-list { flex: 1.2; overflow-y: auto; }
-#action-panel { flex: 2.5; padding: 15px; display: flex; flex-direction: row; flex-wrap: wrap; align-content: flex-start; gap: 12px; overflow-y: auto; }
-#history-panel { flex: 1; overflow-y: auto; }
-
 /* Custom Scrollbar */
-::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
-
-/* =========================================
-   4. BUTTONS & UI ELEMENTE
-   ========================================= */
-
-/* Spieler Buttons */
-.player-button {
-    padding: 14px 12px;
-    margin: 8px 12px;
-    background-color: var(--btn-neutral);
-    border: 1px solid var(--border-color);
-    border-radius: 10px;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    color: var(--text-color);
-}
-
-.player-button:hover { 
-    background-color: rgba(255,255,255,0.1); 
-    transform: translateX(4px);
-}
-
-.player-button.selected-player {
-    background: var(--accent-strong);
-    border: 1px solid transparent;
-    transform: translateX(6px);
-}
-
-.player-info { font-weight: 600; font-size: 1.05rem; }
-.player-number { display: inline-block; width: 35px; color: rgba(255,255,255,0.6); font-family: monospace; }
-.player-button.selected-player .player-number { color: rgba(255,255,255,0.9); }
-
-.player-stats span { font-size: 0.9em; margin-left: 6px; font-weight: 700; background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;}
-.stat-item.green { color: var(--success-color); }
-.stat-item.red { color: var(--danger-color); }
-.stat-item.yellow { color: var(--highlight-color); }
-
-/* Aktions Buttons */
-.action-button {
-    flex: 1 0 45%;
-    min-height: 90px;
-    font-size: 1.15rem;
-    font-weight: 700;
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    backdrop-filter: blur(5px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.action-button:hover { filter: brightness(1.2); transform: translateY(-2px); }
-.action-button:active { transform: scale(0.97); }
-
-.action-button.neutral { background: var(--btn-neutral); color: var(--text-color); }
-.action-button.green { background: var(--btn-green); color: #5cc79a; border-color: rgba(63, 178, 127, 0.4); }
-.action-button.red { background: var(--btn-red); color: #ee7a7e; border-color: rgba(229, 72, 77, 0.4); }
-.action-button.yellow { background: var(--btn-yellow); color: #e8b04f; border-color: rgba(226, 163, 54, 0.4); }
-.action-button.sub-blue { background: var(--btn-blue); color: #8db8fb; border-color: rgba(59, 130, 246, 0.4); }
-
-.action-button.selected-action {
-    border: 2px solid var(--highlight-color);
-    transform: scale(1.02);
-}
-
-.action-button.back-button {
-    flex-basis: 100%;
-    background: rgba(255,255,255,0.1);
-    color: var(--text-color);
-    min-height: 60px;
-    margin-bottom: 5px;
-}
 
 /* =========================================
    5. VERLAUF (HISTORY)
@@ -445,352 +219,13 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .end-game { background: var(--danger-color) !important; color: white !important; border: none !important; }
 
 /* =========================================
-   8. RESPONSIVE
+   8. RESPONSIVE (OVERLAYS)
    ========================================= */
-@media (max-width: 1024px) {
-    #app-container { flex-wrap: wrap; overflow-y: auto; }
-    /* Kein zusaetzlicher Platz fuer das Aktions-Sheet in diesem Bereich:
-       #app-container ist ein mehrzeiliger Flex-Container mit
-       align-content: stretch. Jedes padding und jede margin darin nimmt
-       der ersten Zeile - und damit dem Spielfeld - Hoehe weg, das Feld
-       wuerde beim Auswaehlen wieder springen. Das Feld liegt hier ohnehin
-       oberhalb des Sheets. */
-    #player-list { flex: 1 1 40%; height: 50vh; }
-    #action-panel { flex: 1 1 55%; height: 50vh; }
-    #history-panel { flex: 1 1 100%; height: 300px; order: 3; }
-}
-
 @media (max-width: 768px) {
-    /* Auf dem Handy scrollt die ganze Seite, nicht nur der Mittelteil -
-       deshalb hier die feste Bildschirmhoehe wieder aufheben. */
-    body { height: auto; min-height: 100vh; overflow-y: auto; }
-    #app-container { flex-direction: column; height: auto; overflow: visible; padding: 10px; }
-    /* Fester Platz unter dem Feld, damit man es ueber das Aktions-Sheet
-       schieben kann.
-       WICHTIG: der Wert haengt bewusst NICHT an --cas-height. Wuerde er mit
-       dem Sheet auftauchen und verschwinden, waere die Seite beim Schliessen
-       schlagartig um die Sheet-Hoehe kuerzer - der Browser kappt die
-       Scrollposition dann auf das neue Maximum, und nach jeder Aktion rutscht
-       die Ansicht genau um eine Sheet-Hoehe nach oben. Konstant reserviert
-       bleibt die Seitenhoehe gleich und die Scrollposition damit erreichbar.
-       52vh entspricht der max-height des Sheets. */
-    #app-container.layout-court { padding-bottom: max(300px, 52vh); }
-    header { flex-direction: column; gap: 10px; padding: 10px; }
-    .scoreboard { width: 100%; justify-content: center; }
-    #controls { width: 100%; flex-wrap: wrap; }
-    .control-btn { flex: 1 1 calc(33% - 10px); text-align: center; }
-    #player-list { height: 250px; order: 1; }
-    #action-panel { order: 2; padding-bottom: 30px; }
-    #history-panel { display: none; }
+    /* Auf dem Handy fuellt ein Overlay den ganzen Bildschirm */
     .overlay-content { width: 100%; height: 100%; border-radius: 0; max-height: 100vh; border: none; }
 }
 
-/* =========================================
-   VIEW TOGGLE CONTROLS
-========================================= */
-.view-toggle-container {
-    display: flex;
-    gap: 5px;
-    margin-left: auto;
-    background: rgba(0, 0, 0, 0.4);
-    padding: 4px;
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-}
-.view-toggle-container .control-btn {
-    padding: 8px 12px;
-    font-size: 0.9em;
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-}
-.view-toggle-container .control-btn.active-mode {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text-color);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-
-/* =========================================
-   DYNAMIC VIEW CONTAINER
-========================================= */
-#dynamic-view-container {
-    flex: 1;
-    display: flex;
-    gap: 20px;
-    overflow: hidden;
-}
-
-/* =========================================
-   COURT VIEW (TABLET)
-========================================= */
-.layout-court #dynamic-view-container {
-    flex-direction: column;
-    position: relative;
-    background: transparent;
-    border: none;
-    /* Senkrecht scrollbar statt abschneidend: passen Feld und Bank auf
-       einem flachen Fenster nicht zusammen, soll man an die Bank kommen -
-       vorher war sie einfach weggeschnitten. */
-    overflow-x: hidden;
-    overflow-y: auto;
-    /* Der Grundwert 20px stammt aus der nebeneinanderliegenden Classic-
-       Ansicht. Untereinander kam er ZUSAETZLICH zu den margins der
-       Bereiche und hat 40px verschluckt - genug, dass die letzte
-       Bankreihe angeschnitten war. */
-    gap: 10px;
-}
-
-.court-opponent-area {
-    padding: 10px;
-    background: rgba(0,0,0,0.3);
-    border-radius: 8px;
-    /* Abstand kommt vom gap des Containers, nicht zusaetzlich von hier. */
-    display: flex;
-    justify-content: center;
-}
-
-.court-opponent-btn {
-    width: 100%;
-    max-width: 300px;
-    padding: 15px;
-    background: rgba(229, 72, 77, 0.2);
-    border: 1px solid var(--danger-color);
-    color: white;
-    border-radius: 8px;
-    font-size: 1.2rem;
-    font-weight: bold;
-    cursor: pointer;
-    text-align: center;
-}
-
-.court-active-area {
-    /* Das Feld ist frueher unbegrenzt mit dem Fenster mitgewachsen: auf einem
-       grossen Bildschirm wurde daraus ein 1200 px hohes, fast leeres Rechteck,
-       in dem die Spieler weit auseinander und teilweise unterhalb des
-       sichtbaren Bereichs lagen. Die Positionen sind in Prozent, also ist die
-       Feldgroesse das, was zaehlt. Deckel drauf und mittig. */
-    flex: 1 1 auto;
-    position: relative;
-    width: 100%;
-    max-width: 820px;
-    margin: 0 auto;
-    background: var(--panel-bg);
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
-    overflow: hidden;
-    background-image: radial-gradient(ellipse 45% 48% at 50% 100%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.04) 100%, transparent 100%);
-    /* Auf flachen Fenstern darf das Feld weiter schrumpfen - sonst
-       nimmt es der Bank den Platz weg. Die Spielerpositionen sind in
-       Prozent, das Feld bleibt also in jeder Groesse benutzbar. */
-    min-height: clamp(260px, 38vh, 320px);
-    max-height: 620px;
-}
-
-.court-drop-zone {
-    position: absolute;
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    border: 2px dashed rgba(255, 255, 255, 0.08);
-    transform: translate(-50%, 50%);
-    /* Die Zone ist Untergrund. Lag sie ueber dem Spieler, fing sie jeden
-       Klick ab - der Spieler war nicht mehr antippbar. */
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s, border-color 0.2s, opacity 0.2s;
-}
-
-.dz-label {
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    color: rgba(255, 255, 255, 0.22);
-}
-
-/* Wo jemand steht, verschwindet der Platzhalter komplett */
-.court-drop-zone.is-occupied { border-color: transparent; }
-.court-drop-zone.is-occupied .dz-label { display: none; }
-
-/* Beim Ziehen treten alle Plaetze deutlich hervor */
-body.is-dragging-player .court-drop-zone {
-    border-color: rgba(255, 255, 255, 0.3);
-}
-body.is-dragging-player .court-drop-zone .dz-label {
-    display: block;
-    color: rgba(255, 255, 255, 0.5);
-}
-.court-drop-zone.drag-over {
-    background: rgba(255,255,255,0.1);
-    border-color: white;
-}
-
-.court-bench-area {
-    /* Die Bank wird NICHT geschrumpft. Sonst bekommt sie einen eigenen
-       kleinen Scrollbalken und die hinteren Spieler verschwinden wieder -
-       genau das Problem, das der Umbruch beseitigen sollte. */
-    flex: 0 0 auto;
-    padding: 10px;
-    background: rgba(0,0,0,0.3);
-    border-radius: 8px;
-    display: flex;
-    /* Umbruch statt seitlichem Scrollen: bei 9 oder 10 Auswechselspielern
-       musste man vorher blind wischen, um die hinteren zu sehen. Waagrechtes
-       Wischen kollidiert ausserdem mit dem Zurueck-Geste-Rand des Browsers
-       und funktioniert deshalb auf dem Handy oft gar nicht. */
-    flex-wrap: wrap;
-    align-content: flex-start;
-    gap: 10px;
-    min-height: 85px;
-    /* Kein Deckel auf dem Handy: dort scrollt die ganze Seite, ein
-       zweiter Scrollbereich INNERHALB der Bank waere genau das
-       fummelige Gescrolle, das der Umbruch abschaffen sollte. */
-    overflow-y: auto;
-}
-@media (min-width: 769px) {
-    /* Auf dem Desktop hat der Mittelteil eine feste Hoehe - hier braucht
-       die Bank einen Deckel, damit sie dem Feld nicht alles wegnimmt. */
-    .court-bench-area { max-height: 40vh; }
-}
-.court-bench-area.drag-over {
-    background: rgba(255,255,255,0.1);
-}
-
-.court-player-node {
-    width: 64px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
-    background: none;
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    cursor: grab;
-    /* MUSS ueber der Drop-Zone (z-index 1) liegen, sonst fangen die
-       gestrichelten Kreise saemtliche Klicks ab. */
-    z-index: 2;
-}
-.court-player-node:active { cursor: grabbing; }
-.court-player-node span.name {
-    font-size: 0.6rem;
-    color: var(--text-muted);
-    margin-top: 2px;
-}
-.court-player-node:hover, .court-player-node.selected {
-    /* Hervorhebung sitzt am Kreis (.player-badge), nicht am Container -
-       sonst liegt ein rechteckiger Schein hinter dem runden Spieler. */
-    box-shadow: none;
-}
-.court-player-node.dragging { opacity: 0.5; }
-body.is-dragging-player .court-player-node { pointer-events: none; }
-
-/* Court Absolute Positions */
-.pos-TW { position: absolute; bottom: 15%; left: 50%; transform: translate(-50%, 50%); }
-.pos-LA { position: absolute; bottom: 26%; left: 10%; transform: translate(-50%, 50%); }
-.pos-RA { position: absolute; bottom: 26%; left: 90%; transform: translate(-50%, 50%); }
-.pos-RL { position: absolute; bottom: 52%; left: 25%; transform: translate(-50%, 50%); }
-.pos-RR { position: absolute; bottom: 52%; left: 75%; transform: translate(-50%, 50%); }
-.pos-RM { position: absolute; bottom: 70%; left: 50%; transform: translate(-50%, 50%); }
-.pos-M  { position: absolute; bottom: 70%; left: 50%; transform: translate(-50%, 50%); }
-.pos-K  { position: absolute; bottom: 48%; left: 50%; transform: translate(-50%, 50%); }
-.pos-KM { position: absolute; bottom: 48%; left: 50%; transform: translate(-50%, 50%); }
-
-/* Bench nodes */
-.court-bench-area .court-player-node {
-    position: static;
-    transform: none;
-    flex-shrink: 0;
-}
-
-/* .court-action-menu ist entfallen - das Aktionsmenue ist jetzt das
-   Bottom-Sheet .court-action-sheet ganz unten in dieser Datei. */
-.court-action-btn {
-    padding: 12px;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    color: white;
-}
-.court-action-btn.green, .thumb-action-btn.green { background: rgba(63, 178, 127, 0.2); border: 1px solid var(--success-color); }
-.court-action-btn.red, .thumb-action-btn.red { background: rgba(229, 72, 77, 0.2); border: 1px solid var(--danger-color); }
-.court-action-btn.yellow, .thumb-action-btn.yellow { background: rgba(226, 163, 54, 0.2); border: 1px solid var(--warning-color); }
-.court-action-btn.sub-blue, .thumb-action-btn.sub-blue { background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; }
-/* Navigation ("Zurueck") statt Aktion. Hatte bisher gar keine eigene Regel
-   und erbte nur die 5%-Weiss-Fuellung von .thumb-btn - im Hallenlicht war
-   das praktisch unsichtbar. Bewusst deckend grau: klar als Button lesbar,
-   aber ohne wie eine weitere farbige Aktion auszusehen. */
-.court-action-btn.neutral, .thumb-action-btn.neutral {
-    background: #2a313b;            /* Text #e8ebef darauf = 7.3:1 */
-    border: 1px solid #4a5463;
-    color: #e8ebef;
-}
-.court-action-btn.neutral:active, .thumb-action-btn.neutral:active {
-    background: #242a33;
-}
-
-/* =========================================
-   THUMB VIEW (MOBILE)
-========================================= */
-.layout-thumb #dynamic-view-container {
-    flex-direction: column;
-    gap: 0;
-}
-
-.thumb-top-area {
-    flex: 1;
-    overflow-y: auto;
-    padding: 15px;
-    background: rgba(0,0,0,0.2);
-    border-radius: 12px 12px 0 0;
-    border: 1px solid var(--border-color);
-    border-bottom: none;
-}
-
-.thumb-grid-area {
-    height: 50vh;
-    background: var(--panel-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 0 0 12px 12px;
-    padding: 10px;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-template-rows: repeat(auto-fit, minmax(80px, 1fr));
-    gap: 8px;
-    overflow-y: auto;
-}
-
-.thumb-btn {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px;
-    color: white;
-    font-size: 1.5rem;
-    font-weight: 700;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-}
-.thumb-btn span.name {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    margin-top: 5px;
-    font-weight: normal;
-}
-.thumb-btn:active {
-    background: var(--accent-color);
-}
-.thumb-action-btn {
-    font-size: 1rem;
-    grid-column: span 1;
-}
-.thumb-action-btn.wide {
-    grid-column: span 3;
-}
 /* =========================================
    12. SYNC-STATUS, TOASTS & ZEITKORREKTUR
    ========================================= */
@@ -847,58 +282,19 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 }
 
 /* Die Spielzeit ist jetzt ein Button (antippen = korrigieren) */
-.timer-value {
-    background: transparent;
-    border: 1px dashed transparent;
-    color: inherit;
-    font: inherit;
-    font-variant-numeric: tabular-nums;
-    padding: 2px 6px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease;
-}
 
-.timer-value:hover,
-.timer-value:focus-visible {
-    border-color: var(--border-color);
-    background: rgba(255, 255, 255, 0.06);
-    outline: none;
-}
 
-.time-edit {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    padding: 8px 10px;
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    font-size: 0.85rem;
-    flex-wrap: wrap;
-}
 
-.time-edit input {
-    width: 5.5em;
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    padding: 6px 8px;
-}
 
-.time-edit .add-btn,
-.time-edit .cancel-btn {
-    padding: 6px 12px;
-    font-size: 0.85rem;
-}
 
 /* --- Toasts --- */
 #toast-container {
     position: fixed;
-    left: 50%;
-    /* --cas-height setzt das Aktions-Sheet. Ohne den Versatz legen sich
-       die Toasts genau ueber die Aktionsbuttons. */
-    bottom: calc(90px + var(--cas-height, 0px));
+    /* --cas-height / --cas-width setzt das Aktions-Sheet (unten bzw. als
+       Seitenleiste). Ohne den Versatz legen sich die Toasts genau ueber die
+       Aktionsbuttons. */
+    left: calc((100vw - var(--cas-width, 0px)) / 2);
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px) + var(--cas-height, 0px));
     transform: translateX(-50%);
     z-index: 10000;
     display: flex;
@@ -906,7 +302,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     align-items: center;
     gap: 8px;
     pointer-events: none;
-    width: min(92vw, 460px);
+    width: min(calc(100vw - 24px - var(--cas-width, 0px)), 460px);
 }
 
 .toast {
@@ -949,6 +345,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     border: 1px solid var(--border-color);
     color: var(--text-color);
     padding: 6px 12px;
+    min-height: 44px;
     border-radius: 6px;
     font-size: 0.85rem;
     font-weight: 600;
@@ -966,13 +363,14 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     font-size: 1.25rem;
     line-height: 1;
     padding: 0 2px;
+    min-width: 44px;
+    min-height: 44px;
     cursor: pointer;
 }
 
 .toast-close:hover { color: var(--text-color); }
 
 @media (max-width: 600px) {
-    #toast-container { bottom: calc(76px + var(--cas-height, 0px)); }
     .sync-badge { margin-left: 8px; font-size: 0.72rem; padding: 2px 8px; }
     .sync-badge .sync-text { display: none; }
 }
@@ -987,37 +385,11 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
    ========================================= */
 
 /* Fehlende Farbklassen fuer die neuen Aktionen */
-.action-button.orange { background: rgba(226, 163, 54, 0.2); color: #e8b04f; border-color: rgba(226, 163, 54, 0.45); }
-.court-action-btn.orange, .thumb-action-btn.orange { background: rgba(226, 163, 54, 0.2); border: 1px solid var(--warning-color); }
 
 /* --- Torwart-Anzeige im Header --- */
-.gk-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    margin-left: 10px;
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: rgba(226, 163, 54, 0.14);
-    border: 1px solid rgba(226, 163, 54, 0.35);
-    color: #e8b04f;
-    font-size: 0.78rem;
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.15s ease;
-}
 
-.gk-badge:hover { background: rgba(226, 163, 54, 0.26); }
 
-.gk-badge.gk-missing {
-    background: rgba(229, 72, 77, 0.15);
-    border-color: rgba(229, 72, 77, 0.4);
-    color: #f2a3a6;
-}
 
-.gk-caret { opacity: 0.65; font-size: 0.7em; }
 
 .gk-explain {
     font-size: 0.88rem;
@@ -1163,7 +535,6 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 }
 
 @media (max-width: 600px) {
-    .gk-badge { margin-left: 6px; font-size: 0.72rem; padding: 2px 8px; }
     .stats-table { font-size: 0.78rem; }
     .stats-table th, .stats-table td { padding: 6px 7px; }
     .stats-table .col-name { min-width: 110px; }
@@ -1248,48 +619,24 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .player-badge.is-suspended .badge-photo,
 .player-badge.is-suspended .badge-number { filter: grayscale(100%); opacity: 0.55; }
 
-/* Auswahl-Zustand sitzt jetzt am Kreis, nicht am Container */
-.court-player-node.selected .player-badge,
-.court-player-node:hover .player-badge {
+/* Auswahl-Zustand sitzt am Kreis, nicht am Container. :hover nur dort, wo es
+   ein echtes Hover gibt - auf dem Handy bliebe der zuletzt getippte Kreis sonst
+   dauerhaft "gewaehlt" markiert. */
+.court-player-node.selected .player-badge {
     border-color: var(--accent-color);
     box-shadow: 0 0 12px rgba(59, 130, 246, 0.55);
 }
-.court-player-node .name {
-    font-size: 0.62rem;
-    color: var(--text-muted);
-    max-width: 64px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: center;
+@media (hover: hover) {
+    .court-player-node:hover .player-badge {
+        border-color: var(--accent-color);
+        box-shadow: 0 0 12px rgba(59, 130, 246, 0.55);
+    }
 }
-.thumb-btn .name { margin-top: 6px; }
 
 /* =========================================
    15. TEAMNAMEN
    ========================================= */
 
-.team-name-btn {
-    background: transparent;
-    border: 1px dashed transparent;
-    color: inherit;
-    font: inherit;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    padding: 3px 8px;
-    border-radius: 6px;
-    cursor: pointer;
-    max-width: 12ch;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.team-name-btn:hover,
-.team-name-btn:focus-visible {
-    border-color: var(--border-color);
-    background: rgba(255, 255, 255, 0.06);
-    outline: none;
-}
 
 .field-label {
     font-size: 0.82rem;
@@ -1619,126 +966,6 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 
 
 /* =========================================
-   19. TOUCH-ZIELE IM KOPFBEREICH
-   ========================================= */
-/* Torwart-Knopf, Spielzeit und Sync-Anzeige sassen in einer 20 px hohen
-   Zeile. Auf dem Handy trifft man das mit dem Finger schlicht nicht -
-   der Torwart-Wechsel wirkte dadurch "kaputt", obwohl er funktionierte.
-   Empfehlung fuer Touch-Ziele sind ~44 px. */
-
-.timer-display {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.gk-badge,
-.timer-value {
-    min-height: 34px;
-    padding: 6px 12px;
-}
-
-@media (max-width: 768px) {
-    .timer-display {
-        width: 100%;
-        gap: 8px;
-        row-gap: 10px;
-    }
-    .gk-badge,
-    .timer-value {
-        min-height: 44px;
-        padding: 10px 14px;
-        font-size: 0.9rem;
-    }
-    .gk-badge { flex: 0 0 auto; }
-    .sync-badge { min-height: 44px; padding: 0 12px; }
-    /* Antippbares wird nicht vom Doppeltipp-Zoom verzoegert */
-    .gk-badge, .timer-value, .team-name-btn, .control-btn,
-    .thumb-btn, .history-entry { touch-action: manipulation; }
-}
-
-/* =========================================
-   AKTIONS-SHEET DER COURT-ANSICHT
-   =========================================
-   Haengt am <body>, nicht im Spielfeld-Container. Zwei Gruende:
-   1. Als Kind im Flex-Container hat es dem Feld Hoehe abgezogen - alle
-      Spieler sind bei jeder Auswahl gesprungen (Positionen sind in %).
-   2. Der Container hat overflow:hidden; auf dem Handy lag das Menue danach
-      unterhalb des sichtbaren Bereichs und war schlicht nicht da.
-   Fixed am unteren Rand loest beides und ist ausserdem die Stelle, an der
-   der Daumen ohnehin liegt. */
-.court-action-sheet {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 300;
-    width: auto;
-    max-width: 760px;
-    margin: 0 auto;
-    max-height: 52vh;
-    overflow-y: auto;
-    box-sizing: border-box;
-    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
-    background: rgba(15, 18, 22, 0.97);
-    border: 1px solid var(--border-color);
-    border-bottom: none;
-    border-radius: 16px 16px 0 0;
-    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(10px);
-    animation: cas-in 0.14s ease-out;
-}
-@keyframes cas-in {
-    from { transform: translateY(14px); opacity: 0; }
-    to   { transform: translateY(0);    opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-    .court-action-sheet { animation: none; }
-}
-
-.cas-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-.cas-title {
-    font-weight: 700;
-    font-size: 0.95rem;
-    color: #e8ebef;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.cas-close {
-    flex: 0 0 auto;
-    min-width: 44px;
-    min-height: 44px;
-    border-radius: 10px;
-    background: #2a313b;
-    border: 1px solid #4a5463;
-    color: #e8ebef;
-    font-size: 1rem;
-    line-height: 1;
-    cursor: pointer;
-    touch-action: manipulation;
-}
-.cas-close:active { background: #242a33; }
-
-.cas-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 8px;
-}
-.court-action-sheet .court-action-btn {
-    min-height: 52px;
-    font-size: 0.95rem;
-    touch-action: manipulation;
-}
-
-/* =========================================
    SPIELERVERWALTUNG - NEUEN SPIELER ANLEGEN
    =========================================
    Auf dem Handy stapeln sich Flex-Kinder ohne flex-basis zu je einer
@@ -1829,32 +1056,8 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     .archive-btns button { flex: 1 1 auto; min-height: 44px; }
 }
 
-/* Ziel der laufenden Halbzeit neben der Uhr */
-.timer-target {
-    font-variant-numeric: tabular-nums;
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    margin-left: 2px;
-}
-.timer-target.is-over { color: var(--warning-color); font-weight: 600; }
-
 .settings-box .setting-row + .setting-row { margin-top: 12px; }
 .settings-box select { flex: 1 1 200px; min-width: 0; }
-
-/* Zeitkorrektur: zwei Zeilen (laufende Zeit, Halbzeitlänge) */
-.time-edit { flex-direction: column; align-items: stretch; gap: 10px; }
-.time-edit-zeile {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-.time-edit-zeile label { font-size: 0.85rem; color: var(--text-muted); flex: 0 0 auto; }
-.time-edit-zeile select { flex: 1 1 200px; min-width: 0; }
-@media (max-width: 768px) {
-    .time-edit-zeile button { flex: 1 1 auto; min-height: 44px; }
-    .time-edit-zeile select { flex: 1 1 100%; min-height: 44px; }
-}
 
 /* Kaderliste: der Gegner-Eintrag ist kein normaler Spieler */
 .gast-marke {
@@ -1884,16 +1087,6 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
    Preis: ein Wisch, der auf einem Spieler beginnt, scrollt die Seite
    nicht mehr. Daneben angesetzt scrollt sie wie gewohnt. */
 .court-player-node { touch-action: none; }
-
-/* Ziel der Halbzeit: gleiche Schrift und Groesse wie die Uhr daneben,
-   nur ruhiger in der Farbe - sonst sieht die Zeile zusammengestueckelt aus. */
-.timer-target {
-    font: inherit;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-muted);
-    margin-left: 2px;
-}
-.timer-target.is-over { color: var(--warning-color); font-weight: 600; }
 
 /* ===================================================================
    TICKER
@@ -2130,9 +1323,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 
 /* Welcher Bereich gerade zu sehen ist, bestimmt allein die Klasse am
    <body> (gesetzt von window.Start.ansicht in js/start.js). */
-body:not(.ansicht-spiel) header,
-body:not(.ansicht-spiel) #app-container,
-body:not(.ansicht-spiel) footer { display: none !important; }
+body:not(.ansicht-spiel) #spiel-view { display: none !important; }
 
 .btn {
     display: inline-flex;
@@ -2429,10 +1620,6 @@ body.ansicht-start .start-screen {
     gap: var(--abstand-2) var(--abstand-6);
 }
 
-/* ---------- Kopfzeile des Spiels, ruhiger ---------- */
-header { align-items: center; }
-.control-btn.zur-startseite { padding-left: var(--abstand-2); }
-
 /* Sync- und Ticker-Zustand: grauer Rand, Farbe nur im Punkt */
 .sync-badge,
 .sync-badge.sync-ok, .sync-badge.sync-pending,
@@ -2464,9 +1651,6 @@ header { align-items: center; }
 @keyframes punkt-puls { 50% { opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { .sync-pending::before { animation: none; } }
 
-@media (max-width: 768px) {
-    .control-btn.zur-startseite { align-self: flex-start; flex: 0 0 auto; }
-}
 
 /* Zwei Felder nebeneinander nur, wo sie nicht beschnitten werden */
 @media (max-width: 480px) {

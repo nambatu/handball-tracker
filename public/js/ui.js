@@ -5,64 +5,43 @@
 let selectedPlayerId = null;
 let selectedPrimaryAction = null;
 let selectedPrimaryActionCategory = null;
-let currentSort = 'nummer';
 
 let tempActionData = null;
 let uhrHinweisGezeigt = false;
 
-const historyPanelElement = document.getElementById('history-panel');
+// "Ohne Uhr eintragen" gilt fuer das laufende Spiel und wird bewusst NICHT
+// gespeichert: nach einem Neuladen oder einem neuen Spiel fragt die App wieder.
+let ohneUhrGewaehlt = false;
+// Die Aktion, die auf die Antwort im Uhr-Hinweis wartet
+let wartendeAktion = null;
 
-// Die Classic-Ansicht ist aus dem Umschalter entfernt (der Code bleibt aber
-// liegen). Wer sie gespeichert hatte, landet automatisch auf Mobile.
-const HIDDEN_MODES = ['classic'];
-let storedMode = localStorage.getItem('UI_MODE') || 'thumb';
-if (HIDDEN_MODES.indexOf(storedMode) !== -1) {
-    storedMode = 'thumb';
-    try { localStorage.setItem('UI_MODE', storedMode); } catch (e) { /* egal */ }
-}
-window.UI_MODE = storedMode;
-
-function switchUIMode(mode) {
-    window.UI_MODE = mode;
-    localStorage.setItem('UI_MODE', mode);
-    
-    document.querySelectorAll('.view-toggle-container .control-btn').forEach(btn => btn.classList.remove('active-mode'));
-    const btn = document.getElementById('btn-mode-' + mode);
-    if(btn) btn.classList.add('active-mode');
-    
-    const container = document.getElementById('app-container');
-    if(container) container.className = 'layout-' + mode;
-    
-    selectedPlayerId = null;
-    selectedPrimaryAction = null;
-    selectedPrimaryActionCategory = null;
-    
-    updateUI();
-}
+// Frueher gab es zwei Ansichten (Liste und Feld), gemerkt in UI_MODE. Es gibt nur
+// noch das Feld; ein alter Wert im Browser wird beim Start einmal aufgeraeumt.
+try { localStorage.removeItem('UI_MODE'); } catch (e) { /* egal */ }
 
 /**
  * Neuzeichnen, ohne die Scrollposition zu verlieren.
  *
  * Beim Neuaufbau ist der View-Container kurz leer. Die Seite wird dadurch
- * schlagartig kuerzer, der Browser kappt die Scrollposition auf 0 - und nach
- * jeder erfassten Aktion stand man wieder ganz oben und musste sich zum Feld
- * zurueckscrollen. Deshalb Position merken und direkt wieder setzen.
+ * schlagartig kuerzer, der Browser kappt die Scrollposition auf 0. Seit die
+ * Spielansicht nicht mehr scrollt, ist das fast nur noch Vorsicht - die
+ * Bank (waagrecht scrollbar) soll ihre Position aber behalten, sonst springt
+ * sie nach jeder Aktion zurueck an den Anfang.
  */
 function mitScrollposition(fn) {
-    const app = document.getElementById('app-container');
-    const y = window.scrollY || window.pageYOffset || 0;
-    const appTop = app ? app.scrollTop : 0;
+    const bankAlt = document.querySelector('.court-bench-area');
+    const bankX = bankAlt ? bankAlt.scrollLeft : 0;
+    const bankY = bankAlt ? bankAlt.scrollTop : 0;
 
     fn();
 
-    if (app && app.scrollTop !== appTop) app.scrollTop = appTop;
-    if ((window.scrollY || window.pageYOffset || 0) !== y) window.scrollTo(0, y);
+    const bank = document.querySelector('.court-bench-area');
+    if (bank && (bankX || bankY)) { bank.scrollLeft = bankX; bank.scrollTop = bankY; }
 }
 
 function updateUI() {
     mitScrollposition(function () {
         renderDynamicView();
-        renderGoalkeeperBadge();
         renderTeamNames();
     });
     if (window.Timer) window.Timer.updateTimerDisplay();
@@ -71,28 +50,6 @@ function updateUI() {
 // ===================================================================
 // AKTIVER TORWART
 // ===================================================================
-
-/**
- * Die Anzeige in der Kopfzeile ist entfallen - der aktive Torwart ergibt
- * sich aus Position TW. Die Funktion bleibt, weil sie beschriftet, wer
- * gerade gewaehlt ist, sobald der Knopf irgendwo wieder auftaucht.
- */
-function renderGoalkeeperBadge() {
-    const el = document.getElementById('gk-indicator');
-    if (!el) return;
-
-    const gk = window.Store.getActiveGoalkeeper();
-    if (!gk) {
-        el.innerHTML = '<span class="gk-icon">🧤</span><span class="gk-name">Kein Torwart</span>';
-        el.title = 'Kein Spieler auf Position TW. Gegentore lassen sich ohne Torwart nicht zuordnen.';
-        el.classList.add('gk-missing');
-    } else {
-        el.innerHTML = '<span class="gk-icon">🧤</span><span class="gk-name">#' + gk.nummer + ' '
-            + escapeHtml(String(gk.name).split(' ')[0]) + '</span><span class="gk-caret">▾</span>';
-        el.title = 'Im Tor: ' + gk.name + ' — antippen zum Wechseln. Gegentore und Paraden werden diesem Torwart zugerechnet.';
-        el.classList.remove('gk-missing');
-    }
-}
 
 function openGoalkeeperPicker() {
     const box = document.getElementById('gk-picker');
@@ -131,7 +88,6 @@ function selectGoalkeeper(playerId) {
     if (window.Store.setActiveGoalkeeper(playerId)) {
         const gk = window.Store.getActiveGoalkeeper();
         closeGoalkeeperPicker();
-        renderGoalkeeperBadge();
         if (window.Toast && gk) {
             window.Toast('Im Tor: #' + gk.nummer + ' ' + gk.name, { type: 'success', duration: 2500 });
         }
@@ -222,14 +178,15 @@ function refreshSuspensions() {
 }
 
 // ---------------------------------------------------------------
-// Aktions-Sheet (Court-Ansicht)
+// Aktions-Sheet (Spielfeld)
 // ---------------------------------------------------------------
 // Das Menue haengt bewusst NICHT im #dynamic-view-container:
-//   - als Flex-Kind hat es dem Spielfeld Hoehe weggenommen, dadurch sind
+//   - als Teil des Spielfelds hat es diesem Hoehe weggenommen, dadurch sind
 //     bei jeder Auswahl alle prozentual positionierten Spieler gesprungen;
-//   - der Container hat overflow:hidden, auf dem Handy lag das Menue danach
-//     komplett ausserhalb des sichtbaren Bereichs ("es geht kein Menue auf").
-// Als fixes Bottom-Sheet am <body> kann beides nicht mehr passieren.
+//   - der Container schneidet ab (overflow:hidden), auf dem Handy lag das
+//     Menue danach ausserhalb des sichtbaren Bereichs.
+// Als fixes Sheet am <body> kann beides nicht passieren: hochkant unten ueber
+// dem Feld, quer als Seitenleiste rechts (die Geometrie steht im CSS).
 
 const ACTION_SHEET_ID = 'court-action-sheet';
 
@@ -237,43 +194,40 @@ function closeActionSheet() {
     const alt = document.getElementById(ACTION_SHEET_ID);
     if (alt) alt.remove();
     document.documentElement.style.setProperty('--cas-height', '0px');
+    document.documentElement.style.setProperty('--cas-width', '0px');
 }
 
 /**
- * Breite/Position des Sheets nachziehen.
- * Auf dem Handy volle Breite (das macht schon das CSS). Auf dem Desktop
- * liegt neben dem Feld der Verlauf - dort wird das Sheet auf die Spalte
- * des Spielfelds gesetzt, sonst haengt es quer unter beiden Panels.
- * Ausserdem meldet es seine Hoehe an die Toasts, damit die nicht
- * ausgerechnet die Aktionsbuttons zudecken.
+ * Meldet dem CSS, wie viel Platz das Sheet belegt, damit die Toasts nicht
+ * ausgerechnet die Aktionsbuttons zudecken: unten als Hoehe, als Seitenleiste
+ * als Breite.
  */
 function positionActionSheet() {
     const sheet = document.getElementById(ACTION_SHEET_ID);
-    if (!sheet) { document.documentElement.style.setProperty('--cas-height', '0px'); return; }
-
-    const container = document.getElementById('dynamic-view-container');
-    const zweispaltig = window.innerWidth > 1024 && container;
-
-    if (zweispaltig) {
-        const r = container.getBoundingClientRect();
-        sheet.style.left = Math.round(r.left) + 'px';
-        sheet.style.right = 'auto';
-        sheet.style.width = Math.round(r.width) + 'px';
-        sheet.style.maxWidth = 'none';
-        sheet.style.margin = '0';
-    } else {
-        sheet.style.left = '';
-        sheet.style.right = '';
-        sheet.style.width = '';
-        sheet.style.maxWidth = '';
-        sheet.style.margin = '';
+    if (!sheet) {
+        document.documentElement.style.setProperty('--cas-height', '0px');
+        document.documentElement.style.setProperty('--cas-width', '0px');
+        return;
     }
-
-    document.documentElement.style.setProperty('--cas-height', sheet.offsetHeight + 'px');
+    const r = sheet.getBoundingClientRect();
+    const seitlich = r.width < window.innerWidth * 0.8;
+    document.documentElement.style.setProperty('--cas-height', seitlich ? '0px' : Math.round(r.height) + 'px');
+    document.documentElement.style.setProperty('--cas-width', seitlich ? Math.round(r.width) + 'px' : '0px');
 }
 
 window.addEventListener('resize', positionActionSheet);
 window.addEventListener('orientationchange', positionActionSheet);
+
+// Beschriftung der zweiten Stufe: WOHER der Wurf kam, WELCHE Karte, ...
+const UNTERAKTION_FRAGE = {
+    Wurf: 'Wurfposition', ParadeZone: 'Wurfposition', Verlust: 'Art des Ballverlusts',
+    Gewinn: 'Art des Ballgewinns', Karte: 'Kartenfarbe'
+};
+
+/** Anzeigename einer Aktion. Gespeichert wird weiter `label` (mit Emoji): Ticker-Regeln vergleichen damit. */
+function anzeigeName(a) {
+    return a.anzeige || a.label;
+}
 
 /**
  * Baut das Aktions-Sheet fuer den gewaehlten Spieler und haengt es an <body>.
@@ -289,9 +243,10 @@ function openActionSheet(playerId, posClass) {
     const sheet = document.createElement('div');
     sheet.id = ACTION_SHEET_ID;
     sheet.className = 'court-action-sheet';
+    sheet.setAttribute('role', 'group');
 
-    // Kopfzeile: das Sheet sitzt am unteren Bildschirmrand, der markierte
-    // Spieler weiter oben. Ohne Namen tippt man im Eifer auf den Falschen.
+    // Kopfzeile: das Sheet sitzt ueber dem Feld, der markierte Spieler ist
+    // womoeglich verdeckt. Ohne Namen tippt man im Eifer auf den Falschen.
     const head = document.createElement('div');
     head.className = 'cas-head';
     const istGast = window.Store.istGast(player);
@@ -299,41 +254,69 @@ function openActionSheet(playerId, posClass) {
         ? (window.Store.getTeamNames().gast && window.Store.getTeamNames().gast !== 'GAST'
             ? window.Store.getTeamNames().gast : 'Gegner')
         : `#${player.nummer} ${player.name}`;
+
+    const textBox = document.createElement('div');
+    textBox.className = 'cas-text';
     const label = document.createElement('span');
     label.className = 'cas-title';
-    label.innerText = titel;
+    label.textContent = titel;
+    label.title = titel;
+    textBox.appendChild(label);
+
+    const inUnterstufe = !!(selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]);
+    const sub = document.createElement('span');
+    sub.className = 'cas-sub';
+    if (inUnterstufe) {
+        const haupt = window.Store.HAUPTAKTIONEN.find(a => a.typ === selectedPrimaryAction);
+        sub.textContent = (haupt ? anzeigeName(haupt) : '') + ' · ' + (UNTERAKTION_FRAGE[selectedPrimaryActionCategory] || 'Auswahl');
+    } else {
+        sub.textContent = 'Aktion wählen';
+    }
+    textBox.appendChild(sub);
+
     const closeBtn = document.createElement('button');
     closeBtn.className = 'cas-close';
     closeBtn.type = 'button';
     closeBtn.setAttribute('aria-label', 'Auswahl aufheben');
-    closeBtn.innerText = '✕';
+    closeBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        + 'stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>';
     closeBtn.onclick = (e) => { e.stopPropagation(); selectPlayer(playerId); };
-    head.appendChild(label);
+    head.appendChild(textBox);
     head.appendChild(closeBtn);
     sheet.appendChild(head);
 
     const grid = document.createElement('div');
     grid.className = 'cas-grid';
 
-    if (selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]) {
+    if (inUnterstufe) {
         const backBtn = document.createElement('button');
+        backBtn.type = 'button';
         backBtn.className = 'court-action-btn neutral';
-        backBtn.innerText = '← Zurück';
+        backBtn.textContent = '← Zurück';
         backBtn.onclick = (e) => { e.stopPropagation(); resetActionSelection(); };
         grid.appendChild(backBtn);
 
         window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory].forEach(u => {
             const btn = document.createElement('button');
+            btn.type = 'button';
             btn.className = 'court-action-btn sub-blue';
-            btn.innerText = u.label;
+            if (u.punkt) {
+                const punkt = document.createElement('span');
+                punkt.className = 'cas-punkt';
+                punkt.style.background = u.punkt;
+                punkt.setAttribute('aria-hidden', 'true');
+                btn.appendChild(punkt);
+            }
+            btn.appendChild(document.createTextNode(anzeigeName(u)));
             btn.onclick = (e) => { e.stopPropagation(); selectAction(u.typ); };
             grid.appendChild(btn);
         });
     } else {
         getAvailableActionsForPlayer(playerId, posClass).forEach(a => {
             const btn = document.createElement('button');
+            btn.type = 'button';
             btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
-            btn.innerText = a.label;
+            btn.textContent = anzeigeName(a);
             btn.onclick = (e) => { e.stopPropagation(); selectAction(a.typ, a.category); };
             grid.appendChild(btn);
         });
@@ -348,24 +331,12 @@ function renderDynamicView() {
     const container = document.getElementById('dynamic-view-container');
     if (!container) return;
 
-    // Bei jedem Neuzeichnen zuerst weg - sonst bleibt beim Moduswechsel
-    // oder nach dem Abwaehlen ein verwaistes Sheet am <body> haengen.
+    // Bei jedem Neuzeichnen zuerst weg - sonst bleibt nach dem Abwaehlen
+    // ein verwaistes Sheet am <body> haengen.
     closeActionSheet();
 
-    if (window.UI_MODE === 'classic') {
-        container.innerHTML = `
-            <section id="player-list"></section>
-            <section id="action-panel"></section>
-        `;
-        renderPlayerList();
-        renderActionButtons();
-    } else if (window.UI_MODE === 'thumb') {
-        container.innerHTML = '';
-        renderThumbView(container);
-    } else if (window.UI_MODE === 'court') {
-        container.innerHTML = '';
-        renderCourtView(container);
-    }
+    container.innerHTML = '';
+    renderCourtView(container);
 
     // Nach dem Neuaufbau stimmen die Masse wieder - Sheet nachziehen.
     positionActionSheet();
@@ -399,11 +370,6 @@ function getPlayerDisplayHtml(player, size = '40px') {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const container = document.getElementById('app-container');
-    if(container) container.className = 'layout-' + window.UI_MODE;
-    const btn = document.getElementById('btn-mode-' + window.UI_MODE);
-    if(btn) btn.classList.add('active-mode');
-
     // Enter legt den Spieler an. Auf dem Handy verdeckt die Tastatur den
     // Hinzufuegen-Button; ohne das hier musste man nach jedem Namen erst
     // die Tastatur schliessen und scrollen. Einen ganzen Kader einzugeben
@@ -419,78 +385,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-function toggleSort(criteria) {
-    if (currentSort === criteria) {
-        window.Store.getSPIELER().reverse();
-    } else {
-        currentSort = criteria;
-        sortPlayers();
-    }
-    updateUI();
-}
-
 function sortPlayers() {
-    const spieler = window.Store.getSPIELER();
-    spieler.sort((a, b) => {
-        if (currentSort === 'nummer') {
-            return a.nummer - b.nummer;
-        } else if (currentSort === 'position') {
-            return a.position.localeCompare(b.position);
-        }
-        return 0;
-    });
-}
-
-function renderPlayerList() {
-    const playerListElement = document.getElementById('player-list');
-    if (!playerListElement) return;
-
-    playerListElement.innerHTML = `
-        <div class="player-list-header">
-            <h3>Spieler</h3>
-            <div class="sort-options">
-                <span class="sort-label">Sortieren:</span>
-                <button onclick="window.UI.toggleSort('nummer')" class="sort-btn ${currentSort === 'nummer' ? 'active-sort' : ''}"># Nr.</button>
-                <button onclick="window.UI.toggleSort('position')" class="sort-btn ${currentSort === 'position' ? 'active-sort' : ''}">Pos.</button>
-            </div>
-        </div>
-    `;
-
-    const summaryStats = window.Stats ? window.Stats.getPlayerSummaryStats() : {};
-    const spieler = window.Store.getSPIELER();
-
-    spieler.forEach(player => {
-        const stats = summaryStats[player.id] || { tore: 0, fehler: 0, paraden: 0 };
-        const isSelected = selectedPlayerId === player.id;
-        const playerButton = document.createElement('div');
-
-        playerButton.className = `player-button ${isSelected ? 'selected-player' : ''}`;
-        playerButton.onclick = () => selectPlayer(player.id);
-
-        playerButton.innerHTML = `
-            <div style="display:flex; align-items:center; gap: 10px;">
-                ${getPlayerDisplayHtml(player, '40px')}
-                <div class="player-info">
-                    <span class="player-number">#${player.nummer}</span>
-                    <span class="player-name">${escapeHtml(player.name)} (${escapeHtml(player.position)})</span>
-                </div>
-            </div>
-            <div class="player-stats"> 
-                <span class="stat-item green">🥅 ${stats.tore}</span> 
-                <span class="stat-item red">❌ ${stats.fehler}</span> 
-                <span class="stat-item yellow">🧤 ${stats.paraden}</span>
-            </div>
-        `;
-        document.getElementById('player-list').appendChild(playerButton);
-    });
+    // Der Kader steht immer nach Trikotnummer. Die frueheren Sortierknoepfe
+    // gab es nur in der Listenansicht.
+    window.Store.getSPIELER().sort((a, b) => a.nummer - b.nummer);
 }
 
 /**
- * Baut die Verlaufseintraege in einen beliebigen Container.
- * Wird zweimal gebraucht: fuer das Seitenpanel (breite Bildschirme) und
- * fuer das Verlauf-Overlay - auf dem Handy ist das Panel per CSS
- * ausgeblendet, und ohne das Overlay waere die Korrektur dort
- * ueberhaupt nicht erreichbar.
+ * Baut die Verlaufseintraege in einen Container (das Verlauf-Overlay).
+ * Das frueher daneben stehende Seitenpanel ist mit der Listenansicht entfallen.
  */
 function buildHistoryInto(container, limit) {
     if (!container) return;
@@ -530,13 +433,6 @@ function buildHistoryInto(container, limit) {
 }
 
 function renderHistory() {
-    if (historyPanelElement) {
-        historyPanelElement.innerHTML = '<h3>Verlauf</h3>';
-        const box = document.createElement('div');
-        historyPanelElement.appendChild(box);
-        buildHistoryInto(box, 25);
-    }
-
     // Overlay mitziehen, falls es gerade offen ist
     const overlay = document.getElementById('history-view');
     if (overlay && overlay.style.display === 'flex') {
@@ -650,57 +546,6 @@ function getAvailableActionsForPlayer(playerId, posClassFallback) {
     return all.filter(a => !a.nurTorwart);
 }
 
-function renderActionButtons() {
-    const actionPanelElement = document.getElementById('action-panel');
-    if (!actionPanelElement) return;
-
-    actionPanelElement.innerHTML = '<h3>Aktion</h3>';
-    const actionTitleElement = actionPanelElement.querySelector('h3');
-
-    let buttonsToRender = [];
-    let titleText = "Aktion (Nach Spieler-Wahl)";
-
-    if (selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]) {
-        buttonsToRender = window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory];
-        const primaryActionLabel = window.Store.HAUPTAKTIONEN.find(a => a.typ === selectedPrimaryAction).label;
-        titleText = `Details für: ${primaryActionLabel}`;
-
-        const backButton = document.createElement('button');
-        backButton.className = 'action-button back-button';
-        backButton.innerText = '← Zurück zu Aktionen';
-        backButton.onclick = resetActionSelection;
-        actionTitleElement.insertAdjacentElement('afterend', backButton);
-
-    } else {
-        buttonsToRender = getAvailableActionsForPlayer(selectedPlayerId);
-    }
-
-    actionTitleElement.innerText = titleText;
-
-    buttonsToRender.forEach(action => {
-        const button = document.createElement('button');
-        const isSelected = action.typ === selectedPrimaryAction;
-
-        let baseClass;
-        if (selectedPrimaryActionCategory) {
-            baseClass = 'sub-blue';
-        } else {
-            baseClass = action.farbe || 'neutral';
-        }
-
-        button.className = `action-button ${baseClass} ${isSelected ? 'selected-action' : ''}`;
-        button.innerText = action.label;
-
-        if (action.category !== undefined) {
-            button.onclick = () => selectAction(action.typ, action.category);
-        } else {
-            button.onclick = () => selectAction(action.typ);
-        }
-
-        document.getElementById('action-panel').appendChild(button);
-    });
-}
-
 function selectPlayer(playerId) {
     if (selectedPlayerId === playerId) {
         selectedPlayerId = null;
@@ -759,7 +604,19 @@ function resetActionSelection() {
 }
 
 function handleActionFlow(player, finalActionType, finalActionLabel, category) {
-    const timerState = window.Timer ? window.Timer.getTimerState() : { isTimerRunning: false, spielzeitSekunden: 0 };
+    const timerState = window.Timer ? window.Timer.getTimerState() : { isTimerRunning: false, spielzeitSekunden: 0, currentHalf: 1 };
+
+    // Die Uhr wurde noch nie angefasst: alles wuerde bei 00:00 landen, und
+    // das merkt man erst im Bericht. Der ERSTE Versuch fragt deshalb nach.
+    // "Ohne Uhr" gilt dann fuer den Rest dieses Spiels (wer ohne Uhr trackt,
+    // will nicht bei jeder Aktion gefragt werden).
+    const uhrNochNie = !timerState.isTimerRunning && timerState.spielzeitSekunden === 0
+        && (timerState.currentHalf || 1) === 1;
+    if (uhrNochNie && !ohneUhrGewaehlt) {
+        wartendeAktion = { player: player, typ: finalActionType, label: finalActionLabel, category: category };
+        zeigeSheet('uhr-hinweis');
+        return;
+    }
 
     // Frueher wurde hier per alert() komplett blockiert. Damit liess sich
     // vor dem Anwurf, in der Halbzeit oder nach Spielende nichts nachtragen.
@@ -768,10 +625,10 @@ function handleActionFlow(player, finalActionType, finalActionLabel, category) {
     //
     // Der Hinweis kommt EINMAL pro Pausenphase. Bei jeder Aktion waere er
     // Krach: wer in der Halbzeit fuenf Sachen nachtraegt, will ihn nicht
-    // fuenfmal lesen.
+    // fuenfmal lesen. (Wer "ohne Uhr" gewaehlt hat, weiss es bereits.)
     if (timerState.isTimerRunning) {
         uhrHinweisGezeigt = false;
-    } else if (!uhrHinweisGezeigt && window.Toast) {
+    } else if (!uhrNochNie && !uhrHinweisGezeigt && window.Toast) {
         uhrHinweisGezeigt = true;
         window.Toast('Uhr läuft nicht — Aktionen werden bei '
             + (window.Timer ? window.Timer.formatTime(timerState.spielzeitSekunden) : '00:00') + ' eingetragen.',
@@ -796,6 +653,146 @@ function handleActionFlow(player, finalActionType, finalActionLabel, category) {
     } else {
         executeSaveAction(player, finalActionType, finalActionLabel, category, null);
     }
+}
+
+/**
+ * Antwort im Uhr-Hinweis. `starten` = Uhr starten und eintragen, sonst ohne Uhr.
+ */
+function uhrHinweisWahl(starten) {
+    const a = wartendeAktion;
+    wartendeAktion = null;
+    schliesseSheet('uhr-hinweis');
+    if (!a) return;
+    if (starten) {
+        if (window.Timer && !window.Timer.getTimerState().isTimerRunning) window.Timer.toggleGameTimer();
+    } else {
+        ohneUhrGewaehlt = true;
+    }
+    handleActionFlow(a.player, a.typ, a.label, a.category);
+}
+
+/** Neues Spiel oder Spiel verlassen: die Uhr-Wahl gilt nur fuer EIN Spiel. */
+function vergissUhrWahl() {
+    ohneUhrGewaehlt = false;
+    wartendeAktion = null;
+}
+
+// ===================================================================
+// SHEETS (Menue, Spiel-Info, Uhr-Hinweis, Zeitkorrektur)
+// ===================================================================
+// Ein Sheet ist ein abgedunkelter Bereich mit Tafel: hochkant von unten,
+// quer als Dialog in der Mitte (CSS). Antippen des dunklen Bereichs und
+// Escape schliessen. Sie liegen als <div hidden> fest im HTML.
+
+const SHEET_IDS = ['menue', 'spiel-info', 'uhr-hinweis', 'time-edit'];
+
+function zeigeSheet(id) {
+    const box = document.getElementById(id);
+    if (!box) return;
+    box.hidden = false;
+    // Fokus nur im Zeitfeld (dort will man gleich tippen). Sonst klappt auf dem
+    // Handy die Tastatur auf oder ein Knopf wirkt vorgewaehlt.
+    if (id === 'time-edit') {
+        const f = document.getElementById('time-edit-input');
+        if (f) { f.focus(); f.select(); }
+    }
+}
+
+function schliesseSheet(id) {
+    const box = document.getElementById(id);
+    if (box) box.hidden = true;
+}
+
+function schliesseAlleSheets() {
+    SHEET_IDS.forEach(schliesseSheet);
+    wartendeAktion = null;
+}
+
+SHEET_IDS.forEach(function (id) {
+    document.addEventListener('DOMContentLoaded', function () {
+        const box = document.getElementById(id);
+        if (!box) return;
+        // Nur ein Tipp AUF den dunklen Bereich schliesst, nicht ein Tipp in der Tafel
+        box.addEventListener('click', function (e) {
+            if (e.target !== box) return;
+            if (id === 'uhr-hinweis') wartendeAktion = null;
+            schliesseSheet(id);
+        });
+    });
+});
+
+document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    for (let i = SHEET_IDS.length - 1; i >= 0; i--) {
+        const box = document.getElementById(SHEET_IDS[i]);
+        if (box && !box.hidden) { schliesseSheet(SHEET_IDS[i]); wartendeAktion = null; return; }
+    }
+});
+
+/** Spielansicht verlassen (zurueck zur Startseite): nichts darf offen oder gewaehlt bleiben. */
+function verlasseSpiel() {
+    selectedPlayerId = null;
+    selectedPrimaryAction = null;
+    selectedPrimaryActionCategory = null;
+    closeActionSheet();
+    schliesseAlleSheets();
+}
+
+function openMenue() {
+    const st = window.Timer ? window.Timer.getTimerState() : { currentHalf: 1 };
+    const text = document.getElementById('menue-halbzeit-text');
+    const knopf = document.querySelector('[data-menue="halbzeit"]');
+    if (text && knopf) {
+        const zweite = st.currentHalf >= 2;
+        text.textContent = zweite ? '2. Halbzeit läuft' : 'Halbzeit beenden';
+        knopf.disabled = zweite;
+    }
+    zeigeSheet('menue');
+}
+
+function closeMenue() {
+    schliesseSheet('menue');
+}
+
+/** Ein Eintrag im Menue: erst zu, dann auf - sonst liegt das Menue ueber dem Overlay. */
+async function menueWahl(name) {
+    closeMenue();
+    switch (name) {
+        case 'halbzeit':
+            if (window.Timer) window.Timer.halbzeitBeenden();
+            break;
+        case 'statistik': window.Stats.showStats(); break;
+        case 'bericht': window.Report.showCurrentReport(); break;
+        case 'verlauf': openHistoryView(); break;
+        case 'kader': togglePlayerManagement(); break;
+        case 'ticker': window.TickerUI.oeffne(); break;
+        case 'archiv': window.openArchiveModal(); break;
+        case 'beenden': {
+            // Bestaetigung und "erst archivieren, dann loeschen" stecken in endGame.
+            // Danach gibt es hier nichts mehr zu tracken: zurueck zur Startseite.
+            const geschafft = window.Timer ? await window.Timer.endGame() : false;
+            if (geschafft && window.Start) window.Start.zeige();
+            break;
+        }
+    }
+}
+
+function openSpielInfo() {
+    const n = window.Store.getTeamNames();
+    const set = function (id, text) { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('info-spielname', window.Store.getSpielName() || 'Ohne Namen');
+    set('info-heim', n.heim);
+    set('info-gast', n.gast);
+    zeigeSheet('spiel-info');
+}
+
+function closeSpielInfo() {
+    schliesseSheet('spiel-info');
+}
+
+function spielInfoNamenAendern() {
+    closeSpielInfo();
+    openTeamNameEdit();
 }
 
 function executeSaveAction(player, actionType, actionLabel, category, assistId) {
@@ -1061,19 +1058,15 @@ function openTimeEdit() {
     const hz = document.getElementById('time-edit-halbzeit');
     if (hz && window.Timer) hz.value = String(window.Timer.getHalbzeitMinuten());
 
-    box.style.display = 'flex';
-    input.focus();
-    input.select();
+    zeigeSheet('time-edit');
 
     input.onkeydown = function (e) {
         if (e.key === 'Enter') { e.preventDefault(); applyTimeEdit(); }
-        if (e.key === 'Escape') { e.preventDefault(); closeTimeEdit(); }
     };
 }
 
 function closeTimeEdit() {
-    const box = document.getElementById('time-edit');
-    if (box) box.style.display = 'none';
+    schliesseSheet('time-edit');
 }
 
 function parseTimeInput(value) {
@@ -1208,11 +1201,11 @@ function confirmAssist(assistPlayerId) {
 
 // MANAGEMENT / ROSTER
 async function togglePlayerManagement() {
-    const mainApp = document.getElementById("app-container");
     const managementView = document.getElementById("player-management-view");
 
     if (managementView.style.display === 'none' || managementView.style.display === '') {
-        mainApp.style.display = 'none';
+        // Das Overlay deckt den ganzen Bildschirm ab; die Spielansicht muss
+        // dafuer nicht mehr ausgeblendet werden (frueher: #app-container).
         managementView.style.display = 'block';
         bearbeiteterSpieler = null;
         const assistBox = document.getElementById('setting-assist');
@@ -1228,7 +1221,6 @@ async function togglePlayerManagement() {
         await populateTeamsDropdown();
     } else {
         managementView.style.display = 'none';
-        mainApp.style.display = 'flex';
         updateUI();
     }
 }
@@ -1471,33 +1463,38 @@ async function loadTeam() {
         if (window.Toast) window.Toast("Bitte zuerst ein Team auswählen.", { type: "warn" });
         return;
     }
-    
+
     const teams = await window.Store.getTeams();
     const team = teams.find(t => t.id === teamId);
     if (!team || !team.players) return;
-    
-    const currentPlayers = window.Store.getSPIELER();
-    let replace = false;
-    
-    if (currentPlayers.length > 0) {
-        const choice = confirm("Soll das Team den aktuellen Kader ERSETZEN (OK) oder HINZUGEFÜGT werden (Abbrechen)?");
-        if (choice) {
-            replace = true;
-        }
+
+    const eigene = window.Store.getSPIELER().filter(p => !window.Store.istGast(p));
+    const spielLaeuft = window.Store.loadActions().length > 0;
+    let modus = 'hinzufuegen';   // ohne eigene Spieler gibt es nichts zu ersetzen
+
+    if (eigene.length > 0 && spielLaeuft) {
+        // Aktionen haengen an der Spieler-id: ein Austausch mitten im Spiel
+        // wuerde sie verwaisen. Hinzufuegen geht trotzdem.
+        const hinzufuegen = confirm('Im laufenden Spiel kann der Kader nicht ersetzt werden, weil schon Aktionen '
+            + 'erfasst sind. Sollen die Spieler des Teams stattdessen HINZUGEFÜGT werden?');
+        if (!hinzufuegen) return;
+        modus = 'hinzufuegen';
+    } else if (eigene.length > 0) {
+        modus = confirm("Soll das Team den aktuellen Kader ERSETZEN (OK) oder HINZUGEFÜGT werden (Abbrechen)?")
+            ? 'ersetzen' : 'hinzufuegen';
     }
-    
-    if (replace) {
-        // Clear all players first
-        const allIds = currentPlayers.map(p => p.id);
-        allIds.forEach(id => window.Store.removePlayerFromStore(id));
+
+    const r = window.Store.ladeMannschaft(team.players, modus);
+    if (!r.ok) {
+        if (window.Toast) window.Toast('Im laufenden Spiel kann der Kader nicht ersetzt werden, weil schon Aktionen erfasst sind.',
+            { type: 'warn', duration: 6000 });
+        return;
     }
-    
-    // Add players from team
-    team.players.forEach(p => {
-        window.Store.addPlayerToStore(p.name, p.nummer, p.position);
-    });
-    
-    if (window.Toast) window.Toast(`Team „${team.name}" geladen.`, { type: "success" });
+    selectedPlayerId = null;
+
+    if (window.Toast) {
+        window.Toast(`Team „${team.name}" geladen (${r.hinzugefuegt} Spieler).`, { type: "success" });
+    }
     renderRosterList();
 }
 
@@ -1525,66 +1522,6 @@ function clearAllPlayers() {
     allIds.forEach(id => window.Store.removePlayerFromStore(id));
     selectedPlayerId = null;
     renderRosterList();
-}
-
-function renderThumbView(container) {
-    let topArea = document.createElement('div');
-    topArea.className = 'thumb-top-area';
-    let gridArea = document.createElement('div');
-    gridArea.className = 'thumb-grid-area';
-    
-    const spieler = window.Store.getSPIELER();
-    
-    if (!selectedPlayerId) {
-        topArea.innerHTML = '<h3 style="text-align:center; color: var(--accent-color); margin-top:20px;">Wähle einen Spieler...</h3>';
-    } else {
-        const p = spieler.find(s => s.id === selectedPlayerId);
-        topArea.innerHTML = `
-            <div style="text-align:center;">
-                <h2 style="margin:0; color:var(--text-color);">#${escapeHtml(p.nummer)} ${escapeHtml(p.name)}</h2>
-                <div style="color:var(--text-muted);">${escapeHtml(p.position)}</div>
-                <button onclick="window.UI.selectPlayer('${p.id}')" style="margin-top:10px; background:transparent; border:1px solid var(--border-color); color:white; padding:5px 10px; border-radius:4px; cursor:pointer;">Abbrechen</button>
-            </div>
-        `;
-    }
-    
-    if (!selectedPlayerId) {
-        spieler.forEach(p => {
-            const btn = document.createElement('div');
-            btn.className = 'thumb-btn';
-            btn.innerHTML = getPlayerDisplayHtml(p, '40px') + `<span class="name">${escapeHtml(p.name.split(' ')[0])}</span>`;
-            btn.onclick = () => selectPlayer(p.id);
-            gridArea.appendChild(btn);
-        });
-    } else {
-        if (selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]) {
-            const subEvents = window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory];
-            const backBtn = document.createElement('div');
-            backBtn.className = 'thumb-btn thumb-action-btn neutral';
-            backBtn.innerText = '← Zurück';
-            backBtn.onclick = resetActionSelection;
-            gridArea.appendChild(backBtn);
-            subEvents.forEach(u => {
-                const btn = document.createElement('div');
-                btn.className = 'thumb-btn thumb-action-btn sub-blue';
-                btn.innerText = u.label;
-                btn.onclick = () => selectAction(u.typ);
-                gridArea.appendChild(btn);
-            });
-        } else {
-            const actions = getAvailableActionsForPlayer(selectedPlayerId);
-            actions.forEach(a => {
-                const btn = document.createElement('div');
-                btn.className = `thumb-btn thumb-action-btn ${a.farbe || 'neutral'}`;
-                btn.innerText = a.label;
-                btn.onclick = () => selectAction(a.typ, a.category);
-                gridArea.appendChild(btn);
-            });
-        }
-    }
-    
-    container.appendChild(topArea);
-    container.appendChild(gridArea);
 }
 
 function handleDragStart(e, playerId) {
@@ -1677,21 +1614,25 @@ function onTap(el, handler) {
 function renderCourtView(container) {
     container.innerHTML = '';
     const spieler = window.Store.getSPIELER();
-    
-    // 1. Opponent Area
+
+    // 1. Gegner: eigener Streifen ueber dem Feld (quer: oben in der Seitenleiste)
     const opponentArea = document.createElement('div');
     opponentArea.className = 'court-opponent-area';
     const guestPlayer = spieler.find(p => window.Store.istGast(p));
     if (guestPlayer) {
         const oppBtn = document.createElement('button');
+        oppBtn.type = 'button';
         oppBtn.className = 'court-opponent-btn';
         // "Gast / Gegner (0)" war unbeholfen - die Trikotnummer des
         // Pseudo-Spielers sagt niemandem etwas. Jetzt steht dort der
         // eingestellte Gastname, sonst schlicht "Gegner".
         const gastName = window.Store.getTeamNames().gast;
-        oppBtn.innerText = (gastName && gastName !== 'GAST') ? gastName : 'Gegner';
+        const oppText = (gastName && gastName !== 'GAST') ? gastName : 'Gegner';
+        oppBtn.textContent = oppText;
+        oppBtn.title = oppText;   // der Name wird bei Platzmangel gekuerzt
+        oppBtn.setAttribute('aria-label', 'Gegner: ' + oppText);
         onTap(oppBtn, function () { selectPlayer(guestPlayer.id); });
-        if(selectedPlayerId === guestPlayer.id) oppBtn.style.borderColor = 'white';
+        if (selectedPlayerId === guestPlayer.id) oppBtn.classList.add('is-selected');
         opponentArea.appendChild(oppBtn);
 
         // Gleiches Sheet wie bei den eigenen Spielern. Frueher wuchs hier ein
@@ -1700,15 +1641,18 @@ function renderCourtView(container) {
     }
     container.appendChild(opponentArea);
 
-    // 2. Active Court Area
+    // 2. Feld. Die Buehne gibt den verfuegbaren Platz vor, das Feld darin
+    // behaelt sein Seitenverhaeltnis (siehe CSS) und scrollt nie.
+    const stage = document.createElement('div');
+    stage.className = 'court-stage';
     const courtArea = document.createElement('div');
     courtArea.className = 'court-active-area';
     courtArea.onclick = () => {
         if (istTapEcho()) return;
         if (selectedPlayerId) selectPlayer(selectedPlayerId);
     };
-    
-    // Create Drop Zones for Court
+
+    // Leere Plaetze (zugleich Ziel beim Ziehen)
     const positions = ['TW', 'LA', 'RL', 'RM', 'RR', 'RA', 'KM'];
     positions.forEach(pos => {
         const dropZone = document.createElement('div');
@@ -1722,26 +1666,28 @@ function renderCourtView(container) {
         dropZone.addEventListener('drop', (e) => handleDrop(e, pos));
         courtArea.appendChild(dropZone);
     });
+    stage.appendChild(courtArea);
 
-    // 3. Bench Area
+    // 3. Bank: hochkant eine Reihe, die INNEN waagrecht scrollt (so bleibt das
+    // Feld gross); quer eine Spalte neben dem Feld.
     const benchArea = document.createElement('div');
     benchArea.className = 'court-bench-area';
+    benchArea.setAttribute('aria-label', 'Auswechselbank');
     benchArea.addEventListener('dragover', handleDragOver);
     benchArea.addEventListener('dragleave', handleDragLeave);
     benchArea.addEventListener('drop', (e) => handleDrop(e, 'Bank'));
 
-    // Render Players
     const occupied = new Set();
     const courtPlayers = [];
     const benchPlayers = [];
 
     spieler.forEach(p => {
-        if (window.Store.istGast(p)) return; 
-        
+        if (window.Store.istGast(p)) return;
+
         let posClass = p.position;
-        if(posClass === 'M') posClass = 'RM';
-        if(posClass === 'K') posClass = 'KM';
-        
+        if (posClass === 'M') posClass = 'RM';
+        if (posClass === 'K') posClass = 'KM';
+
         if (posClass !== 'Bank' && posClass !== 'N/A' && !occupied.has(posClass)) {
             occupied.add(posClass);
             courtPlayers.push({ player: p, posClass: posClass });
@@ -1761,36 +1707,56 @@ function renderCourtView(container) {
     allRenderedPlayers.forEach(({player, posClass, area}) => {
         const node = document.createElement('div');
         node.className = `court-player-node ${area === courtArea ? 'pos-' + posClass : ''}`;
-        if(selectedPlayerId === player.id) node.classList.add('selected');
-        
-        node.innerHTML = getPlayerDisplayHtml(player, '50px') + `<span class="name">${escapeHtml(player.name.split(' ')[0])}</span>`;
+        if (selectedPlayerId === player.id) node.classList.add('selected');
+        node.setAttribute('role', 'button');
+        node.tabIndex = 0;
+        node.setAttribute('aria-label', '#' + player.nummer + ' ' + player.name);
+        node.setAttribute('aria-pressed', selectedPlayerId === player.id ? 'true' : 'false');
+
+        // Nur der Vorname: der Platz unter dem Kreis ist knapp. Der volle Name
+        // steht im title und im Aktions-Sheet, sobald man den Spieler antippt.
+        const vorname = String(player.name).split(' ')[0];
+        node.innerHTML = getPlayerDisplayHtml(player, 'var(--feld-badge, 44px)')
+            + `<span class="name" title="${escapeHtml(player.name)}">${escapeHtml(vorname)}</span>`;
         node.draggable = true;
         node.addEventListener('dragstart', (e) => handleDragStart(e, player.id));
         node.addEventListener('dragend', handleDragEnd);
-        
+        node.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectPlayer(player.id); }
+        });
+
         if (area === courtArea) {
             node.addEventListener('dragover', handleDragOver);
             node.addEventListener('dragleave', handleDragLeave);
             node.addEventListener('drop', (e) => handleDrop(e, posClass));
         }
-        
+
         onTap(node, function () { selectPlayer(player.id); });
-        
+
         area.appendChild(node);
-        
+
         if (selectedPlayerId === player.id) openActionSheet(player.id, posClass);
     });
 
-    container.appendChild(courtArea);
+    container.appendChild(stage);
     container.appendChild(benchArea);
 }
 
 window.UI = {
     updateUI,
-    switchUIMode,
     renderHistory,
     openHistoryView,
     closeHistoryView,
+    openMenue,
+    closeMenue,
+    menueWahl,
+    openSpielInfo,
+    closeSpielInfo,
+    spielInfoNamenAendern,
+    uhrHinweisWahl,
+    vergissUhrWahl,
+    verlasseSpiel,
+    closeActionSheet,
     updateScoreboard,
     undoLastAction,
     updateActionCount,
@@ -1803,7 +1769,6 @@ window.UI = {
     deleteEditedAction,
     pulseFeedback,
     refreshSuspensions,
-    toggleSort,
     selectPlayer,
     selectAction,
     resetActionSelection,
@@ -1830,7 +1795,6 @@ window.UI = {
     closeTimeEdit,
     applyTimeEdit,
     parseTimeInput,
-    renderGoalkeeperBadge,
     renderTeamNames,
     openTeamNameEdit,
     closeTeamNameEdit,

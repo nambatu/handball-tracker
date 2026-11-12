@@ -20,15 +20,19 @@ const WURFPOSITIONEN = [
     { typ: "7Meter", label: "7 Meter" }
 ];
 
+// `label` wird mit der Aktion gespeichert (Verlauf, Bericht) und vom Ticker
+// verglichen (lib/ticker.js: Regeln mit "subtyp", Platzhalter {sub}). Es darf
+// sich deshalb nicht aendern. Was auf den Knoepfen steht, ist `anzeige` - ohne
+// Emoji, die Farbe der Taste sagt schon, worum es geht.
 const HAUPTAKTIONEN = [
-    { typ: "WurfTor", label: "🤾🏻‍♀️ Wurf mit Tor", category: "Wurf", farbe: "green" },
-    { typ: "WurfOhneTor", label: "❌ Wurf ohne Tor", category: "Wurf", farbe: "red" },
-    { typ: "Ballverlust", label: "🥀 Ballverlust", category: "Verlust", farbe: "red" },
-    { typ: "Ballgewinn", label: "💪 Ballgewinn", category: "Gewinn", farbe: "green" },
-    { typ: "Parade", label: "🧤 Parade", category: "ParadeZone", farbe: "yellow", nurTorwart: true },
-    { typ: "SiebenMeterRaus", label: "🎯 7m herausgeholt", category: "Herausgeholt", farbe: "green" },
-    { typ: "Zeitstrafe", label: "⏱️ 2-Minuten", category: "Strafe", farbe: "orange" },
-    { typ: "Karte", label: "🟨 Karte", category: "Karte", farbe: "orange" },
+    { typ: "WurfTor", label: "🤾🏻‍♀️ Wurf mit Tor", anzeige: "Wurf mit Tor", category: "Wurf", farbe: "green" },
+    { typ: "WurfOhneTor", label: "❌ Wurf ohne Tor", anzeige: "Wurf ohne Tor", category: "Wurf", farbe: "red" },
+    { typ: "Ballverlust", label: "🥀 Ballverlust", anzeige: "Ballverlust", category: "Verlust", farbe: "red" },
+    { typ: "Ballgewinn", label: "💪 Ballgewinn", anzeige: "Ballgewinn", category: "Gewinn", farbe: "green" },
+    { typ: "Parade", label: "🧤 Parade", anzeige: "Parade", category: "ParadeZone", farbe: "yellow", nurTorwart: true },
+    { typ: "SiebenMeterRaus", label: "🎯 7m herausgeholt", anzeige: "7m herausgeholt", category: "Herausgeholt", farbe: "green" },
+    { typ: "Zeitstrafe", label: "⏱️ 2-Minuten", anzeige: "2-Minuten", category: "Strafe", farbe: "orange" },
+    { typ: "Karte", label: "🟨 Karte", anzeige: "Karte", category: "Karte", farbe: "orange" },
 ];
 
 const UNTERAKTIONEN = {
@@ -50,9 +54,10 @@ const UNTERAKTIONEN = {
         { typ: "Block", label: "Block" }
     ],
     "Karte": [
-        { typ: "Gelb", label: "🟨 Gelbe Karte" },
-        { typ: "Rot", label: "🟥 Rote Karte" },
-        { typ: "Blau", label: "🟦 Blaue Karte" }
+        // punkt: Farbe der Karte als kleines Quadrat statt Emoji
+        { typ: "Gelb", label: "🟨 Gelbe Karte", anzeige: "Gelbe Karte", punkt: "#f2c744" },
+        { typ: "Rot", label: "🟥 Rote Karte", anzeige: "Rote Karte", punkt: "#e5484d" },
+        { typ: "Blau", label: "🟦 Blaue Karte", anzeige: "Blaue Karte", punkt: "#3b82f6" }
     ]
 };
 
@@ -244,25 +249,46 @@ function setSpielName(name) {
 }
 
 /**
- * Laedt eine gespeicherte Mannschaft als eigenen Kader (ersetzt den bisherigen).
+ * Laedt eine gespeicherte Mannschaft in den Kader. EINE Umsetzung fuer die
+ * Startseite ("Eigene Mannschaft") und "Team laden" in der Spielerverwaltung.
  *
- * Nimmt dieselben Store-Funktionen wie "Team laden" in der Spielerverwaltung
- * (removePlayerFromStore / addPlayerToStore). Zwei Unterschiede, mit Absicht:
- *  - Die Gegner-Eintraege bleiben stehen und kommen nicht aus dem gespeicherten
- *    Team dazu. Sonst entsteht ein "Gegner" mit team 'heim' - und ein
- *    gegnerisches Tor liesse sich nicht mehr erfassen.
- *  - Nur fuer ein NEUES Spiel gedacht (noch keine Aktionen): Aktionen haengen
- *    an der Spieler-id, ein Austausch mitten im Spiel wuerde sie verwaisen.
+ * Fuer beide gilt, mit Absicht:
+ *  - Der Gegner-Eintrag bleibt immer stehen und wird nie aus dem gespeicherten
+ *    Team uebernommen. Sonst entsteht ein "Gegner" mit team 'heim' - oder er
+ *    verschwindet - und ein gegnerisches Tor liesse sich nicht mehr erfassen.
+ *  - Ersetzen geht nur, solange das Spiel noch keine Aktionen hat: Aktionen
+ *    haengen an der Spieler-id, ein Austausch mitten im Spiel wuerde sie
+ *    verwaisen (die Statistik kennt die Spieler dann nicht mehr).
+ *    Hinzufuegen geht jederzeit.
  *
  * @param {Array} spielerListe Spieler des gespeicherten Teams
+ * @param {string} [modus] 'ersetzen' (Standard) oder 'hinzufuegen'
+ * @returns {{ok: boolean, grund?: string, hinzugefuegt: number}}
  */
-function ladeMannschaft(spielerListe) {
-    state().spieler.filter(function (p) { return !istGast(p); })
-        .forEach(function (p) { removePlayerFromStore(p.id); });
+function ladeMannschaft(spielerListe, modus) {
+    const ersetzen = modus !== 'hinzufuegen';
+    if (ersetzen && state().aktionen.length > 0) {
+        return { ok: false, grund: 'aktionen', hinzugefuegt: 0 };
+    }
+
+    if (ersetzen) {
+        state().spieler.filter(function (p) { return !istGast(p); })
+            .forEach(function (p) { removePlayerFromStore(p.id); });
+        state().aktiverTorwartId = null;
+    }
+
+    let hinzugefuegt = 0;
     (spielerListe || []).filter(function (p) { return p && !istGast(p) && !istGastName(p.name); })
-        .forEach(function (p) { addPlayerToStore(p.name, p.nummer, p.position); });
-    state().aktiverTorwartId = null;
+        .forEach(function (p) {
+            // Beim Hinzufuegen keine Doppelten: dieselbe Person mit derselben Nummer
+            if (!ersetzen && state().spieler.some(function (x) {
+                return !istGast(x) && x.name === p.name && String(x.nummer) === String(p.nummer);
+            })) return;
+            addPlayerToStore(p.name, p.nummer, p.position);
+            hinzugefuegt++;
+        });
     savePlayers();
+    return { ok: true, hinzugefuegt: hinzugefuegt };
 }
 
 /**
