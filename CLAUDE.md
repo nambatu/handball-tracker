@@ -6,6 +6,11 @@ Mehrgeraete-Sync, Statistik/Spielbericht und WhatsApp-Ticker. Ziel-Adresse: `tra
 Sprache: Code-Kommentare, Logs, Commit-Nachrichten und UI sind **deutsch** (Umlaute im Code als ae/oe/ue).
 Der Besitzer hat keinen Informatik-Hintergrund - Erklaerungen schlicht halten, Befehle zum Kopieren liefern.
 
+## Aktueller Auftrag
+
+**Zuerst `docs/HANDOVER.md` lesen.** Entscheidung vom 12.11.2026: kein bezahltes Hosting, der Tracker
+zieht auf GitHub Pages + Supabase um (wie CIRCArt). Der Pi behaelt nur das WhatsApp-Gateway.
+
 ## Aufbau
 
 - `server.js` - Express 5, ein Prozess, speichert **JSON-Dateien** unter `DATA_DIR` (keine Datenbank).
@@ -47,5 +52,6 @@ Es gibt keine Tests und keinen Linter in diesem Repo. Nach Aenderungen mindesten
 ## Deployment
 
 Push nach `main`, dann auf dem Server `git pull --ff-only && npm install --omit=dev && pm2 restart handball-tracker`.
-Ausfuehrliche Entscheidungen und Betriebsbefunde stehen in den Projekt-Dokumenten
-(`deployment-pi.md`, `vps-umzug.md`, `whatsapp-gateway.md`, `sync-konflikte.md`, `roadmap-code-review.md`).
+Das ist der heutige Betrieb auf dem Pi und gilt, bis der Umzug aus `docs/HANDOVER.md` abgeschlossen ist.
+Ausfuehrliche Entscheidungen und Betriebsbefunde stehen im claude.ai-Projekt "Handball Tracker & Ticker"
+(nicht in diesem Repo); das Wichtigste daraus ist in `docs/HANDOVER.md` zusammengefasst.
