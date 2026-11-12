@@ -108,9 +108,11 @@ async function checkAuthStatus() {
 
 function enterApp(username) {
     document.getElementById('auth-overlay').style.display = 'none';
-    document.getElementById('app-container').style.display = 'flex';
-    document.getElementById('controls').style.display = 'flex';
-    document.getElementById('auth-logout-btn').style.display = 'inline-block';
+    // Welche Ansicht gerade sichtbar ist (Anmeldung, Startseite, Spiel),
+    // entscheidet allein window.Start. Bis der Spielstand da ist, steht
+    // die Startseite mit "Wird geladen" - nicht das halbleere Spiel.
+    window.Start.ansicht('start');
+    window.Start.zeigeName(username);
     initializeApp(username);
 }
 
@@ -139,50 +141,60 @@ async function initializeApp(username) {
 
     window.Sync.renderBadge();
 
-    // 5. WhatsApp-UI (nur relevant, wenn die Integration aktiv ist)
+    // 5. Startseite oder - bei laufendem Spiel - gleich das Spiel
+    window.Start.init(username);
+
+    // 6. WhatsApp-UI (nur relevant, wenn die Integration aktiv ist)
     checkWhatsAppStatusOnLoad();
 }
 
 function showAuthOverlay() {
+    window.Start.ansicht('login');
     document.getElementById('auth-overlay').style.display = 'flex';
-    document.getElementById('app-container').style.display = 'none';
-    document.getElementById('controls').style.display = 'none';
 
     // Ohne Netz ist jeder Anmeldeversuch zwecklos - das gehoert hingeschrieben,
     // statt den Nutzer stumm gegen ein Formular laufen zu lassen.
     if (!navigator.onLine) {
-        const hinweis = document.getElementById('auth-error-msg');
-        if (hinweis) {
-            hinweis.style.color = 'var(--warning-color)';
-            hinweis.innerText = 'Keine Verbindung zum Server. Zum Anmelden brauchst du einmal Internet — '
-                + 'danach startet die App auch offline.';
-        }
+        zeigeAuthMeldung('Keine Verbindung zum Server. Zum Anmelden brauchst du einmal Internet — '
+            + 'danach startet die App auch offline.', 'warn');
     }
+}
+
+// Die Farbe der Meldung kommt aus der Klasse (auth-meldung ist-fehler /
+// ist-ok / ist-warn), nicht aus einem Inline-Stil.
+function zeigeAuthMeldung(text, art) {
+    const el = document.getElementById('auth-error-msg');
+    if (!el) return;
+    el.className = 'auth-meldung' + (text && art ? ' ist-' + art : '');
+    el.innerText = text || '';
 }
 
 function toggleAuthMode() {
     isLoginMode = !isLoginMode;
-    document.getElementById('auth-title').innerText = isLoginMode ? 'Login' : 'Register';
-    document.getElementById('auth-submit-btn').innerText = isLoginMode ? 'Login' : 'Register';
-    document.getElementById('auth-toggle-btn').innerText = isLoginMode ? 'Need an account? Register' : 'Already have an account? Login';
-    document.getElementById('auth-error-msg').innerText = '';
+    document.getElementById('auth-title').innerText = isLoginMode ? 'Anmelden' : 'Konto anlegen';
+    document.getElementById('auth-submit-btn').innerText = isLoginMode ? 'Anmelden' : 'Konto anlegen';
+    document.getElementById('auth-toggle-btn').innerText = isLoginMode ? 'Noch kein Konto? Konto anlegen' : 'Schon ein Konto? Anmelden';
+    document.getElementById('auth-password').setAttribute('autocomplete', isLoginMode ? 'current-password' : 'new-password');
+    zeigeAuthMeldung('');
 
     // Einladungscode gibt es nur noch beim alten Server (Pi). Auf Supabase
     // ist die Registrierung offen.
     const codeEl = document.getElementById('auth-code');
-    if (codeEl) codeEl.style.display = (!isLoginMode && window.Api.modus === 'server') ? 'block' : 'none';
+    const zeigeCode = !isLoginMode && window.Api.modus === 'server';
+    if (codeEl) codeEl.style.display = zeigeCode ? 'block' : 'none';
+    const codeGruppe = document.getElementById('auth-code-gruppe');
+    if (codeGruppe) codeGruppe.classList.toggle('ist-sichtbar', zeigeCode);
 
     const hintEl = document.getElementById('auth-hint');
-    if (hintEl) hintEl.innerText = isLoginMode ? '' : 'Passwort: mindestens 8 Zeichen.';
+    if (hintEl) hintEl.innerText = isLoginMode ? '' : 'Das Passwort braucht mindestens 8 Zeichen.';
 }
 
 window.loginUser = async function() {
     const user = document.getElementById('auth-username').value;
     const pass = document.getElementById('auth-password').value;
-    const err = document.getElementById('auth-error-msg');
-    err.innerText = '';
+    zeigeAuthMeldung('');
 
-    if(!user || !pass) return err.innerText = 'Fill all fields';
+    if (!user || !pass) return zeigeAuthMeldung('Bitte Benutzername und Passwort eingeben.', 'fehler');
 
     try {
         if (isLoginMode) {
@@ -190,26 +202,33 @@ window.loginUser = async function() {
             if (r.ok) {
                 enterApp(r.username);
             } else {
-                err.style.color = 'red';
-                err.innerText = r.error || 'Error';
+                zeigeAuthMeldung(r.error || 'Anmeldung fehlgeschlagen.', 'fehler');
             }
         } else {
             const codeEl = document.getElementById('auth-code');
             const r = await window.Api.register(user, pass, codeEl && codeEl.value ? codeEl.value : undefined);
             if (r.ok) {
-                err.style.color = 'green';
-                err.innerText = 'Registered! Please login now.';
-                setTimeout(() => toggleAuthMode(), 1500);
+                // Sofort auf "Anmelden" umschalten; die Meldung bleibt stehen.
+                toggleAuthMode();
+                zeigeAuthMeldung('Konto angelegt. Bitte jetzt anmelden.', 'ok');
             } else {
-                err.style.color = 'red';
-                err.innerText = r.error || 'Error';
+                zeigeAuthMeldung(r.error || 'Konto konnte nicht angelegt werden.', 'fehler');
             }
         }
     } catch(e) {
-        err.style.color = 'red';
-        err.innerText = 'Network error';
+        zeigeAuthMeldung('Keine Verbindung zum Server.', 'fehler');
     }
 };
+
+// Enter schickt das Formular ab. Ein <form> mit mehreren Feldern und ohne
+// Absende-Knopf tut das von sich aus nicht.
+['auth-username', 'auth-password', 'auth-code'].forEach(function (id) {
+    const feld = document.getElementById(id);
+    if (!feld) return;
+    feld.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); window.loginUser(); }
+    });
+});
 
 // Mehrere parallele Anfragen koennen gleichzeitig ein 401 bekommen und
 // alle logoutUser() rufen. Ohne Sperre erschiene die Rueckfrage mehrfach.

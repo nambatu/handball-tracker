@@ -11,7 +11,7 @@ import {
     SKIP, anmeldenA, api, getState, pushState, standLeeren, zusammenfuehren, LAUF
 } from './helfer.mjs';
 
-const SCHLUESSEL = ['rev', 'updatedAt', 'spielId', 'spieler', 'aktionen', 'tickerMarken',
+const SCHLUESSEL = ['rev', 'updatedAt', 'spielId', 'spielName', 'spieler', 'aktionen', 'tickerMarken',
     'aktiverTorwartId', 'teamHeim', 'teamGast', 'halbzeitSekunden'].sort();
 
 const spieler = function (id, name) { return { id: id, name: name, nummer: 7 }; };

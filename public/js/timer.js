@@ -184,15 +184,15 @@ function updateTimerDisplay() {
     }
 
     const btn = document.getElementById("timer-btn");
-    if (btn) btn.innerText = isRunning() ? "⏸️ Pause" : "▶️ Start";
+    if (btn) btn.innerText = isRunning() ? "Uhr pausieren" : "Uhr starten";
 
     const endBtn = document.getElementById("half-end-btn");
     if (endBtn) {
         if (clock.half === 2) {
-            endBtn.innerText = "🏁 Spiel Beenden";
+            endBtn.innerText = "Spiel beenden";
             endBtn.classList.add('end-game');
         } else {
-            endBtn.innerText = "⏸️ Halbzeit";
+            endBtn.innerText = "Halbzeit";
             endBtn.classList.remove('end-game');
         }
     }
@@ -304,11 +304,16 @@ function toggleEndHalfOrGame() {
     if (window.UI) window.UI.updateUI();
 }
 
+// Rueckgabe: true, wenn das Spiel archiviert UND zurueckgesetzt ist. Die
+// Startseite braucht das, um erst danach das Formular fuer ein neues Spiel
+// zu oeffnen - bei Abbruch oder Fehler bleibt das laufende Spiel stehen.
 async function endGame() {
-    if (!confirm("SPIEL BEENDEN? Das aktuelle Spiel wird ins Archiv verschoben und hier zurückgesetzt.")) return;
+    if (!confirm("SPIEL BEENDEN? Das aktuelle Spiel wird ins Archiv verschoben und hier zurückgesetzt.")) return false;
 
     const spieler = window.Store.getSPIELER();
     const aktionen = window.Store.loadActions();
+    // Vor dem Zuruecksetzen merken: reset() leert den Namen mit dem Rest.
+    const spielName = window.Store.getSpielName ? window.Store.getSpielName() : null;
 
     // Erst sicherstellen, dass der Server den finalen Stand hat,
     // dann archivieren. Sonst landet ein unvollstaendiges Spiel im Archiv.
@@ -317,6 +322,7 @@ async function endGame() {
     } catch (e) { /* der Archiv-Request traegt die Daten ohnehin selbst */ }
 
     let archived = false;
+    let archivDatei = null;
     try {
         const res = await fetch('/api/archive', {
             method: 'POST',
@@ -326,6 +332,10 @@ async function endGame() {
                 : {}))
         });
         archived = res.ok;
+        if (res.ok) {
+            const antwort = await res.json().catch(function () { return null; });
+            archivDatei = antwort && antwort.filename;
+        }
     } catch (e) {
         archived = false;
     }
@@ -338,7 +348,21 @@ async function endGame() {
         } else {
             alert('Archivieren fehlgeschlagen - das Spiel bleibt erhalten.');
         }
-        return;
+        return false;
+    }
+
+    // Der Spielname aus der Startseite wird zur Beschriftung des Archivs.
+    // Scheitert das, ist das Spiel trotzdem sicher archiviert - der Name
+    // laesst sich im Archiv nachtragen. Deshalb wird der Fehler bewusst
+    // verschluckt.
+    if (spielName && archivDatei) {
+        try {
+            await fetch('/api/archive/' + encodeURIComponent(archivDatei), {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ label: spielName })
+            });
+        } catch (e) { /* siehe oben */ }
     }
 
     // Schlusspfiff in den Ticker. Die Reihenfolge ist entscheidend: erst
@@ -384,8 +408,9 @@ async function endGame() {
     }
 
     if (window.Toast) {
-        window.Toast('Spiel archiviert und zurueckgesetzt.', { type: 'success' });
+        window.Toast('Spiel archiviert und zurückgesetzt.', { type: 'success' });
     }
+    return true;
 }
 
 /**
@@ -435,6 +460,7 @@ window.Timer = {
     toggleGameTimer,
     loadGameState,
     toggleEndHalfOrGame,
+    endGame,
     getTimerState,
     setGameTime,
     elapsedSeconds,

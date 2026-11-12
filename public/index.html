@@ -4,10 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Handball Ticker</title>
+    <title>Handball Tracker</title>
     <!-- Stempel fuer den Service Worker: GitHub Pages kann keinen X-App-Shell-Header senden -->
     <meta name="app-shell" content="handball-tracker">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#0f1216">
     <meta name="description" content="Aktionen eines Handballspiels live erfassen — Tore, Paraden, Strafen — mit Statistik und Spielbericht.">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icons/icon-192.png" sizes="192x192">
@@ -16,12 +16,19 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=20261112">
+    <link rel="stylesheet" href="style.css?v=20261113">
 </head>
 
-<body>
+<body class="ansicht-login">
 
     <header>
+        <!-- Zurueck zur Startseite. Die Uhr laeuft dabei weiter, nichts wird zurueckgesetzt. -->
+        <button type="button" onclick="window.Start.zeige()" id="start-btn" class="control-btn zur-startseite"
+                title="Zur Startseite - die Uhr läuft weiter">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
+            Startseite
+        </button>
         <div id="game-info">
             <div class="scoreboard">
                 <button id="team-name" class="team-name-btn" onclick="window.UI.openTeamNameEdit()" title="Teamnamen ändern">HEIM</button>
@@ -38,7 +45,7 @@
                         title="Antippen, um die Spielzeit zu korrigieren">00:00</button>
                 <span id="timer-target" class="timer-target" title="Ende der laufenden Halbzeit">/ 30:00</span>
                 <span id="sync-status" class="sync-badge sync-ok" title="Synchronisierung"></span>
-                <span id="ticker-status" class="ticker-badge" style="display:none;" title="Ticker"></span>
+                <span id="ticker-status" class="ticker-badge" hidden title="Ticker"></span>
             </div>
 
             <!-- Zeitkorrektur (z.B. wenn die App im Hintergrund weiterlief) -->
@@ -66,19 +73,18 @@
         </div>
 
         <div id="controls">
-            <button onclick="window.Timer.toggleGameTimer()" id="timer-btn" class="control-btn">▶️ Start</button>
-            <button onclick="window.Timer.toggleEndHalfOrGame()" id="half-end-btn" class="control-btn">⏸️ Halbzeit</button>
-            <button onclick="window.Stats.showStats()" class="control-btn">📊 Statistik</button>
-            <button onclick="window.Report.showCurrentReport()" class="control-btn">📄 Spielbericht</button>
-            <button onclick="window.UI.togglePlayerManagement()" class="control-btn">👥 Spieler</button>
-            <button onclick="window.UI.openHistoryView()" class="control-btn">🕐 Verlauf</button>
-            <button onclick="openArchiveModal()" class="control-btn">📚 Archiv</button>
-            <button onclick="window.TickerUI.oeffne()" class="control-btn" id="ticker-btn">📡 Ticker</button>
-            <button onclick="logoutUser()" class="control-btn" id="auth-logout-btn" style="display:none; background:var(--danger-color);">🚪 Logout</button>
-            
+            <button onclick="window.Timer.toggleGameTimer()" id="timer-btn" class="control-btn primaer">Uhr starten</button>
+            <button onclick="window.Timer.toggleEndHalfOrGame()" id="half-end-btn" class="control-btn">Halbzeit</button>
+            <button onclick="window.Stats.showStats()" class="control-btn">Statistik</button>
+            <button onclick="window.Report.showCurrentReport()" class="control-btn">Spielbericht</button>
+            <button onclick="window.UI.togglePlayerManagement()" class="control-btn">Spieler</button>
+            <button onclick="window.UI.openHistoryView()" class="control-btn">Verlauf</button>
+            <button onclick="openArchiveModal()" class="control-btn">Archiv</button>
+            <button onclick="window.TickerUI.oeffne()" class="control-btn" id="ticker-btn">Ticker</button>
+
             <div class="view-toggle-container">
-                <button onclick="window.UI.switchUIMode('thumb')" id="btn-mode-thumb" class="control-btn active-mode">📱 Mobile</button>
-                <button onclick="window.UI.switchUIMode('court')" id="btn-mode-court" class="control-btn">🏟️ Court</button>
+                <button onclick="window.UI.switchUIMode('thumb')" id="btn-mode-thumb" class="control-btn active-mode">Liste</button>
+                <button onclick="window.UI.switchUIMode('court')" id="btn-mode-court" class="control-btn">Feld</button>
             </div>
         </div>
     </header>
@@ -107,19 +113,104 @@
         <p>Gesamt Aktionen: <span id="action-count">0</span></p>
     </footer>
 
-    <!-- AUTHENTICATION OVERLAY -->
-    <div id="auth-overlay" class="overlay-view" style="display:none; z-index: 9999; background: rgba(0,0,0,0.95);">
-        <div class="overlay-content management-content glass-panel" style="max-width: 400px;">
-            <h2 id="auth-title">Login</h2>
-            <div class="form-row" style="flex-direction: column; align-items: stretch;">
-                <input type="text" id="auth-username" placeholder="Username" style="margin-bottom: 10px;">
-                <input type="password" id="auth-password" placeholder="Password" style="margin-bottom: 10px;">
-                <input type="text" id="auth-code" placeholder="Einladungscode" style="margin-bottom: 10px; display: none;">
-                <p id="auth-hint" style="font-size: 0.85em; color: var(--text-muted); margin: 0 0 15px 0; text-align: center;"></p>
-                <button onclick="loginUser()" id="auth-submit-btn" class="add-btn" style="margin-bottom: 10px;">Login</button>
-                <button onclick="toggleAuthMode()" id="auth-toggle-btn" class="back-btn" style="background: transparent; border: 1px solid var(--border-color);">Need an account? Register</button>
+    <!-- ANMELDUNG: ganzer Bildschirm, kein Overlay ueber dem Spiel -->
+    <div id="auth-overlay" class="auth-screen" style="display:none;">
+        <div class="auth-card">
+            <div class="auth-appname">Handball Tracker</div>
+            <h1 id="auth-title" class="auth-titel">Anmelden</h1>
+            <form id="auth-form" class="auth-form" onsubmit="return false;" novalidate>
+                <label class="feld-label" for="auth-username">Benutzername</label>
+                <input type="text" id="auth-username" class="feld" autocomplete="username"
+                       autocapitalize="none" autocorrect="off" spellcheck="false">
+                <label class="feld-label" for="auth-password">Passwort</label>
+                <input type="password" id="auth-password" class="feld" autocomplete="current-password">
+                <div id="auth-code-gruppe" class="auth-code-gruppe">
+                    <label class="feld-label" for="auth-code">Einladungscode</label>
+                    <input type="text" id="auth-code" class="feld" autocomplete="off" style="display: none;">
+                </div>
+                <p id="auth-hint" class="auth-hinweis"></p>
+                <p id="auth-error-msg" class="auth-meldung" role="alert"></p>
+                <button type="button" onclick="loginUser()" id="auth-submit-btn" class="btn btn-primary btn-block">Anmelden</button>
+                <button type="button" onclick="toggleAuthMode()" id="auth-toggle-btn" class="btn-link auth-wechsel">Noch kein Konto? Konto anlegen</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- STARTSEITE: hier beginnt jedes Spiel. Die Ansicht schaltet
+         window.Start (js/start.js) ueber eine Klasse am <body>. -->
+    <div id="start-view" class="start-screen">
+        <div class="start-inner">
+            <p id="start-laedt" class="start-laedt">Spielstand wird geladen …</p>
+            <div id="start-inhalt" hidden>
+                <div class="start-kopf">
+                    <h1 class="start-titel">Handball Tracker</h1>
+                    <span id="start-sync-platz" class="start-sync-platz"></span>
+                    <div class="start-konto">
+                        <span id="start-user" class="start-user"></span>
+                        <button type="button" class="btn-link" onclick="logoutUser()">Abmelden</button>
+                    </div>
+                </div>
+
+                <!-- Laeuft schon ein Spiel? Dann zuerst das. -->
+                <div id="start-laufend" class="karte" hidden>
+                    <h2 class="karte-titel">Laufendes Spiel</h2>
+                    <div id="laufend-name" class="laufend-name"></div>
+                    <div class="laufend-zeile">
+                        <span id="laufend-stand" class="laufend-stand">0 : 0</span>
+                        <span id="laufend-meta" class="laufend-meta"></span>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-block" id="start-weiter" onclick="window.Start.zumSpiel()">Weiter tracken</button>
+                    <button type="button" class="btn btn-block" id="start-neu-knopf" onclick="window.Start.neuesSpielZeigen()">Neues Spiel beginnen</button>
+                    <div id="start-neu-hinweis" class="hinweisbox" hidden>
+                        <p>Ein neues Spiel geht erst, wenn das laufende beendet ist. Es wird dabei archiviert
+                           und ist danach unter „Archiv &amp; Statistik“ zu finden.</p>
+                        <button type="button" class="btn btn-danger btn-block" id="start-beenden" onclick="window.Start.laufendesBeenden()">Laufendes Spiel beenden und archivieren</button>
+                    </div>
+                </div>
+
+                <form id="start-formular" class="karte" onsubmit="return false;" novalidate>
+                    <h2 class="karte-titel">Neues Spiel</h2>
+
+                    <label class="feld-label" for="start-spielname">Spielname <span class="optional">(optional)</span></label>
+                    <input type="text" id="start-spielname" class="feld" maxlength="80" placeholder="z. B. Punktspiel 14.11." autocomplete="off">
+
+                    <label class="feld-label" for="start-kader">Eigene Mannschaft</label>
+                    <select id="start-kader" class="feld"></select>
+                    <p id="start-kader-hinweis" class="feld-hinweis"></p>
+
+                    <div class="feld-paar">
+                        <div>
+                            <label class="feld-label" for="start-team-heim">Name eigene Mannschaft</label>
+                            <input type="text" id="start-team-heim" class="feld" maxlength="40" placeholder="z. B. ESV" autocomplete="off">
+                        </div>
+                        <div>
+                            <label class="feld-label" for="start-team-gast">Gegner</label>
+                            <input type="text" id="start-team-gast" class="feld" maxlength="40" placeholder="z. B. TSV Musterdorf" autocomplete="off">
+                        </div>
+                    </div>
+
+                    <span class="feld-label" id="start-hz-label">Halbzeitlänge</span>
+                    <div id="start-halbzeit" class="segment" role="radiogroup" aria-labelledby="start-hz-label"></div>
+
+                    <span class="feld-label" id="start-ticker-label">WhatsApp-Ticker</span>
+                    <div class="schalter-zeile">
+                        <label class="schalter">
+                            <input type="checkbox" id="start-ticker" role="switch" disabled>
+                            <span class="schalter-spur" aria-hidden="true"></span>
+                            <span id="start-ticker-text" class="schalter-text">Ticker senden</span>
+                        </label>
+                    </div>
+                    <p id="start-ticker-info" class="feld-hinweis"></p>
+
+                    <p id="start-fehler" class="formfehler" role="alert" hidden></p>
+                    <button type="button" class="btn btn-primary btn-block" id="start-los" onclick="window.Start.starten()">Spiel starten</button>
+                </form>
+
+                <div class="start-links">
+                    <button type="button" class="btn-link" onclick="window.Start.kaderVerwalten()">Kader verwalten</button>
+                    <button type="button" class="btn-link" onclick="window.Start.archivOeffnen()">Archiv &amp; Statistik</button>
+                </div>
             </div>
-            <p id="auth-error-msg" style="color: var(--danger-color); text-align: center; margin-top: 15px;"></p>
         </div>
     </div>
 
@@ -205,7 +296,7 @@
                 <button onclick="window.Stats.exportAsCSV()" class="add-btn">⬇️ CSV Export</button>
             </div>
             <div id="stats-content"></div>
-            <button onclick="window.Stats.closeStats()" class="back-btn">Zurück zum Spiel</button>
+            <button onclick="window.Stats.closeStats()" class="back-btn">Zurück</button>
         </div>
     </div>
 
@@ -228,7 +319,7 @@
             
             <!-- TEAMS SECTION -->
             <div id="team-management-section" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border-color);">
-                <h3 style="margin-top: 0; color: var(--accent-color);">Teams Verwalten</h3>
+                <h3 style="margin-top: 0; color: var(--accent-color);">Teams verwalten</h3>
                 
                 <div class="form-row" style="align-items: center;">
                     <select id="team-select" style="flex: 1;">
@@ -313,7 +404,7 @@
                 </ul>
             </div>
 
-            <button onclick="window.UI.togglePlayerManagement()" class="back-btn">Zurück zum Spiel</button>
+            <button onclick="window.UI.togglePlayerManagement()" class="back-btn">Zurück</button>
         </div>
     </div>
 
@@ -322,7 +413,7 @@
          handball.net-Bot zusammen. -->
     <div id="ticker-view" class="overlay-view" style="display:none;">
         <div class="overlay-content management-content glass-panel">
-            <h2>📡 WhatsApp-Ticker</h2>
+            <h2>WhatsApp-Ticker</h2>
             <div id="ticker-body"></div>
             <p id="ticker-meldung" class="ticker-meldung"></p>
             <div class="ticker-fuss">
@@ -336,7 +427,7 @@
     <!-- Archiv Modal -->
     <div id="archive-view" class="overlay-view" style="display:none;">
         <div class="overlay-content management-content glass-panel">
-            <h2>📚 Spiele-Archiv</h2>
+            <h2>Spiele-Archiv</h2>
             <div id="archive-list-container" style="max-height: 60vh; overflow-y: auto; margin-bottom: 20px;">
                 <ul id="archive-list" style="list-style: none; padding: 0;">
                     <!-- Archived games will be injected here -->
@@ -346,20 +437,21 @@
         </div>
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="vendor/touch-drag.js?v=20261112"></script>
-    <script src="js/config.js?v=20261112"></script>
-    <script src="vendor/supabase.js?v=20261112"></script>
-    <script src="js/api.js?v=20261112"></script>
-    <script src="js/sync.js?v=20261112"></script>
-    <script src="js/wakelock.js?v=20261112"></script>
-    <script src="js/store.js?v=20261112"></script>
-    <script src="js/timer.js?v=20261112"></script>
-    <script src="js/stats.js?v=20261112"></script>
-    <script src="js/report.js?v=20261112"></script>
-    <script src="js/whatsapp.js?v=20261112"></script>
-    <script src="js/tickerui.js?v=20261112"></script>
-    <script src="js/ui.js?v=20261112"></script>
-    <script src="js/app.js?v=20261112"></script>
+    <script src="vendor/touch-drag.js?v=20261113"></script>
+    <script src="js/config.js?v=20261113"></script>
+    <script src="vendor/supabase.js?v=20261113"></script>
+    <script src="js/api.js?v=20261113"></script>
+    <script src="js/sync.js?v=20261113"></script>
+    <script src="js/wakelock.js?v=20261113"></script>
+    <script src="js/store.js?v=20261113"></script>
+    <script src="js/timer.js?v=20261113"></script>
+    <script src="js/stats.js?v=20261113"></script>
+    <script src="js/report.js?v=20261113"></script>
+    <script src="js/whatsapp.js?v=20261113"></script>
+    <script src="js/tickerui.js?v=20261113"></script>
+    <script src="js/ui.js?v=20261113"></script>
+    <script src="js/start.js?v=20261113"></script>
+    <script src="js/app.js?v=20261113"></script>
 
 </body>
 

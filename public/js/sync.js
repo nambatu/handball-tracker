@@ -57,7 +57,7 @@
     };
 
     function emptyState() {
-        return { rev: 0, updatedAt: 0, spielId: null, spieler: [], aktionen: [], tickerMarken: [], aktiverTorwartId: null, teamHeim: null, teamGast: null, halbzeitSekunden: null };
+        return { rev: 0, updatedAt: 0, spielId: null, spielName: null, spieler: [], aktionen: [], tickerMarken: [], aktiverTorwartId: null, teamHeim: null, teamGast: null, halbzeitSekunden: null };
     }
 
     function normalize(raw) {
@@ -69,6 +69,9 @@
             // und der Merkzettel auf dem Server wuerde sie ab dem zweiten
             // Spiel als "schon getickert" abtun.
             spielId: (raw && raw.spielId) || null,
+            // Freier Name des Spiels aus der Startseite ("Punktspiel 14.11.").
+            // Wird beim Archivieren zur Beschriftung des Archiveintrags.
+            spielName: (raw && raw.spielName) || null,
             spieler: (raw && Array.isArray(raw.spieler)) ? raw.spieler : [],
             aktionen: (raw && Array.isArray(raw.aktionen)) ? raw.aktionen : [],
             // Zeitmarken des Tickers ("Noch 5 Minuten"). Bewusst NICHT in
@@ -90,6 +93,7 @@
             rev: state.rev,
             updatedAt: state.updatedAt,
             spielId: state.spielId,
+            spielName: state.spielName,
             spieler: state.spieler,
             aktionen: state.aktionen,
             tickerMarken: state.tickerMarken,
@@ -168,6 +172,7 @@
             rev: Math.max(lokal.rev || 0, fern.rev || 0) + 1,
             updatedAt: Date.now(),
             spielId: juenger.spielId,
+            spielName: juenger.spielName,
             spieler: spieler,
             aktionen: aktionen,
             tickerMarken: marken,

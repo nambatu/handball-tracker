@@ -20,7 +20,7 @@
 // offline passiert; ein zwischengespeicherter Spielstand waere genau die
 // Art von stillem Datenverlust, gegen die der Sync gebaut wurde.
 
-const CACHE = 'handball-tracker-v20261112';
+const CACHE = 'handball-tracker-v20261113';
 
 // Wie lange auf den Server gewartet wird, bevor der Cache uebernimmt.
 //
@@ -56,6 +56,7 @@ const SHELL = [
     'js/whatsapp.js',
     'js/tickerui.js',
     'js/ui.js',
+    'js/start.js',
     'js/app.js',
     'vendor/touch-drag.js',
     'icons/icon-192.png',

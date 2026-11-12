@@ -106,15 +106,15 @@
         if (!el) return;
 
         if (!konfiguration || !konfiguration.aktiv) {
-            el.style.display = 'none';
+            el.hidden = true;
             return;
         }
-        el.style.display = '';
+        el.hidden = false;
 
         if (!navigator.onLine) {
             el.className = 'ticker-badge ticker-pause';
             el.title = 'Ohne Verbindung wird nicht getickert. Die Aktionen selbst sind lokal gesichert.';
-            el.innerHTML = '<span>📡</span><span class="ticker-text">Ticker pausiert</span>';
+            el.innerHTML = '<span class="punkt" aria-hidden="true"></span><span class="ticker-text">Ticker pausiert</span>';
             return;
         }
 
@@ -122,7 +122,7 @@
         el.title = ausgelassenGesamt > 0
             ? ausgelassenGesamt + ' Aktion(en) wurden nicht getickert (zu spät).'
             : 'Der Ticker läuft.';
-        el.innerHTML = '<span>📡</span><span class="ticker-text">Ticker aktiv</span>';
+        el.innerHTML = '<span class="punkt" aria-hidden="true"></span><span class="ticker-text">Ticker aktiv</span>';
     }
 
     /**

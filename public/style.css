@@ -2,26 +2,42 @@
    1. GRUNDEINSTELLUNGEN & VARIABLEN
    ========================================= */
 :root {
-    --bg-color: #0f172a; /* Slate 900 */
-    --header-bg: rgba(15, 23, 42, 0.85);
-    --panel-bg: rgba(30, 41, 59, 0.7); /* Slate 800 with opacity */
-    --text-color: #f8fafc; /* Slate 50 */
-    --text-muted: #94a3b8; /* Slate 400 */
-    --accent-color: #0ea5e9;  /* Sky 500 */
-    --accent-hover: #0284c7;  /* Sky 600 */
-    --accent-strong: #0369a1; /* Sky 700 - traegt weisse Schrift (5,4:1) */
-    --highlight-color: #fbbf24; /* Amber 400 */
-    --danger-color: #ef4444; /* Red 500 */
-    --success-color: #10b981; /* Emerald 500 */
-    --warning-color: #f59e0b; /* Amber 500 */
-    --border-color: rgba(255, 255, 255, 0.1);
-    
-    /* Button Farben */
-    --btn-neutral: rgba(51, 65, 85, 0.8); /* Slate 700 */
-    --btn-blue: rgba(14, 165, 233, 0.2);
-    --btn-green: rgba(16, 185, 129, 0.2);
-    --btn-red: rgba(239, 68, 68, 0.2);
-    --btn-yellow: rgba(245, 158, 11, 0.2);
+    /* Ruhige, fast farblose Dunkel-Palette. Farbe gibt es nur dort, wo sie
+       etwas bedeutet: Blau = die eine Hauptaktion, Gruen/Rot/Gelb = Tor,
+       Strafe, Warnung. Alles andere ist Grau auf Grau. */
+    --bg-color: #0f1216;
+    --header-bg: #171b21;
+    --panel-bg: #171b21;       /* Flaeche (Karten, Kopfzeile) */
+    --raised-bg: #1f242c;      /* erhoehte Flaeche (normale Knoepfe, Eingaben) */
+    --text-color: #e8ebef;
+    --text-muted: #98a2b0;
+    --accent-color: #3b82f6;
+    --accent-hover: #2f6fe0;
+    /* Fuellung der Hauptknoepfe: #3b82f6 mit weisser Schrift hat nur 3,7:1,
+       dieses Blau 5,2:1 - in der Halle zaehlt das. */
+    --accent-strong: #2563eb;
+    --highlight-color: #e2a336;
+    --danger-color: #e5484d;
+    --success-color: #3fb27f;
+    --warning-color: #e2a336;
+    --border-color: #2a313b;
+
+    /* Knopffarben im Spielfeld (stufenlos aus den Semantikfarben) */
+    --btn-neutral: #1f242c;
+    --btn-blue: rgba(59, 130, 246, 0.16);
+    --btn-green: rgba(63, 178, 127, 0.16);
+    --btn-red: rgba(229, 72, 77, 0.16);
+    --btn-yellow: rgba(226, 163, 54, 0.16);
+
+    /* Raster: alles Vielfache von 4 px */
+    --radius: 10px;
+    --abstand-1: 4px;
+    --abstand-2: 8px;
+    --abstand-3: 12px;
+    --abstand-4: 16px;
+    --abstand-6: 24px;
+    --abstand-8: 32px;
+    --touch: 44px;
 }
 
 * {
@@ -43,11 +59,11 @@ body {
        Geraet aus. */
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                  "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
     margin: 0;
     padding: 0;
     background-color: var(--bg-color);
-    background-image: radial-gradient(circle at top right, rgba(14, 165, 233, 0.15), transparent 40%),
-                      radial-gradient(circle at bottom left, rgba(99, 102, 241, 0.15), transparent 40%);
     color: var(--text-color);
     overflow: hidden; /* App feels like native */
 }
@@ -57,7 +73,6 @@ body {
    ========================================= */
 header, footer {
     background: var(--header-bg);
-    backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border-color);
     padding: 12px 24px;
     display: flex;
@@ -88,7 +103,6 @@ footer {
     border-radius: 12px;
     margin-bottom: 5px;
     border: 1px solid var(--border-color);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
 
 #team-name, #guest-name {
@@ -110,14 +124,13 @@ footer {
     font-size: 2.2rem;
     font-weight: 800;
     color: var(--text-color);
-    background: linear-gradient(135deg, #10b981, #059669);
+    background: var(--raised-bg);
+    border: 1px solid var(--border-color);
     padding: 4px 16px;
-    border-radius: 8px;
+    border-radius: var(--radius);
     min-width: 55px;
     text-align: center;
     font-variant-numeric: tabular-nums;
-    box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 4px 8px rgba(0,0,0,0.4);
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
 }
 
 .timer-display {
@@ -146,23 +159,34 @@ footer {
 
 .control-btn {
     padding: 10px 16px;
+    min-height: var(--touch);
     font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--raised-bg);
     color: var(--text-color);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    transition: all 0.2s ease;
+    border-radius: var(--radius);
+    transition: background 0.15s ease;
 }
 
-.control-btn:hover { 
-    background: rgba(255, 255, 255, 0.1); 
-    transform: translateY(-1px);
-}
+.control-btn:hover { background: #262c35; }
 
-.control-btn:active {
-    transform: translateY(1px);
+.control-btn:active { background: #2c333d; }
+
+/* Die eine Hauptaktion im Spielkopf: die Uhr */
+.control-btn.primaer {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+    color: #fff;
+}
+.control-btn.primaer:hover { background: var(--accent-hover); }
+/* Zurueck zur Startseite: Text statt Knopf-Optik */
+.control-btn.zur-startseite {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--abstand-2);
+    background: transparent;
 }
 
 /* =========================================
@@ -190,13 +214,11 @@ footer {
 
 section {
     background: var(--panel-bg);
-    backdrop-filter: blur(10px);
-    border-radius: 16px;
+    border-radius: var(--radius);
     border: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
 }
 
 section h3 {
@@ -246,9 +268,8 @@ section h3 {
 }
 
 .player-button.selected-player {
-    background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+    background: var(--accent-strong);
     border: 1px solid transparent;
-    box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4);
     transform: translateX(6px);
 }
 
@@ -281,14 +302,13 @@ section h3 {
 .action-button:active { transform: scale(0.97); }
 
 .action-button.neutral { background: var(--btn-neutral); color: var(--text-color); }
-.action-button.green { background: var(--btn-green); color: #34d399; border-color: rgba(16, 185, 129, 0.4); }
-.action-button.red { background: var(--btn-red); color: #f87171; border-color: rgba(239, 68, 68, 0.4); }
-.action-button.yellow { background: var(--btn-yellow); color: #fbbf24; border-color: rgba(245, 158, 11, 0.4); }
-.action-button.sub-blue { background: var(--btn-blue); color: #38bdf8; border-color: rgba(14, 165, 233, 0.4); }
+.action-button.green { background: var(--btn-green); color: #5cc79a; border-color: rgba(63, 178, 127, 0.4); }
+.action-button.red { background: var(--btn-red); color: #ee7a7e; border-color: rgba(229, 72, 77, 0.4); }
+.action-button.yellow { background: var(--btn-yellow); color: #e8b04f; border-color: rgba(226, 163, 54, 0.4); }
+.action-button.sub-blue { background: var(--btn-blue); color: #8db8fb; border-color: rgba(59, 130, 246, 0.4); }
 
 .action-button.selected-action {
     border: 2px solid var(--highlight-color);
-    box-shadow: 0 0 20px rgba(251, 191, 36, 0.3);
     transform: scale(1.02);
 }
 
@@ -349,7 +369,7 @@ section h3 {
 
 .management-content { text-align: left; }
 .management-content h2 { margin-top: 0; color: var(--accent-color); }
-.glass-panel { background: rgba(15, 23, 42, 0.8); }
+.glass-panel { background: var(--panel-bg); }
 
 .player-grid {
     display: flex;
@@ -374,7 +394,6 @@ section h3 {
 .player-grid button:hover {
     background: var(--accent-color);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
 }
 
 .form-row {
@@ -404,8 +423,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 
 #roster-list { list-style: none; padding: 0; }
 #roster-list li { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(0,0,0,0.1); margin-bottom: 5px; border-radius: 8px; }
-#roster-list button { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
-#roster-list button:hover { background: #ef4444; color: white; }
+#roster-list button { background: rgba(229, 72, 77, 0.2); color: #ee7a7e; border: 1px solid rgba(229, 72, 77, 0.3); padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+#roster-list button:hover { background: #e5484d; color: white; }
 
 
 /* =========================================
@@ -423,7 +442,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 }
 .undo-btn:hover { background: rgba(255,255,255,0.2); }
 
-.end-game { background: linear-gradient(135deg, #ef4444, #dc2626) !important; color: white !important; border: none !important; }
+.end-game { background: var(--danger-color) !important; color: white !important; border: none !important; }
 
 /* =========================================
    8. RESPONSIVE
@@ -534,7 +553,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     width: 100%;
     max-width: 300px;
     padding: 15px;
-    background: rgba(239, 68, 68, 0.2);
+    background: rgba(229, 72, 77, 0.2);
     border: 1px solid var(--danger-color);
     color: white;
     border-radius: 8px;
@@ -695,21 +714,21 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     cursor: pointer;
     color: white;
 }
-.court-action-btn.green, .thumb-action-btn.green { background: rgba(16, 185, 129, 0.2); border: 1px solid var(--success-color); }
-.court-action-btn.red, .thumb-action-btn.red { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger-color); }
-.court-action-btn.yellow, .thumb-action-btn.yellow { background: rgba(245, 158, 11, 0.2); border: 1px solid var(--warning-color); }
+.court-action-btn.green, .thumb-action-btn.green { background: rgba(63, 178, 127, 0.2); border: 1px solid var(--success-color); }
+.court-action-btn.red, .thumb-action-btn.red { background: rgba(229, 72, 77, 0.2); border: 1px solid var(--danger-color); }
+.court-action-btn.yellow, .thumb-action-btn.yellow { background: rgba(226, 163, 54, 0.2); border: 1px solid var(--warning-color); }
 .court-action-btn.sub-blue, .thumb-action-btn.sub-blue { background: rgba(59, 130, 246, 0.2); border: 1px solid #3b82f6; }
 /* Navigation ("Zurueck") statt Aktion. Hatte bisher gar keine eigene Regel
    und erbte nur die 5%-Weiss-Fuellung von .thumb-btn - im Hallenlicht war
    das praktisch unsichtbar. Bewusst deckend grau: klar als Button lesbar,
    aber ohne wie eine weitere farbige Aktion auszusehen. */
 .court-action-btn.neutral, .thumb-action-btn.neutral {
-    background: #475569;            /* Text #f8fafc darauf = 7.3:1 */
-    border: 1px solid #94a3b8;
-    color: #f8fafc;
+    background: #2a313b;            /* Text #e8ebef darauf = 7.3:1 */
+    border: 1px solid #4a5463;
+    color: #e8ebef;
 }
 .court-action-btn.neutral:active, .thumb-action-btn.neutral:active {
-    background: #334155;
+    background: #242a33;
 }
 
 /* =========================================
@@ -795,15 +814,15 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .sync-badge .sync-icon { font-size: 0.85em; line-height: 1; }
 
 .sync-ok {
-    background: rgba(16, 185, 129, 0.15);
-    border-color: rgba(16, 185, 129, 0.35);
-    color: #6ee7b7;
+    background: rgba(63, 178, 127, 0.15);
+    border-color: rgba(63, 178, 127, 0.35);
+    color: #7fd3ad;
 }
 
 .sync-pending {
-    background: rgba(14, 165, 233, 0.15);
-    border-color: rgba(14, 165, 233, 0.35);
-    color: #7dd3fc;
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.35);
+    color: #93c5fd;
 }
 
 .sync-pending .sync-icon {
@@ -816,15 +835,15 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 }
 
 .sync-offline {
-    background: rgba(245, 158, 11, 0.18);
-    border-color: rgba(245, 158, 11, 0.4);
-    color: #fcd34d;
+    background: rgba(226, 163, 54, 0.18);
+    border-color: rgba(226, 163, 54, 0.4);
+    color: #e8b04f;
 }
 
 .sync-error {
-    background: rgba(239, 68, 68, 0.18);
-    border-color: rgba(239, 68, 68, 0.45);
-    color: #fca5a5;
+    background: rgba(229, 72, 77, 0.18);
+    border-color: rgba(229, 72, 77, 0.45);
+    color: #f2a3a6;
 }
 
 /* Die Spielzeit ist jetzt ein Button (antippen = korrigieren) */
@@ -901,7 +920,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     width: 100%;
     padding: 12px 14px;
     border-radius: 10px;
-    background: rgba(30, 41, 59, 0.97);
+    background: rgba(31, 36, 44, 0.97);
     border: 1px solid var(--border-color);
     border-left: 4px solid var(--accent-color);
     color: var(--text-color);
@@ -968,8 +987,8 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
    ========================================= */
 
 /* Fehlende Farbklassen fuer die neuen Aktionen */
-.action-button.orange { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-color: rgba(245, 158, 11, 0.45); }
-.court-action-btn.orange, .thumb-action-btn.orange { background: rgba(245, 158, 11, 0.2); border: 1px solid var(--warning-color); }
+.action-button.orange { background: rgba(226, 163, 54, 0.2); color: #e8b04f; border-color: rgba(226, 163, 54, 0.45); }
+.court-action-btn.orange, .thumb-action-btn.orange { background: rgba(226, 163, 54, 0.2); border: 1px solid var(--warning-color); }
 
 /* --- Torwart-Anzeige im Header --- */
 .gk-badge {
@@ -979,9 +998,9 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     margin-left: 10px;
     padding: 3px 10px;
     border-radius: 999px;
-    background: rgba(245, 158, 11, 0.14);
-    border: 1px solid rgba(245, 158, 11, 0.35);
-    color: #fcd34d;
+    background: rgba(226, 163, 54, 0.14);
+    border: 1px solid rgba(226, 163, 54, 0.35);
+    color: #e8b04f;
     font-size: 0.78rem;
     font-weight: 600;
     font-family: inherit;
@@ -990,12 +1009,12 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     transition: background 0.15s ease;
 }
 
-.gk-badge:hover { background: rgba(245, 158, 11, 0.26); }
+.gk-badge:hover { background: rgba(226, 163, 54, 0.26); }
 
 .gk-badge.gk-missing {
-    background: rgba(239, 68, 68, 0.15);
-    border-color: rgba(239, 68, 68, 0.4);
-    color: #fca5a5;
+    background: rgba(229, 72, 77, 0.15);
+    border-color: rgba(229, 72, 77, 0.4);
+    color: #f2a3a6;
 }
 
 .gk-caret { opacity: 0.65; font-size: 0.7em; }
@@ -1029,7 +1048,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 
 .gk-option.gk-active {
     border-color: var(--warning-color);
-    background: rgba(245, 158, 11, 0.14);
+    background: rgba(226, 163, 54, 0.14);
 }
 
 .gk-radio { color: var(--warning-color); font-size: 1.1em; }
@@ -1092,7 +1111,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .stats-table thead th {
     position: sticky;
     top: 0;
-    background: rgba(15, 23, 42, 0.97);
+    background: rgba(15, 18, 22, 0.97);
     color: var(--text-muted);
     font-size: 0.76rem;
     font-weight: 600;
@@ -1105,22 +1124,22 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     text-align: left;
     position: sticky;
     left: 0;
-    background: rgba(15, 23, 42, 0.97);
+    background: rgba(15, 18, 22, 0.97);
     z-index: 1;
     min-width: 140px;
 }
 
 .stats-table thead .col-name { z-index: 3; }
 .stats-table tbody tr:hover td { background: rgba(255, 255, 255, 0.04); }
-.stats-table tbody tr:hover .col-name { background: rgba(30, 41, 59, 0.99); }
+.stats-table tbody tr:hover .col-name { background: rgba(31, 36, 44, 0.99); }
 
 .stats-table .num { font-weight: 500; }
 .stats-table .strong { font-weight: 800; }
-.stats-table .muted { color: rgba(148, 163, 184, 0.45); }
+.stats-table .muted { color: rgba(152, 162, 176, 0.45); }
 
-.stats-table .q-good { color: #34d399; font-weight: 700; }
-.stats-table .q-mid  { color: #fbbf24; font-weight: 700; }
-.stats-table .q-low  { color: #f87171; font-weight: 700; }
+.stats-table .q-good { color: #5cc79a; font-weight: 700; }
+.stats-table .q-mid  { color: #e8b04f; font-weight: 700; }
+.stats-table .q-low  { color: #ee7a7e; font-weight: 700; }
 
 .stats-total td {
     border-top: 2px solid var(--border-color);
@@ -1170,7 +1189,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     aspect-ratio: 1 / 1;
     flex: 0 0 auto;
     border-radius: 50%;
-    background: var(--primary-color, #1e293b);
+    background: var(--primary-color, #1f242c);
     border: 2px solid rgba(255, 255, 255, 0.85);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
     overflow: hidden;
@@ -1219,7 +1238,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: rgba(220, 38, 38, 0.88);
+    background: rgba(229, 72, 77, 0.88);
     color: #fff;
     font-size: calc(var(--badge-size, 40px) * 0.28);
     font-weight: 800;
@@ -1233,7 +1252,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .court-player-node.selected .player-badge,
 .court-player-node:hover .player-badge {
     border-color: var(--accent-color);
-    box-shadow: 0 0 12px rgba(56, 189, 248, 0.55);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.55);
 }
 .court-player-node .name {
     font-size: 0.62rem;
@@ -1331,7 +1350,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     /* Deckend dunkel. var(--panel-bg) ist halbtransparent und wurde vom
        hellen Berichtsbogen darunter aufgehellt - die weissen Knopfbeschriftungen
        standen dann praktisch weiss auf weiss. */
-    background: #1e293b;
+    background: #1f242c;
     border-bottom: 1px solid var(--border-color);
 }
 .report-toolbar .control-btn {
@@ -1570,7 +1589,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .ae-player:hover { background: rgba(255, 255, 255, 0.08); }
 .ae-player.ae-active {
     border-color: var(--accent-color);
-    background: rgba(14, 165, 233, 0.16);
+    background: rgba(59, 130, 246, 0.16);
 }
 
 .ae-actions {
@@ -1662,7 +1681,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     overflow-y: auto;
     box-sizing: border-box;
     padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
-    background: rgba(15, 23, 42, 0.97);
+    background: rgba(15, 18, 22, 0.97);
     border: 1px solid var(--border-color);
     border-bottom: none;
     border-radius: 16px 16px 0 0;
@@ -1688,7 +1707,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .cas-title {
     font-weight: 700;
     font-size: 0.95rem;
-    color: #f1f5f9;
+    color: #e8ebef;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1698,15 +1717,15 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     min-width: 44px;
     min-height: 44px;
     border-radius: 10px;
-    background: #475569;
-    border: 1px solid #94a3b8;
-    color: #f8fafc;
+    background: #2a313b;
+    border: 1px solid #4a5463;
+    color: #e8ebef;
     font-size: 1rem;
     line-height: 1;
     cursor: pointer;
     touch-action: manipulation;
 }
-.cas-close:active { background: #334155; }
+.cas-close:active { background: #242a33; }
 
 .cas-grid {
     display: grid;
@@ -1846,9 +1865,9 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     text-transform: uppercase;
     padding: 2px 7px;
     border-radius: 4px;
-    background: rgba(239, 68, 68, 0.18);
-    color: #fca5a5;
-    border: 1px solid rgba(239, 68, 68, 0.35);
+    background: rgba(229, 72, 77, 0.18);
+    color: #f2a3a6;
+    border: 1px solid rgba(229, 72, 77, 0.35);
     margin-left: 6px;
     vertical-align: middle;
 }
@@ -1905,9 +1924,9 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 }
 
 .ticker-pause {
-    background: rgba(245, 158, 11, 0.15);
-    border-color: rgba(245, 158, 11, 0.35);
-    color: #fcd34d;
+    background: rgba(226, 163, 54, 0.15);
+    border-color: rgba(226, 163, 54, 0.35);
+    color: #e8b04f;
 }
 
 /* --- Einstellansicht --- */
@@ -1915,7 +1934,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .ticker-block {
     margin-bottom: 22px;
     padding-bottom: 18px;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    border-bottom: 1px solid rgba(152, 162, 176, 0.18);
 }
 
 .ticker-block:last-child { border-bottom: none; }
@@ -1934,7 +1953,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 
 .ticker-hinweis code {
     font-size: 0.95em;
-    background: rgba(148, 163, 184, 0.14);
+    background: rgba(152, 162, 176, 0.14);
     padding: 1px 5px;
     border-radius: 4px;
     /* Die Platzhalterliste ist lang; ohne das sprengt sie schmale
@@ -2027,8 +2046,8 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     margin-top: 7px;
     padding: 9px 12px;
     border-radius: 10px 10px 10px 3px;
-    background: rgba(16, 185, 129, 0.12);
-    border: 1px solid rgba(16, 185, 129, 0.25);
+    background: rgba(63, 178, 127, 0.12);
+    border: 1px solid rgba(63, 178, 127, 0.25);
     font-size: 0.87rem;
     line-height: 1.5;
     min-height: 1.5em;
@@ -2037,15 +2056,15 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 }
 
 .ticker-vorschau-leer {
-    background: rgba(148, 163, 184, 0.1);
-    border-color: rgba(148, 163, 184, 0.22);
+    background: rgba(152, 162, 176, 0.1);
+    border-color: rgba(152, 162, 176, 0.22);
     color: var(--text-muted);
     font-style: italic;
 }
 
 .ticker-meldung { margin: 10px 0 0; font-size: 0.88rem; }
-.ticker-ok { color: #6ee7b7; }
-.ticker-fehler { color: #fca5a5; }
+.ticker-ok { color: #7fd3ad; }
+.ticker-fehler { color: #f2a3a6; }
 .ticker-laden { color: var(--text-muted); }
 
 .ticker-fuss {
@@ -2063,7 +2082,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     margin: 10px 0 4px;
     padding: 12px;
     border-radius: 10px;
-    background: rgba(148, 163, 184, 0.09);
+    background: rgba(152, 162, 176, 0.09);
 }
 
 .ticker-spielerzeile {
@@ -2086,7 +2105,7 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .ticker-spieler-vorschau {
     margin: 10px 0;
     font-size: 0.85rem;
-    color: #6ee7b7;
+    color: #7fd3ad;
     white-space: pre-wrap;
     word-break: break-word;
 }
@@ -2097,3 +2116,364 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     .ticker-badge { margin-left: 6px; font-size: 0.72rem; padding: 2px 8px; }
     .ticker-badge .ticker-text { display: none; }
 }
+
+/* =========================================
+   20. NEUE BASIS (Stufe 1): Knoepfe, Felder, Karten
+   =========================================
+   Regeln: normale Knoepfe sind graue Flaechen mit Rand. Pro Bildschirm
+   gibt es genau EINEN Hauptknopf in Blau (.btn-primary). Rot steht nur
+   fuer Gefahr, Gruen/Gelb nur dort, wo sie etwas bedeuten. */
+
+:root { color-scheme: dark; }
+
+[hidden] { display: none !important; }
+
+/* Welcher Bereich gerade zu sehen ist, bestimmt allein die Klasse am
+   <body> (gesetzt von window.Start.ansicht in js/start.js). */
+body:not(.ansicht-spiel) header,
+body:not(.ansicht-spiel) #app-container,
+body:not(.ansicht-spiel) footer { display: none !important; }
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--abstand-2);
+    min-height: var(--touch);
+    padding: var(--abstand-2) var(--abstand-4);
+    background: var(--raised-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background 0.15s ease;
+}
+.btn:hover { background: #262c35; }
+.btn:active { background: #2c333d; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+
+.btn-primary {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+    color: #fff;
+}
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-primary:active { background: var(--accent-hover); }
+
+/* Gefaehrliche Aktion: roter Rand und rote Schrift, keine rote Flaeche.
+   Die rote Flaeche waere sonst lauter als der Hauptknopf. */
+.btn-danger {
+    background: transparent;
+    border-color: var(--danger-color);
+    color: var(--danger-color);
+}
+.btn-danger:hover { background: rgba(229, 72, 77, 0.12); }
+
+.btn-block { display: flex; width: 100%; }
+
+/* Textknopf: sieht aus wie ein Link, ist aber gross genug zum Tippen */
+.btn-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch);
+    padding: 0 var(--abstand-2);
+    background: none;
+    border: none;
+    color: var(--accent-color);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.btn-link:hover { text-decoration: underline; }
+/* Im Fliesstext (Hinweise) nicht auf 44 px aufblasen */
+.feld-hinweis .btn-link, .formfehler .btn-link { min-height: 0; padding: 0; display: inline; }
+
+.btn:focus-visible, .btn-link:focus-visible, .control-btn:focus-visible,
+.feld:focus-visible, .segment-teil input:focus-visible + span,
+.schalter input:focus-visible + .schalter-spur {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
+.feld {
+    display: block;
+    width: 100%;
+    min-height: var(--touch);
+    padding: var(--abstand-2) var(--abstand-3);
+    background: var(--raised-bg);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    font: inherit;
+    font-size: 16px;   /* unter 16 px zoomt iOS beim Antippen ins Feld */
+}
+.feld::placeholder { color: #6b7686; }
+.feld:focus { outline: none; border-color: var(--accent-color); }
+
+.feld-label {
+    display: block;
+    margin: var(--abstand-4) 0 var(--abstand-1);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+.feld-label:first-of-type { margin-top: 0; }
+.optional { font-weight: 400; }
+.feld-hinweis {
+    margin: var(--abstand-2) 0 0;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    min-height: 0;
+}
+.feld-hinweis:empty { display: none; }
+
+.feld-paar { display: grid; grid-template-columns: 1fr 1fr; gap: var(--abstand-3); }
+.feld-paar > div { min-width: 0; }
+.feld-paar .feld-label { margin-top: var(--abstand-4); }
+
+.karte {
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: var(--abstand-4);
+    margin: 0 0 var(--abstand-4);
+}
+.karte-titel { margin: 0 0 var(--abstand-4); font-size: 1.125rem; font-weight: 700; }
+
+.hinweisbox {
+    margin-top: var(--abstand-3);
+    padding: var(--abstand-3);
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+}
+.hinweisbox p { margin: 0 0 var(--abstand-3); color: var(--text-muted); font-size: 0.9375rem; }
+
+.formfehler {
+    margin: var(--abstand-4) 0 0;
+    padding: var(--abstand-3);
+    border: 1px solid var(--danger-color);
+    border-radius: var(--radius);
+    color: var(--text-color);
+    font-size: 0.9375rem;
+}
+.formfehler .btn-link { color: var(--text-color); text-decoration: underline; }
+
+/* Auswahl aus wenigen Werten (Halbzeitlaenge). Die Radio-Knoepfe sind nur
+   versteckt, nicht entfernt - Tastatur und Vorlese-Programme funktionieren. */
+.segment {
+    display: flex;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--raised-bg);
+    padding: 2px;
+    gap: 2px;
+}
+.segment-teil { flex: 1 1 0; position: relative; margin: 0; cursor: pointer; }
+.segment-teil input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+}
+.segment-teil span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.segment-teil input:checked + span {
+    background: var(--bg-color);
+    color: var(--text-color);
+    box-shadow: inset 0 0 0 1px var(--accent-color);
+}
+
+/* Schalter (an/aus) */
+.schalter-zeile { margin-top: var(--abstand-1); }
+.schalter {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--abstand-3);
+    min-height: var(--touch);
+    cursor: pointer;
+}
+.schalter input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+}
+.schalter-spur {
+    position: relative;
+    flex: 0 0 auto;
+    width: 48px;
+    height: 28px;
+    border-radius: 14px;
+    background: var(--raised-bg);
+    border: 1px solid var(--border-color);
+    transition: background 0.15s ease;
+}
+.schalter-spur::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+.schalter input:checked + .schalter-spur { background: var(--accent-strong); border-color: var(--accent-strong); }
+.schalter input:checked + .schalter-spur::after { transform: translateX(20px); background: #fff; }
+.schalter input:disabled + .schalter-spur { opacity: 0.45; }
+.schalter input:disabled ~ .schalter-text { color: var(--text-muted); }
+
+/* ---------- Anmeldung ---------- */
+.auth-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: var(--bg-color);
+    align-items: center;
+    justify-content: center;
+    overflow-y: auto;
+    padding: var(--abstand-4);
+}
+.auth-card { width: 100%; max-width: 380px; margin: auto; }
+.auth-appname {
+    color: var(--text-muted);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.auth-titel { margin: var(--abstand-1) 0 var(--abstand-6); font-size: 1.75rem; font-weight: 700; }
+.auth-form .feld-label { margin-top: var(--abstand-4); }
+.auth-form .feld-label:first-child { margin-top: 0; }
+.auth-code-gruppe { display: none; }
+.auth-code-gruppe.ist-sichtbar { display: block; }
+.auth-hinweis { margin: var(--abstand-2) 0 0; color: var(--text-muted); font-size: 0.875rem; }
+.auth-hinweis:empty { display: none; }
+.auth-meldung { margin: var(--abstand-4) 0 0; font-size: 0.9375rem; }
+.auth-meldung:empty { display: none; }
+.auth-meldung.ist-fehler { color: var(--danger-color); }
+.auth-meldung.ist-ok { color: var(--success-color); }
+.auth-meldung.ist-warn { color: var(--warning-color); }
+.auth-form .btn-primary { margin-top: var(--abstand-6); }
+.auth-wechsel { display: flex; width: 100%; justify-content: center; margin-top: var(--abstand-2); }
+
+/* ---------- Startseite ---------- */
+.start-screen { display: none; }
+body.ansicht-start .start-screen {
+    display: block;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+.start-inner {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: var(--abstand-4) var(--abstand-4) var(--abstand-8);
+}
+.start-laedt { color: var(--text-muted); text-align: center; padding: var(--abstand-8) 0; }
+
+.start-kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0 var(--abstand-3);
+    margin-bottom: var(--abstand-2);
+}
+.start-titel { margin: 0; font-size: 1.375rem; font-weight: 700; }
+.start-konto {
+    flex: 1 0 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--text-muted);
+    font-size: 0.9375rem;
+}
+.start-konto .btn-link { padding-right: 0; }
+.start-user { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.start-sync-platz .sync-badge { margin-left: 0; }
+/* Auch auf dem Handy mit Text: hier ist Platz, und "Gesichert" sagt mehr als ein Punkt */
+.start-screen .sync-badge .sync-text { display: inline; }
+
+.laufend-name { font-size: 1.125rem; font-weight: 600; overflow-wrap: anywhere; }
+.laufend-zeile {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--abstand-1) var(--abstand-4);
+    margin: var(--abstand-1) 0 var(--abstand-4);
+}
+.laufend-stand { font-size: 2.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.laufend-meta { color: var(--text-muted); font-size: 0.9375rem; font-variant-numeric: tabular-nums; }
+#start-laufend .btn + .btn { margin-top: var(--abstand-2); }
+
+.start-links {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--abstand-2) var(--abstand-6);
+}
+
+/* ---------- Kopfzeile des Spiels, ruhiger ---------- */
+header { align-items: center; }
+.control-btn.zur-startseite { padding-left: var(--abstand-2); }
+
+/* Sync- und Ticker-Zustand: grauer Rand, Farbe nur im Punkt */
+.sync-badge,
+.sync-badge.sync-ok, .sync-badge.sync-pending,
+.sync-badge.sync-offline, .sync-badge.sync-error,
+.ticker-badge, .ticker-badge.ticker-aktiv, .ticker-badge.ticker-pause {
+    background: transparent;
+    border-color: var(--border-color);
+    color: var(--text-muted);
+}
+.sync-badge { gap: var(--abstand-2); }
+.sync-badge .sync-icon { display: none; }
+.sync-badge::before,
+.ticker-badge .punkt {
+    content: '';
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--punkt, var(--text-muted));
+}
+.ticker-badge .punkt { display: inline-block; }
+.sync-ok { --punkt: var(--success-color); }
+.sync-pending { --punkt: var(--accent-color); }
+.sync-pending::before { animation: punkt-puls 1.1s ease-in-out infinite; }
+.sync-offline { --punkt: var(--warning-color); }
+.sync-error { --punkt: var(--danger-color); }
+.ticker-aktiv { --punkt: var(--success-color); }
+.ticker-pause { --punkt: var(--warning-color); }
+@keyframes punkt-puls { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .sync-pending::before { animation: none; } }
+
+@media (max-width: 768px) {
+    .control-btn.zur-startseite { align-self: flex-start; flex: 0 0 auto; }
+}
+
+/* Zwei Felder nebeneinander nur, wo sie nicht beschnitten werden */
+@media (max-width: 480px) {
+    .feld-paar { grid-template-columns: 1fr; gap: 0; }
+}
+#start-formular .btn-primary { margin-top: var(--abstand-6); }
+#start-formular .formfehler + .btn-primary { margin-top: var(--abstand-4); }
+/* Das Label der Halbzeitlaenge ist ein <span> und damit das erste seiner Art -
+   die :first-of-type-Regel oben haette ihm den Abstand genommen. */
+#start-hz-label { margin-top: var(--abstand-4); }

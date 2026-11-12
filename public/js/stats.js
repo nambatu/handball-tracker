@@ -550,10 +550,10 @@ function archivZeile(a) {
             <div class="archive-meta">${esc(zeile2)}</div>
         </div>
         <div class="archive-btns">
-            <button class="add-btn js-report">📄 Bericht</button>
-            <button class="control-btn js-csv">⬇️ CSV</button>
-            <button class="control-btn js-rename" title="Spiel benennen">✏️</button>
-            <button class="cancel-btn js-del" title="Spiel löschen">🗑️</button>
+            <button class="add-btn js-report">Bericht</button>
+            <button class="control-btn js-csv">CSV</button>
+            <button class="control-btn js-rename" title="Spiel benennen">Umbenennen</button>
+            <button class="cancel-btn js-del" title="Spiel löschen">Löschen</button>
         </div>
     `;
     li.querySelector('.js-report').onclick = () => window.Report.showArchiveReport(a.filename);

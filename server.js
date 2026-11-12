@@ -426,6 +426,7 @@ app.post('/api/state', requireUser, (req, res) => {
             rev: incomingRev,
             updatedAt: Number(incoming.updatedAt) || Date.now(),
             spielId: incoming.spielId || null,
+            spielName: incoming.spielName || null,
             spieler: Array.isArray(incoming.spieler) ? incoming.spieler : [],
             aktionen: Array.isArray(incoming.aktionen) ? incoming.aktionen : [],
             tickerMarken: Array.isArray(incoming.tickerMarken) ? incoming.tickerMarken : [],

@@ -233,6 +233,62 @@ function setTeamNames(heim, gast) {
     savePlayers();
 }
 
+/** Freier Spielname aus der Startseite (oder null). */
+function getSpielName() {
+    return state().spielName || null;
+}
+
+function setSpielName(name) {
+    state().spielName = (typeof name === 'string' ? name.trim().slice(0, 80) : '') || null;
+    savePlayers();
+}
+
+/**
+ * Laedt eine gespeicherte Mannschaft als eigenen Kader (ersetzt den bisherigen).
+ *
+ * Nimmt dieselben Store-Funktionen wie "Team laden" in der Spielerverwaltung
+ * (removePlayerFromStore / addPlayerToStore). Zwei Unterschiede, mit Absicht:
+ *  - Die Gegner-Eintraege bleiben stehen und kommen nicht aus dem gespeicherten
+ *    Team dazu. Sonst entsteht ein "Gegner" mit team 'heim' - und ein
+ *    gegnerisches Tor liesse sich nicht mehr erfassen.
+ *  - Nur fuer ein NEUES Spiel gedacht (noch keine Aktionen): Aktionen haengen
+ *    an der Spieler-id, ein Austausch mitten im Spiel wuerde sie verwaisen.
+ *
+ * @param {Array} spielerListe Spieler des gespeicherten Teams
+ */
+function ladeMannschaft(spielerListe) {
+    state().spieler.filter(function (p) { return !istGast(p); })
+        .forEach(function (p) { removePlayerFromStore(p.id); });
+    (spielerListe || []).filter(function (p) { return p && !istGast(p) && !istGastName(p.name); })
+        .forEach(function (p) { addPlayerToStore(p.name, p.nummer, p.position); });
+    state().aktiverTorwartId = null;
+    savePlayers();
+}
+
+/**
+ * Beginnt ein neues Spiel aus der Startseite: Name, Mannschaftsnamen,
+ * Halbzeitlaenge und eine frische Spielkennung - alles mit EINEM
+ * Sync.touch(), damit der Stand nicht halb geschrieben beim Server landet.
+ *
+ * Die Spielkennung entstand bisher nur beim Beenden eines Spiels
+ * (timer.js endGame). Fuer das allererste Spiel eines Kontos gab es keine -
+ * die Ticker-Zeitmarken liefen dann unter dem Notnamen 'spiel'.
+ */
+function beginneSpiel(opt) {
+    const st = state();
+    st.spielName = (typeof opt.spielName === 'string' ? opt.spielName.trim().slice(0, 80) : '') || null;
+    st.teamHeim = (typeof opt.teamHeim === 'string' ? opt.teamHeim.trim().slice(0, 40) : '') || null;
+    st.teamGast = (typeof opt.teamGast === 'string' ? opt.teamGast.trim().slice(0, 40) : '') || null;
+    st.spielId = 'g' + Date.now();
+    if (opt.halbzeitMinuten) {
+        // Erst den Stand setzen, dann die Uhr: Timer.setHalbzeitLaenge ruft nur
+        // dann selbst touch(), wenn sich st.halbzeitSekunden noch aendert.
+        st.halbzeitSekunden = Math.round(opt.halbzeitMinuten) * 60;
+        if (window.Timer) window.Timer.setHalbzeitLaenge(opt.halbzeitMinuten);
+    }
+    savePlayers();
+}
+
 // ===================================================================
 // AKTIVER TORWART
 // ===================================================================
@@ -386,6 +442,10 @@ window.Store = {
     getSPIELER: () => state().spieler,
     getTeamNames,
     setTeamNames,
+    getSpielName,
+    setSpielName,
+    ladeMannschaft,
+    beginneSpiel,
     isGoalkeeper,
     getGoalkeepers,
     getActiveGoalkeeper,
@@ -414,14 +474,16 @@ window.Store = {
     tickPlaytime,
 
     // Team API Wrappers
-    getTeams: async function() {
+    // leise: true = kein Toast bei Fehlern (die Startseite fragt im
+    // Hintergrund und meldet selbst, wenn die Liste fehlt)
+    getTeams: async function(optionen) {
         try {
             const res = await fetch('/api/teams');
             if (!res.ok) return [];
             return await res.json();
         } catch(e) {
             console.error(e);
-            if (window.Toast) window.Toast('Teams konnten nicht geladen werden (offline?)', { type: 'warn' });
+            if (window.Toast && !(optionen && optionen.leise)) window.Toast('Teams konnten nicht geladen werden (offline?)', { type: 'warn' });
             return [];
         }
     },
