@@ -4,24 +4,7 @@
 
 let isLoginMode = true;
 
-const originalFetch = window.fetch;
-window.fetch = async function() {
-    let [resource, config] = arguments;
-    if (!config) config = {};
-    if (!config.headers) config.headers = {};
-
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await originalFetch(resource, config);
-    // 401 handling for main api (not whatsapp which uses its own admin token logic)
-    if (response.status === 401 && resource.toString().startsWith('/api') && !resource.toString().includes('/api/whatsapp') && !resource.toString().includes('/api/login') && !resource.toString().includes('/api/register')) {
-        logoutUser();
-    }
-    return response;
-};
+// Der fetch-Wrapper (Anmeldung, 401-Abmeldung, Server oder Supabase) steckt in js/api.js.
 
 window.onload = async () => {
     registriereServiceWorker();
@@ -77,16 +60,15 @@ function frageServerNachAnmeldung() {
 }
 
 async function checkAuthStatus() {
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
+    if (!window.Api.hatAnmeldung()) {
         showAuthOverlay();
         return;
     }
 
-    // Token UND bekannter Name vorhanden: nicht erst den Server fragen.
+    // Anmeldung UND bekannter Name vorhanden: nicht erst den Server fragen.
     // In der Halle heisst jede Rueckfrage Wartezeit vor einem leeren
     // Bildschirm, und der lokale Stand traegt das Spiel ohnehin allein.
-    // Die Pruefung laeuft trotzdem - ein abgelaufenes Token fliegt dann
+    // Die Pruefung laeuft trotzdem - eine abgelaufene Anmeldung fliegt dann
     // ueber den 401-Weg raus, genau wie bei jeder anderen Anfrage auch.
     const bekannterName = localStorage.getItem('auth_username');
     if (bekannterName) {
@@ -185,9 +167,10 @@ function toggleAuthMode() {
     document.getElementById('auth-toggle-btn').innerText = isLoginMode ? 'Need an account? Register' : 'Already have an account? Login';
     document.getElementById('auth-error-msg').innerText = '';
 
-    // Einladungscode nur bei der Registrierung anzeigen
+    // Einladungscode gibt es nur noch beim alten Server (Pi). Auf Supabase
+    // ist die Registrierung offen.
     const codeEl = document.getElementById('auth-code');
-    if (codeEl) codeEl.style.display = isLoginMode ? 'none' : 'block';
+    if (codeEl) codeEl.style.display = (!isLoginMode && window.Api.modus === 'server') ? 'block' : 'none';
 
     const hintEl = document.getElementById('auth-hint');
     if (hintEl) hintEl.innerText = isLoginMode ? '' : 'Passwort: mindestens 8 Zeichen.';
@@ -201,35 +184,26 @@ window.loginUser = async function() {
 
     if(!user || !pass) return err.innerText = 'Fill all fields';
 
-    const endpoint = isLoginMode ? '/api/login' : '/api/register';
-
-    const payload = { username: user, password: pass };
-    if (!isLoginMode) {
-        const codeEl = document.getElementById('auth-code');
-        if (codeEl && codeEl.value) payload.code = codeEl.value;
-    }
-
     try {
-        const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-
-        const data = await res.json();
-        if (res.ok) {
-            if (isLoginMode) {
-                localStorage.setItem('auth_token', data.token);
-                localStorage.setItem('auth_username', data.username);
-                enterApp(data.username);
+        if (isLoginMode) {
+            const r = await window.Api.login(user, pass);
+            if (r.ok) {
+                enterApp(r.username);
             } else {
+                err.style.color = 'red';
+                err.innerText = r.error || 'Error';
+            }
+        } else {
+            const codeEl = document.getElementById('auth-code');
+            const r = await window.Api.register(user, pass, codeEl && codeEl.value ? codeEl.value : undefined);
+            if (r.ok) {
                 err.style.color = 'green';
                 err.innerText = 'Registered! Please login now.';
                 setTimeout(() => toggleAuthMode(), 1500);
+            } else {
+                err.style.color = 'red';
+                err.innerText = r.error || 'Error';
             }
-        } else {
-            err.style.color = 'red';
-            err.innerText = data.error || 'Error';
         }
     } catch(e) {
         err.style.color = 'red';
@@ -237,7 +211,12 @@ window.loginUser = async function() {
     }
 };
 
+// Mehrere parallele Anfragen koennen gleichzeitig ein 401 bekommen und
+// alle logoutUser() rufen. Ohne Sperre erschiene die Rueckfrage mehrfach.
+let abmeldungLaeuft = false;
+
 window.logoutUser = function() {
+    if (abmeldungLaeuft) return;
     // Nicht ausloggen, solange noch ungesicherte Aktionen offen sind -
     // sonst waere das Spiel nach dem Reload nur noch lokal vorhanden.
     if (window.Sync && window.Sync.isPending()) {
@@ -247,8 +226,12 @@ window.logoutUser = function() {
         );
         if (!weiter) return;
     }
-    localStorage.removeItem('auth_token');
-    location.reload();
+    abmeldungLaeuft = true;
+    // Auch das Abmelden darf nie am Netz haengen: Api.logout() raeumt nur
+    // lokal auf. Danach neu laden, damit alles vom Anmeldeformular aus startet.
+    Promise.resolve(window.Api.logout()).catch(function () {}).then(function () {
+        location.reload();
+    });
 };
 
 async function checkWhatsAppStatusOnLoad() {

@@ -1,5 +1,5 @@
 // ===================================================================
-// Edge Function "register" - Konto anlegen mit Einladungscode
+// Edge Function "register" - Konto anlegen
 // ===================================================================
 // Ersetzt POST /api/register aus server.js. Supabase Auth kennt nur
 // E-Mail-Adressen; aus dem Benutzernamen wird deshalb intern eine
@@ -7,10 +7,14 @@
 // etwas geschickt (email_confirm: true).
 //
 // Das Konto zaehlt erst mit der Zeile in "profiles" - die legt nur diese
-// Function an. Ohne gesetzten REGISTRATION_CODE wird NIE registriert.
+// Function an.
 //
-// verify_jwt ist aus: wer sich registriert, hat noch kein Token. Der
-// Schutz ist der Einladungscode plus das Limit je Adresse.
+// Die Registrierung ist OFFEN (Entscheidung des Besitzers vom 12.11.2026,
+// kein Einladungscode mehr). Jedes Konto sieht nur seine eigenen Daten;
+// der einzige Schutz gegen Massenanmeldungen ist das Limit von 5 Versuchen
+// je Stunde und Adresse.
+//
+// verify_jwt ist aus: wer sich registriert, hat noch kein Token.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -34,31 +38,11 @@ function usernameSlug(username: string): string {
   return String(username || "").replace(/[^a-z0-9]/gi, "_").toLowerCase();
 }
 
-// Zeitkonstanter Vergleich, damit sich der Code nicht ueber Laufzeit-
-// unterschiede Zeichen fuer Zeichen erraten laesst.
-async function gleich(a: string, b: string): Promise<boolean> {
-  const enc = new TextEncoder();
-  const [ha, hb] = await Promise.all([
-    crypto.subtle.digest("SHA-256", enc.encode(a)),
-    crypto.subtle.digest("SHA-256", enc.encode(b)),
-  ]);
-  const x = new Uint8Array(ha), y = new Uint8Array(hb);
-  let diff = 0;
-  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
-  return diff === 0;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return antwort(405, { error: "Nur POST" });
 
   try {
-    const erwartet = Deno.env.get("REGISTRATION_CODE") || "";
-    if (!erwartet) {
-      console.error("[register] REGISTRATION_CODE ist nicht gesetzt - Registrierung gesperrt.");
-      return antwort(503, { error: "Registrierung ist nicht eingerichtet." });
-    }
-
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -75,13 +59,9 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const username = String(body.username || "");
     const password = String(body.password || "");
-    const code = String(body.code || "");
 
     if (!username || !password) {
       return antwort(400, { error: "Benutzername und Passwort werden gebraucht." });
-    }
-    if (!(await gleich(code, erwartet))) {
-      return antwort(403, { error: "Ungültiger Einladungscode" });
     }
     if (!/^[a-zA-Z0-9_-]{3,32}$/.test(username)) {
       return antwort(400, { error: "Benutzername: 3-32 Zeichen, nur Buchstaben, Ziffern, _ und -" });

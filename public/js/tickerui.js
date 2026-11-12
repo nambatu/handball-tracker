@@ -40,7 +40,7 @@
 
         const k = await window.Ticker.laden();
         if (!k) {
-            el('ticker-body').innerHTML = '<p class="ticker-fehler">Einstellungen nicht ladbar. Ohne Verbindung geht das nicht.</p>';
+            el('ticker-body').innerHTML = '<p class="ticker-fehler">' + esc(window.Ticker.ladeHinweis || 'Einstellungen nicht ladbar. Ohne Verbindung geht das nicht.') + '</p>';
             return;
         }
         entwurf = JSON.parse(JSON.stringify(k));
@@ -318,7 +318,7 @@
 
         let k = window.Ticker.konfiguration;
         if (!k) k = await window.Ticker.laden();
-        if (!k) { behaelter.innerHTML = '<p class="ticker-fehler">Ohne Verbindung nicht änderbar.</p>'; return; }
+        if (!k) { behaelter.innerHTML = '<p class="ticker-fehler">' + esc(window.Ticker.ladeHinweis || 'Ohne Verbindung nicht änderbar.') + '</p>'; return; }
 
         const label = {};
         window.Ticker.ereignisse.forEach(function (e) { label[e.schluessel] = e.label; });

@@ -1,0 +1,44 @@
+# Veroeffentlicht den Ordner public/ auf GitHub Pages.
+# Es gibt keinen Build-Schritt: was in public/ liegt, wird so ausgeliefert.
+# Einmalig noetig: im Repo unter Settings > Pages als Quelle "GitHub Actions" waehlen.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Die Aktion braucht Schreibrecht auf Pages und ein Identitaets-Token,
+# mit dem GitHub die Veroeffentlichung bestaetigt.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Immer nur eine Veroeffentlichung gleichzeitig. Eine laufende wird nicht
+# abgebrochen, sonst bliebe die Seite im Zweifel halb aktualisiert.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Code holen
+        uses: actions/checkout@v4
+
+      - name: Pages einrichten
+        uses: actions/configure-pages@v5
+
+      - name: public/ hochladen
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Veroeffentlichen
+        id: deployment
+        uses: actions/deploy-pages@v4

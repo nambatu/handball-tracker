@@ -207,14 +207,14 @@ describe('Gesperrte Funktionen und Registrierung', { skip: SKIP, concurrency: fa
         }
     });
 
-    it('Registrierung mit falschem Code liefert nie 200 (503 = noch nicht eingerichtet, 403 = falscher Code)', async () => {
+    it('Registrierung prueft den Benutzernamen (400) und legt dabei kein Konto an', async () => {
         // Hoechstens EINE Anfrage hierher je Lauf: die Funktion erlaubt nur 5 je Stunde und Adresse.
+        // Bewusst ein ungueltiger Name: die Registrierung ist offen, ein gueltiger wuerde ein Konto anlegen.
         const r = await fetch(URL_BASIS + '/functions/v1/register', {
             method: 'POST',
             headers: { apikey: KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: 'vertragstest' + LAUF, password: 'Falsch-' + LAUF + '-1!', code: 'falscher-code-' + LAUF })
+            body: JSON.stringify({ username: 'x!', password: 'Falsch-' + LAUF + '-1!' })
         });
-        assert.notEqual(r.status, 200);
-        assert.ok([503, 403].includes(r.status), 'erwartet 503 oder 403, war ' + r.status + ' ' + (await r.text()));
+        assert.ok([400, 429].includes(r.status), 'erwartet 400 (oder 429 bei erreichtem Limit), war ' + r.status + ' ' + (await r.text()));
     });
 });

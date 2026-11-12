@@ -21,6 +21,7 @@
     let gatewayVorhanden = false;
     let kiVorhanden = false;
     let offeneGruppen = null;     // Zwischenspeicher der Gruppenliste
+    let ladeHinweis = null;       // Text des Servers, wenn der Ticker bewusst nicht verfuegbar ist (503)
 
     // ---------------------------------------------------------------
     // Laden und Sichern
@@ -29,7 +30,16 @@
     async function laden() {
         try {
             const res = await fetch('/api/ticker/config');
-            if (!res.ok) return null;
+            ladeHinweis = null;
+            if (!res.ok) {
+                // 503 mit Text = der Ticker ist (z.B. beim Umzug) bewusst aus.
+                // Das soll so dastehen statt "ohne Verbindung".
+                if (res.status === 503) {
+                    const f = await res.json().catch(function () { return null; });
+                    if (f && f.error) ladeHinweis = f.error;
+                }
+                return null;
+            }
             const d = await res.json();
             konfiguration = d.konfiguration;
             ereignisse = d.ereignisse || [];
@@ -142,6 +152,7 @@
         vorschau: vorschau,
         meldeLauf: meldeLauf,
         zeichneZustand: zeichneZustand,
+        get ladeHinweis() { return ladeHinweis; },
         get konfiguration() { return konfiguration; },
         get ereignisse() { return ereignisse; },
         get standardvorlagen() { return standardvorlagen; },

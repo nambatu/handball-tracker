@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Handball Ticker</title>
+    <!-- Stempel fuer den Service Worker: GitHub Pages kann keinen X-App-Shell-Header senden -->
+    <meta name="app-shell" content="handball-tracker">
     <meta name="theme-color" content="#0f172a">
     <meta name="description" content="Aktionen eines Handballspiels live erfassen — Tore, Paraden, Strafen — mit Statistik und Spielbericht.">
     <link rel="manifest" href="manifest.json">
@@ -14,7 +16,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=20260926">
+    <link rel="stylesheet" href="style.css?v=20261112">
 </head>
 
 <body>
@@ -344,17 +346,20 @@
         </div>
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="vendor/touch-drag.js?v=20260926"></script>
-    <script src="js/sync.js?v=20260926"></script>
-    <script src="js/wakelock.js?v=20260926"></script>
-    <script src="js/store.js?v=20260926"></script>
-    <script src="js/timer.js?v=20260926"></script>
-    <script src="js/stats.js?v=20260926"></script>
-    <script src="js/report.js?v=20260926"></script>
-    <script src="js/whatsapp.js?v=20260926"></script>
-    <script src="js/tickerui.js?v=20260926"></script>
-    <script src="js/ui.js?v=20260926"></script>
-    <script src="js/app.js?v=20260926"></script>
+    <script src="vendor/touch-drag.js?v=20261112"></script>
+    <script src="js/config.js?v=20261112"></script>
+    <script src="vendor/supabase.js?v=20261112"></script>
+    <script src="js/api.js?v=20261112"></script>
+    <script src="js/sync.js?v=20261112"></script>
+    <script src="js/wakelock.js?v=20261112"></script>
+    <script src="js/store.js?v=20261112"></script>
+    <script src="js/timer.js?v=20261112"></script>
+    <script src="js/stats.js?v=20261112"></script>
+    <script src="js/report.js?v=20261112"></script>
+    <script src="js/whatsapp.js?v=20261112"></script>
+    <script src="js/tickerui.js?v=20261112"></script>
+    <script src="js/ui.js?v=20261112"></script>
+    <script src="js/app.js?v=20261112"></script>
 
 </body>
 

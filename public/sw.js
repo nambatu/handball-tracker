@@ -20,7 +20,7 @@
 // offline passiert; ein zwischengespeicherter Spielstand waere genau die
 // Art von stillem Datenverlust, gegen die der Sync gebaut wurde.
 
-const CACHE = 'handball-tracker-v20260926';
+const CACHE = 'handball-tracker-v20261112';
 
 // Wie lange auf den Server gewartet wird, bevor der Cache uebernimmt.
 //
@@ -44,6 +44,9 @@ const SHELL = [
     'index.html',
     'style.css',
     'manifest.json',
+    'js/config.js',
+    'vendor/supabase.js',
+    'js/api.js',
     'js/sync.js',
     'js/wakelock.js',
     'js/store.js',
@@ -67,8 +70,37 @@ const SHELL = [
 // Browser und Server schiebt: die ngrok-Warnseite, ein WLAN-Anmelde-
 // portal, eine Fehlerseite des Proxys. Online faellt das nicht auf -
 // offline zeigt die App dann genau diese fremde Seite statt sich selbst.
-function istAppHuelle(res) {
-    return !!res && res.ok && res.headers.get('X-App-Shell') === 'handball-tracker';
+//
+// Der Stempel kann auf zwei Wegen kommen: als Header X-App-Shell (eigener
+// Server) oder als <meta name="app-shell"> in der Seite selbst. Letzteres
+// braucht es, weil GitHub Pages keine eigenen Header senden kann. Das
+// Portal oder die ngrok-Seite kennen unser Meta-Tag nicht, die Schutzwirkung
+// bleibt also dieselbe.
+//
+// Liest den Rumpf nur von einer KOPIE: ein Response-Rumpf laesst sich nur
+// einmal lesen, und das Original muss fuer cache.put bzw. den Browser
+// unberuehrt bleiben.
+const STEMPEL_META = '<meta name="app-shell" content="handball-tracker">';
+
+async function istAppHuelle(res) {
+    if (!res || !res.ok) return false;
+    if (res.headers.get('X-App-Shell') === 'handball-tracker') return true;
+    try {
+        const text = await res.clone().text();
+        return text.indexOf(STEMPEL_META) !== -1;
+    } catch (e) {
+        return false;
+    }
+}
+
+// Startseite im Hintergrund pruefen und ablegen. Die Kopie wird SOFORT
+// gezogen (vor dem await), solange das Original noch niemand gelesen hat -
+// danach darf der Browser die Antwort ruhig verbrauchen.
+function merkeStartseite(res, cache) {
+    const kopie = res.clone();
+    return istAppHuelle(kopie).then(function (ok) {
+        if (ok) return cache.put('index.html', kopie);
+    }).catch(function () { /* Ablegen ist nur ein Bonus */ });
 }
 
 // Wenn gar nichts Brauchbares da ist, lieber eine ehrliche Seite als eine
@@ -98,7 +130,7 @@ self.addEventListener('install', function (event) {
             try {
                 const res = await fetch(pfad, { cache: 'reload' });
                 const istSeite = pfad === 'index.html' || pfad === './';
-                if (istSeite && !istAppHuelle(res)) {
+                if (istSeite && !(await istAppHuelle(res))) {
                     console.warn('[SW] Startseite ohne Stempel - nicht gespeichert:', pfad);
                     return;
                 }
@@ -127,7 +159,7 @@ const TREFFER = { ignoreSearch: true };
 
 function aktualisiereImHintergrund(req, cache) {
     fetch(req).then(function (res) {
-        if (istAppHuelle(res)) cache.put('index.html', res.clone());
+        return merkeStartseite(res, cache);
     }).catch(function () { /* weiterhin kein Netz - nicht schlimm */ });
 }
 
@@ -152,7 +184,7 @@ self.addEventListener('fetch', function (event) {
             if (!gespeichert) {
                 try {
                     const netz = await fetch(req);
-                    if (istAppHuelle(netz)) cache.put('index.html', netz.clone());
+                    merkeStartseite(netz, cache);
                     return netz;
                 } catch (e) {
                     return notseite();
@@ -168,7 +200,7 @@ self.addEventListener('fetch', function (event) {
 
             try {
                 const netz = await mitZeitgrenze(fetch(req), NETZ_GEDULD_MS);
-                if (istAppHuelle(netz)) cache.put('index.html', netz.clone());
+                merkeStartseite(netz, cache);
                 return netz;
             } catch (e) {
                 // Kein Netz, oder es antwortet nicht schnell genug. Die App

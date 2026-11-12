@@ -169,3 +169,29 @@ Julian can ask the domain admin for the CNAME at any time; it is the step with t
   `sync-konflikte.md`, `offline-und-heim-gast.md`, `court-view-layout.md`,
   `roadmap-code-review.md`, `markt-und-wettbewerb.md`. They are not in this repo. If a session
   cannot see them, ask Julian to paste the one that is needed.
+
+## Progress log
+
+### 12 Nov 2026 (evening) - steps 1 to 3 built, not yet live
+
+Decisions by Julian: separate Supabase project, separate tracker accounts, users register
+again, **no invitation code** (registration is open; 5 attempts per hour and address).
+
+- Supabase project `handball-tracker`, ref `pbkasfptpfzmkhhsyzgr`, Frankfurt. Schema in
+  `supabase/migrations/`, registration in `supabase/functions/register/`.
+- `public/js/api.js` answers every `fetch('/api/...')` from Supabase with the status codes
+  and bodies of the old server. Mode is chosen by host name: `*.github.io` and
+  `tracker.langschwerts.de` use Supabase, everything else (the Pi) the old server. For local
+  tests: `python3 -m http.server 8765 --directory public`, then open `/?backend=supabase`.
+- **Deliberate change to the push contract:** an equal `rev` with different content is now
+  rejected as stale too (migration 0002). On the old server two devices starting from the same
+  state overwrote each other silently. The client did not need a change.
+- Tests: `npm test` (27 contract tests against the live backend; needs the `HT_*` variables,
+  see `test/helfer.mjs`; behind a proxy add `NODE_USE_ENV_PROXY=1`).
+- Ticker routes answer 503 in Supabase mode until step 4 is done.
+- Because registration is open, do **not** pre-load old data by user name
+  (`private.altdaten`): whoever registers the name first would get it. Attach old data only
+  after the real user has registered.
+
+Still open: switch on GitHub Pages (Settings > Pages > Source "GitHub Actions"), merge to
+`main`, data move from the Pi, ticker (steps 4 and 5), CNAME, redesign with a start page.

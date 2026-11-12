@@ -97,11 +97,21 @@ describe('Spielstand-Vertrag (push_state / get_state)', { skip: SKIP, concurrenc
         assert.deepEqual((await getState(A)).json, vorher, 'abgelehnter Push darf nichts veraendern');
     });
 
-    it('gleiche rev wird angenommen (nur existingRev > incomingRev wird abgewiesen)', async () => {
+    it('gleiche rev mit ANDEREM Inhalt ist veraltet (zwei Geraete vom selben Stand aus)', async () => {
+        // Abweichung von server.js, mit Absicht: dort hat das zweite Geraet
+        // das erste bei gleicher rev stillschweigend ueberschrieben.
         await serverAuf(A, 5, { spieler: [spieler('p1', 'Alt')] });
         const r = await pushState(A, { rev: 5, spieler: [spieler('p1', 'Neu')] });
+        assert.equal(r.json.ok, false);
+        assert.equal(r.json.error, 'stale');
+        assert.equal((await getState(A)).json.spieler[0].name, 'Alt');
+    });
+
+    it('gleiche rev mit GLEICHEM Inhalt wird angenommen (wiederholter Push nach verlorener Antwort)', async () => {
+        await serverAuf(A, 5, { spieler: [spieler('p1', 'Alt')] });
+        const stand = (await getState(A)).json;
+        const r = await pushState(A, stand);
         assert.deepEqual(r.json, { ok: true, rev: 5 });
-        assert.equal((await getState(A)).json.spieler[0].name, 'Neu');
     });
 
     it('hoehere rev wird angenommen', async () => {
