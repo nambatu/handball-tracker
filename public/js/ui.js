@@ -244,6 +244,13 @@ function openActionSheet(playerId, posClass) {
     sheet.id = ACTION_SHEET_ID;
     sheet.className = 'court-action-sheet';
     sheet.setAttribute('role', 'group');
+    // Geisterklick: Der Tipp auf einen Spieler loest das Zeichnen aus, das Sheet
+    // erscheint UNTER dem Finger, und der nachgereichte Klick des Browsers traf
+    // dann die Taste darunter (meist "Wurf mit Tor"). Klicks in den ersten
+    // 350 ms nach einem Spielertipp gelten daher nicht als Bedienung.
+    sheet.addEventListener('click', function (e) {
+        if (Date.now() - letzterTapAm < 350) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
 
     // Kopfzeile: das Sheet sitzt ueber dem Feld, der markierte Spieler ist
     // womoeglich verdeckt. Ohne Namen tippt man im Eifer auf den Falschen.
@@ -462,8 +469,10 @@ function renderTeamNames() {
     const names = window.Store.getTeamNames();
     const heimEl = document.getElementById('team-name');
     const gastEl = document.getElementById('guest-name');
-    if (heimEl) heimEl.textContent = names.heim;
-    if (gastEl) gastEl.textContent = names.gast;
+    // title: im Stand werden lange Namen gekuerzt; voll zu sehen sind sie per Tipp
+    // auf den Stand (Spiel-Info) und hier als Tooltip.
+    if (heimEl) { heimEl.textContent = names.heim; heimEl.title = names.heim; }
+    if (gastEl) { gastEl.textContent = names.gast; gastEl.title = names.gast; }
 }
 
 function openTeamNameEdit() {
@@ -1580,6 +1589,7 @@ function handleDrop(e, newPosition) {
 // frisch erzeugten Knoten, dessen eigene Sperre noch unberuehrt waere -
 // und der haette die Auswahl sofort wieder aufgehoben.
 let tapEchoBis = 0;
+let letzterTapAm = 0;
 
 function istTapEcho() {
     return Date.now() < tapEchoBis;
@@ -1599,6 +1609,7 @@ function onTap(el, handler) {
     el.addEventListener('pointerup', function (e) {
         if (bewegt || !t0 || Date.now() - t0 > 700) return;
         tapEchoBis = Date.now() + 500;
+        letzterTapAm = Date.now();
         e.stopPropagation();
         handler(e);
     });

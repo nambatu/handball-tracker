@@ -20,7 +20,7 @@
 // offline passiert; ein zwischengespeicherter Spielstand waere genau die
 // Art von stillem Datenverlust, gegen die der Sync gebaut wurde.
 
-const CACHE = 'handball-tracker-v20261113';
+const CACHE = 'handball-tracker-v20261114';
 
 // Wie lange auf den Server gewartet wird, bevor der Cache uebernimmt.
 //

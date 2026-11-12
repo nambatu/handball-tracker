@@ -53,7 +53,8 @@ body {
        hier overflow:hidden steht, landete alles Ueberzaehlige unerreichbar
        unterhalb des Bildschirms. */
     height: 100vh;
-    min-height: 100vh;
+    height: 100dvh;
+    min-height: 0;
     /* Systemschrift statt Google Fonts: laedt ohne Netz, ohne fremden
        Server und ohne DSGVO-Frage - und sieht auf jedem Geraet nach dem
        Geraet aus. */
@@ -290,19 +291,20 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 /* --- Toasts --- */
 #toast-container {
     position: fixed;
-    /* --cas-height / --cas-width setzt das Aktions-Sheet (unten bzw. als
-       Seitenleiste). Ohne den Versatz legen sich die Toasts genau ueber die
-       Aktionsbuttons. */
-    left: calc((100vw - var(--cas-width, 0px)) / 2);
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px) + var(--cas-height, 0px));
+    /* Fest am unteren Rand und UNTER dem Aktions-Sheet (z-index 250 < 300):
+       Frueher rutschte der Toast beim Oeffnen des Sheets nach oben - genau
+       unter den Finger, und der nachgereichte Klick des Browsers traf
+       "Rueckgaengig". So bewegt er sich nie; das Sheet deckt ihn einfach zu. */
+    left: 50%;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
-    z-index: 10000;
+    z-index: 250;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 8px;
     pointer-events: none;
-    width: min(calc(100vw - 24px - var(--cas-width, 0px)), 460px);
+    width: min(calc(100vw - 24px), 460px);
 }
 
 .toast {
@@ -950,7 +952,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 /* Im Homescreen-Betrieb gibt es keine Browserleiste - dvh rechnet das
    korrekt, vh zaehlt auf iOS die eingeblendete Leiste faelschlich mit. */
 @supports (height: 100dvh) {
-    body { min-height: 100dvh; }
     .overlay-view { height: 100dvh; }
 }
 
@@ -1661,3 +1662,326 @@ body.ansicht-start .start-screen {
 /* Das Label der Halbzeitlaenge ist ein <span> und damit das erste seiner Art -
    die :first-of-type-Regel oben haette ihm den Abstand genommen. */
 #start-hz-label { margin-top: var(--abstand-4); }
+
+
+/* =========================================
+   21. SPIELANSICHT (Stufe 2): nur das Feld
+   =========================================
+   Mobil zuerst. Hochkant: Kopfzeile (56) + Uhrzeile (48), darunter
+   Gegner, Feld (nimmt den ganzen Rest), Bank. Quer (Seitenverhaeltnis
+   ab 11:10): Feld links, rechts Gegner und Bank. Nichts scrollt, ausser
+   der Bank in ihrem eigenen Streifen. */
+
+.spiel { display: none; }
+body.ansicht-spiel .spiel {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+}
+
+.spiel-kopf {
+    flex: 0 0 auto;
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--border-color);
+    padding: env(safe-area-inset-top, 0px) max(8px, env(safe-area-inset-right, 0px)) 0 max(8px, env(safe-area-inset-left, 0px));
+    z-index: 100;
+}
+.kopf-oben, .kopf-uhr { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.kopf-oben { height: 56px; }
+.kopf-uhr { height: 48px; border-top: 1px solid var(--border-color); }
+
+.kopf-knopf {
+    flex: 0 0 auto;
+    width: 44px; height: 44px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: transparent; color: var(--text-color);
+    border: 1px solid transparent; border-radius: var(--radius);
+    font: inherit; cursor: pointer; padding: 0; touch-action: manipulation;
+}
+.kopf-knopf:active { background: var(--raised-bg); }
+.kopf-menue { gap: 0; }
+.kopf-menue-text { font-size: 11px; line-height: 1; margin-top: 1px; color: var(--text-muted); }
+
+.spielstand {
+    flex: 1 1 0; min-width: 0; height: 48px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    background: transparent; color: var(--text-color);
+    border: 0; border-radius: var(--radius); padding: 0;
+    font: inherit; cursor: pointer; touch-action: manipulation;
+}
+.sb-name {
+    flex: 1 1 0; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 13px; font-weight: 600; line-height: 1.2;
+}
+.sb-heim { text-align: right; }
+.sb-gast { text-align: left; color: var(--text-muted); }
+.sb-stand { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
+.score-number {
+    background: none; border: 0; padding: 0; min-width: 0;
+    font-size: 26px; font-weight: 800; line-height: 1;
+    font-variant-numeric: tabular-nums; border-radius: 0;
+}
+.score-divider { font-size: 20px; font-weight: 700; color: var(--text-muted); line-height: 1; }
+
+.uhr-block {
+    flex: 0 1 auto; min-width: 0; height: 44px;
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+    background: transparent; color: var(--text-color);
+    border: 0; border-radius: var(--radius); padding: 0 4px;
+    font: inherit; cursor: pointer; touch-action: manipulation; text-align: left;
+}
+.uhr-zahlen { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.timer-value { font-size: 17px; font-weight: 700; line-height: 1.15; color: var(--text-color); }
+.timer-target { font-size: 13px; line-height: 1.15; color: var(--text-muted); margin: 0; font-weight: 500; }
+.timer-target.is-over { color: var(--warning-color); font-weight: 600; }
+.uhr-hz { font-size: 12px; line-height: 1.1; color: var(--text-muted); }
+
+.uhr-sync { flex: 1 1 auto; display: flex; justify-content: flex-end; align-items: center; min-width: 0; }
+.uhr-sync .sync-badge {
+    margin: 0; padding: 0 4px; border: 0; background: none; min-height: 0;
+    font-size: 12px; gap: 6px; color: var(--text-muted);
+}
+.uhr-sync .sync-badge .sync-text { display: none; }
+.uhr-sync .sync-badge.sync-offline::after { content: "Offline"; }
+.uhr-sync .sync-badge.sync-error::after { content: "Ungesichert"; }
+.uhr-sync .sync-badge.sync-pending::after { content: "Sichere…"; }
+
+.uhr-knopf {
+    flex: 0 0 auto; min-width: 100px; height: 44px; padding: 0 12px;
+    background: var(--raised-bg); color: var(--text-color);
+    border: 1px solid var(--border-color); border-radius: var(--radius);
+    font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; touch-action: manipulation;
+}
+.uhr-knopf.primaer { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+
+/* ---------- Feld ---------- */
+#app-container { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+#dynamic-view-container {
+    --feld-badge: 44px;
+    --luecke: 6px;
+    flex: 1 1 auto; min-height: 0; min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "gegner" "feld" "bank";
+    gap: var(--luecke);
+    padding: var(--luecke) max(10px, env(safe-area-inset-right, 0px)) max(var(--luecke), env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
+    overflow: hidden;
+}
+.court-opponent-area { grid-area: gegner; display: flex; justify-content: center; min-width: 0; }
+.court-opponent-btn {
+    width: 100%; max-width: 360px; min-height: 44px; padding: 0 14px;
+    background: rgba(229, 72, 77, 0.14); border: 1px solid var(--danger-color);
+    color: var(--text-color); border-radius: var(--radius);
+    font: inherit; font-size: 15px; font-weight: 700; text-align: center;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    cursor: pointer; touch-action: manipulation;
+}
+.court-opponent-btn.is-selected { background: rgba(229, 72, 77, 0.3); border-color: #fff; }
+
+.court-stage {
+    grid-area: feld; min-height: 0; min-width: 0;
+    container-type: size;
+    display: flex; align-items: center; justify-content: center;
+}
+.court-active-area {
+    position: relative;
+    width: 100%; height: 100%;
+    /* Seitenverhaeltnis zwischen 0,7 und 1,6 (Breite:Hoehe). Dazwischen fuellt
+       das Feld den Platz, ausserhalb bleibt es in der Form und wird zentriert. */
+    width: min(100cqw, 160cqh, 960px);
+    height: min(100cqh, 142.8cqw);
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color); border-radius: 12px;
+    overflow: hidden;
+    background-image: radial-gradient(ellipse 45% 48% at 50% 100%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.04) 100%, transparent 100%);
+}
+.court-drop-zone {
+    position: absolute; width: 64px; height: 64px; border-radius: 50%;
+    border: 2px dashed rgba(255, 255, 255, 0.08); transform: translate(-50%, 50%);
+    z-index: 1; display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s, border-color 0.2s;
+}
+.dz-label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: rgba(255,255,255,0.22); }
+.court-drop-zone.is-occupied { border-color: transparent; }
+.court-drop-zone.is-occupied .dz-label { display: none; }
+body.is-dragging-player .court-drop-zone { border-color: rgba(255,255,255,0.3); }
+body.is-dragging-player .court-drop-zone .dz-label { display: block; color: rgba(255,255,255,0.5); }
+.court-drop-zone.drag-over { background: rgba(255,255,255,0.1); border-color: #fff; }
+
+.court-player-node {
+    width: 64px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: none; border: 0; cursor: grab; z-index: 2; touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.court-player-node .name {
+    flex: 0 0 auto; font-size: 12px; line-height: 1.25; color: var(--text-muted);
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
+}
+.court-player-node.selected .name { color: var(--text-color); }
+.court-player-node.dragging { opacity: 0.5; }
+body.is-dragging-player .court-player-node { pointer-events: none; }
+.court-player-node:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; border-radius: 8px; }
+
+/* Positionen in Prozent; Aussen bei 14/86 %, damit der 64-px-Knoten auch auf 296 px Feldbreite drinnen bleibt */
+.pos-TW { position: absolute; bottom: 15%; left: 50%; transform: translate(-50%, 50%); }
+.pos-LA { position: absolute; bottom: 26%; left: 14%; transform: translate(-50%, 50%); }
+.pos-RA { position: absolute; bottom: 26%; left: 86%; transform: translate(-50%, 50%); }
+.pos-RL { position: absolute; bottom: 52%; left: 25%; transform: translate(-50%, 50%); }
+.pos-RR { position: absolute; bottom: 52%; left: 75%; transform: translate(-50%, 50%); }
+.pos-RM, .pos-M { position: absolute; bottom: 70%; left: 50%; transform: translate(-50%, 50%); }
+.pos-K, .pos-KM { position: absolute; bottom: 46%; left: 50%; transform: translate(-50%, 50%); }
+
+/* Bank: hochkant EINE Reihe, die innen waagrecht scrollt */
+.court-bench-area {
+    grid-area: bank; min-width: 0;
+    display: flex; flex-wrap: nowrap; gap: 6px; padding: 4px 6px;
+    height: 74px;
+    background: rgba(0,0,0,0.3); border-radius: var(--radius);
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+}
+.court-bench-area:empty::before { content: "Bank leer - Spieler hierher ziehen"; align-self: center; color: var(--text-muted); font-size: 12px; padding: 0 8px; }
+.court-bench-area .court-player-node { position: static; transform: none; flex: 0 0 auto; width: 60px; touch-action: pan-x; }
+.court-bench-area.drag-over { background: rgba(255,255,255,0.1); }
+
+/* ---------- Aktions-Sheet ---------- */
+.court-action-sheet {
+    position: fixed; left: 50%; bottom: 0; transform: translateX(-50%);
+    z-index: 300; width: 100%; max-width: 520px;
+    max-height: min(62dvh, 440px); overflow-y: auto;
+    padding: 8px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: rgba(15, 18, 22, 0.98);
+    border: 1px solid var(--border-color); border-bottom: 0; border-radius: 16px 16px 0 0;
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.7);
+    animation: cas-in 0.14s ease-out;
+}
+@keyframes cas-in { from { opacity: 0; margin-bottom: -14px; } to { opacity: 1; margin-bottom: 0; } }
+@media (prefers-reduced-motion: reduce) { .court-action-sheet { animation: none; } }
+.cas-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.cas-text { min-width: 0; display: flex; flex-direction: column; }
+.cas-title { font-weight: 700; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cas-sub { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cas-close {
+    flex: 0 0 auto; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radius); background: #2a313b; border: 1px solid #4a5463; color: var(--text-color);
+    cursor: pointer; touch-action: manipulation;
+}
+.cas-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 359px) { .cas-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.court-action-btn {
+    min-height: 48px; padding: 6px 6px; border: 1px solid var(--border-color); border-radius: 10px;
+    font: inherit; font-size: 14px; font-weight: 600; line-height: 1.2; color: var(--text-color);
+    cursor: pointer; touch-action: manipulation; overflow-wrap: anywhere; hyphens: auto;
+    display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center;
+}
+.court-action-btn.green { background: rgba(63,178,127,0.2); border-color: var(--success-color); }
+.court-action-btn.red { background: rgba(229,72,77,0.2); border-color: var(--danger-color); }
+.court-action-btn.yellow, .court-action-btn.orange { background: rgba(226,163,54,0.2); border-color: var(--warning-color); }
+.court-action-btn.sub-blue { background: rgba(59,130,246,0.2); border-color: #3b82f6; }
+.court-action-btn.neutral { background: #2a313b; border-color: #4a5463; }
+.court-action-btn:active { filter: brightness(1.3); }
+.cas-punkt { flex: 0 0 auto; width: 12px; height: 16px; border-radius: 2px; }
+
+/* ---------- Sheets (Menue, Info, Uhr-Hinweis, Zeit) ---------- */
+.sheet {
+    position: fixed; inset: 0; z-index: 2500;
+    display: flex; align-items: flex-end; justify-content: center;
+    background: rgba(0,0,0,0.55);
+}
+.sheet-panel {
+    width: 100%; max-width: 520px; max-height: 92dvh; overflow-y: auto;
+    background: var(--panel-bg); border: 1px solid var(--border-color); border-bottom: 0;
+    border-radius: 16px 16px 0 0;
+    padding: 12px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.sheet-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.sheet-titel { margin: 0; font-size: 18px; font-weight: 700; }
+.sheet-panel > .sheet-titel { margin-bottom: 8px; }
+.sheet-zu {
+    width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+    background: var(--raised-bg); border: 1px solid var(--border-color); border-radius: var(--radius);
+    color: var(--text-color); cursor: pointer; touch-action: manipulation;
+}
+.sheet-text { margin: 0 0 12px; color: var(--text-muted); font-size: 15px; }
+.sheet-panel .btn + .btn { margin-top: 8px; }
+.menue-liste { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.menue-eintrag {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    min-height: 48px; padding: 0 14px; width: 100%;
+    background: var(--raised-bg); color: var(--text-color);
+    border: 1px solid var(--border-color); border-radius: var(--radius);
+    font: inherit; font-size: 16px; font-weight: 600; text-align: left; cursor: pointer; touch-action: manipulation;
+}
+.menue-eintrag:disabled { opacity: 0.5; cursor: default; }
+.menue-zusatz { color: var(--text-muted); font-size: 13px; font-weight: 500; }
+.menue-eintrag .ticker-badge { margin: 0; border: 0; background: none; padding: 0; }
+.menue-eintrag .ticker-badge .ticker-text { display: inline; }
+.menue-gefahr {
+    margin-top: 12px; background: transparent; color: var(--danger-color);
+    border-color: var(--danger-color); justify-content: center; text-align: center;
+}
+.info-liste { margin: 0 0 12px; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; }
+.info-liste dt { color: var(--text-muted); }
+.info-liste dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.zeit-zeile { display: flex; gap: 8px; }
+.zeit-zeile .feld { flex: 1 1 auto; min-width: 0; width: auto; }
+
+/* ---------- Quer / Tablet breit: Feld links, Gegner + Bank rechts ---------- */
+@media (min-aspect-ratio: 11/10) {
+    #dynamic-view-container {
+        grid-template-columns: minmax(0, 1fr) clamp(190px, 32vw, 320px);
+        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-areas: "feld gegner" "feld bank";
+    }
+    .court-bench-area {
+        height: auto; min-height: 0; flex-wrap: wrap; align-content: flex-start;
+        overflow-x: hidden; overflow-y: auto;
+    }
+    .court-bench-area .court-player-node { touch-action: pan-y; }
+    .court-opponent-btn { max-width: none; }
+    .court-action-sheet {
+        left: auto; right: 0; top: calc(env(safe-area-inset-top, 0px) + 56px); bottom: 0;
+        transform: none; width: min(320px, 46vw); max-width: none; max-height: none;
+        border-radius: 16px 0 0 0; border-right: 0; border-bottom: 0;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+    @keyframes cas-in { from { opacity: 0; } to { opacity: 1; } }
+    .sheet { align-items: center; }
+    .sheet-panel { border-radius: 16px; border-bottom: 1px solid var(--border-color); max-width: 480px; }
+}
+/* Querformat-Handy: Kopf- und Uhrzeile in EINER Zeile */
+@media (min-aspect-ratio: 11/10) and (max-height: 479px) {
+    .spiel-kopf { display: flex; align-items: center; height: 56px; }
+    .kopf-oben, .kopf-uhr { display: contents; }
+    .kopf-zurueck { order: 1; }
+    .spielstand { order: 2; }
+    .uhr-block { order: 3; }
+    .uhr-sync { order: 4; flex: 0 0 auto; }
+    .uhr-knopf { order: 5; }
+    .kopf-menue { order: 6; }
+    .spiel-kopf { gap: 6px; }
+    .court-action-sheet { top: calc(env(safe-area-inset-top, 0px) + 56px); }
+    .menue-liste { grid-template-columns: 1fr 1fr; }
+    .menue-gefahr { grid-column: 1 / -1; margin-top: 6px; }
+    .sheet-panel { max-height: 96dvh; }
+    #dynamic-view-container { --feld-badge: 44px; }
+}
+@media (min-width: 600px) and (max-aspect-ratio: 11/10) { .court-bench-area { height: 88px; } }
+@media (min-width: 600px) { #dynamic-view-container { --feld-badge: 52px; } .court-player-node { width: 72px; } .court-player-node .name { font-size: 13px; } }
+@media (min-width: 600px) and (max-height: 479px) { #dynamic-view-container { --feld-badge: 44px; } .court-player-node { width: 64px; } }
+
+/* ---------- Overlays: Schliessen immer erreichbar ---------- */
+.overlay-content > .back-btn:last-child,
+.overlay-content > .close-btn:last-child {
+    position: sticky; bottom: 0; width: 100%; min-height: 48px; margin-top: 12px; background: #2a313b;
+}
+.ticker-fuss { position: sticky; bottom: 0; background: var(--panel-bg); padding: 10px 0 2px; }
+
+/* Nur der neueste Hinweis ist sichtbar. Mehrere gestapelte "Rueckgaengig"-Knoepfe
+   lagen sonst ueber der Bank und dem Aktions-Sheet - ein Tipp daneben nahm das
+   vorletzte Tor zurueck. */
+#toast-container .toast:not(:last-child) { display: none; }

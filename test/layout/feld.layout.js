@@ -157,12 +157,16 @@ function messen(opt) {
             const sx = (ax === 'auto' || ax === 'scroll') && p.scrollWidth > p.clientWidth + 1;
             const sy = (ay === 'auto' || ay === 'scroll') && p.scrollHeight > p.clientHeight + 1;
             if (sx || sy) scrollerGeprueft.add(p);
+            // Ein innerer Scroller "verbraucht" die Achse: die Elemente duerfen dort
+            // ueber seinen Rand ragen (sie sind per Wischen erreichbar), und die
+            // aeusseren Huellen schneiden sie nicht mehr. Der Scroller selbst wird
+            // unten auf "im Bild" geprueft.
             if (sx) exX = true;
-            else if (ax !== 'visible' && (r.left < pr.left - 1 || r.right > pr.right + 1)) {
+            else if (!exX && ax !== 'visible' && (r.left < pr.left - 1 || r.right > pr.right + 1)) {
                 probleme.push('ragt seitlich aus ' + beschr(p));
             }
             if (sy) exY = true;
-            else if (ay !== 'visible' && (r.top < pr.top - 1 || r.bottom > pr.bottom + 1)) {
+            else if (!exY && ay !== 'visible' && (r.top < pr.top - 1 || r.bottom > pr.bottom + 1)) {
                 probleme.push('ragt oben/unten aus ' + beschr(p));
             }
         }
@@ -436,6 +440,9 @@ async function waehle(page, wer) {
         await page.locator('.court-player-node', { hasText: wer }).first().tap({ timeout: 8000 });
     }
     await page.waitForSelector('#court-action-sheet', { state: 'visible', timeout: 5000 });
+    // Ein Mensch tippt nicht schneller als nach ~350 ms auf die naechste Taste;
+    // die App ignoriert Klicks davor (Geisterklick nach dem Spielertipp).
+    await sleep(450);
 }
 
 // Ein Tor ueber die Oberflaeche: Spieler -> Wurf mit Tor -> Zone (-> Hinweise)
@@ -540,19 +547,24 @@ async function laufViewport(browser, base, vp) {
                 melde(e, 9, 'rueckgaengig', 'Stand nach Rueckgaengig ' + z2.heim + ':' + z2.gast + ' / ' + z2.anzahl + ' statt ' + nullStand.heim + ':' + nullStand.gast + ' / ' + nullStand.anzahl);
             }
         } catch (err) {
-            melde(e, 9, 'tor', 'Ablauf abgebrochen: ' + String(err.message).split('\n')[0]);
-            await page.evaluate(function () { if (window.UI && window.UI.resetAuswahl) window.UI.resetAuswahl(); });
+            melde(e, 9, 'tor', 'Ablauf abgebrochen: ' + String(err.message).split('\n').slice(0, 7).join(' | '));
+            await page.evaluate(function () { if (window.UI && window.UI.verlasseSpiel) window.UI.verlasseSpiel(); });
         }
 
         // (d) 3 Tore fuer uns, 2 fuer den Gegner
         try {
             for (const wer of ['Felix', 'Noah', 'Emil', 'gegner', 'gegner']) {
+                const vorher = await zahlen(page);
                 await tor(page, e, vp, wer, einmal);
+                const nachher = await zahlen(page);
+                if (process.env.HT_DEBUG) console.log(wer, vorher.anzahl, '->', nachher.anzahl, await page.evaluate(function () { return Array.from(document.querySelectorAll('.toast')).map(function (t) { return t.textContent; }).join(' / '); }));
+                if (Number(nachher.anzahl) !== Number(vorher.anzahl) + 1) melde(e, 9, 'd', 'Tor von ' + wer + ' nicht eingetragen (Aktionen ' + vorher.anzahl + ' -> ' + nachher.anzahl + ')');
             }
             const z3 = await zahlen(page);
+            if (process.env.HT_DEBUG) console.log(JSON.stringify(await page.evaluate(function () { return window.Sync.getState().aktionen.map(function (a) { var p = window.Store.getSPIELER().find(function (x) { return x.id === a.spielerId; }); return [p && p.name, a.typ, a.spielzeit]; }); })));
             if (z3.heim !== '3' || z3.gast !== '2') melde(e, 9, 'd', 'Stand ' + z3.heim + ':' + z3.gast + ' statt 3:2');
         } catch (err) {
-            melde(e, 9, 'd', 'Tore eintragen abgebrochen: ' + String(err.message).split('\n')[0]);
+            melde(e, 9, 'd', 'Tore eintragen abgebrochen: ' + String(err.message).split('\n').slice(0, 7).join(' | '));
         }
         await messe(page, e, vp, 'd', {});
 
