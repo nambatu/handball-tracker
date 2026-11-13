@@ -18,9 +18,12 @@ und hoechstens einer Aktion; Karten und Bausteine aus `style.css` Abschnitt
 20/21; keine Inline-Styles, keine Emojis, keine `confirm/prompt/alert`.
 Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
 
-- [ ] 1.1 Baukasten: gemeinsame Vollbild-Ansicht + Bestaetigungsblatt als
-      wiederverwendbare Funktion (`ui.js`), Verlauf als erste Ansicht darauf
-      umgestellt. (M)
+- [x] 13.11.2026 (Branch claude/dazzling-heisenberg-t6asr4) 1.1 Baukasten:
+      `UI.Vollbild.oeffne/schliesse` (Kopfzeile Zurueck + Titel + eine Aktion,
+      scrollender Inhalt, CSS am Ende von `style.css`) und
+      `UI.bestaetigen({titel,text,okText,gefahr})` (Versprechen, ersetzt
+      `confirm`). Verlauf nutzt es; Pruefungen im Layouttest (Zustand f).
+      Der Verlauf zeigt Aktionsnamen ohne Emoji (`ohneEmoji`). (M)
 - [ ] 1.2 Kader / Spielerverwaltung: Spieler anlegen/bearbeiten in einem
       Blatt, Mannschaft speichern/laden ohne Farbknoepfe, Avatar-Upload. (M)
 - [ ] 1.3 Archiv: Liste als Karten (Name, Datum, Ergebnis), Umbenennen und
@@ -88,6 +91,9 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
 
 ## Ideen (ungeprueft, erst nach Ruecksprache mit Julian nach oben)
 
+- (aus 1.1) Emojis stecken auch in den gespeicherten Aktions-Bezeichnungen
+  (`store.js`, Feld `label`) und damit in Statistik/Bericht/Auswahl; bei
+  1.4/1.5 mit `UI.ohneEmoji`-Logik oder `anzeige` bereinigen.
 - Spielbericht als Bild/PDF direkt per Teilen-Knopf (`navigator.share`) in
   WhatsApp schicken.
 - Heller Modus mit hohem Kontrast fuer helle Hallen.

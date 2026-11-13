@@ -732,7 +732,53 @@ async function laufViewport(browser, base, vp) {
             await page.waitForSelector('#history-view', { state: 'visible', timeout: 5000 });
             await sleep(300);
             await messe(page, e, vp, 'f', { schrift: false });
+            await foto(page, vp, 'verlauf');
+            // Baukasten: Kopfzeile mit Zurueck, Titel; Inhalt scrollt darunter
+            const kopf = await page.evaluate(function () {
+                const k = document.querySelector('#history-view .vollbild-kopf');
+                const z = document.querySelector('#history-view .vollbild-zurueck');
+                const t = document.querySelector('#history-view .vollbild-titel');
+                const i = document.querySelector('#history-view .vollbild-inhalt');
+                if (!k || !z || !t || !i) return { fehlt: true };
+                const kr = k.getBoundingClientRect(), tr = t.getBoundingClientRect();
+                return {
+                    kopfOben: kr.top, kopfHoehe: kr.height, titel: t.textContent.trim(),
+                    titelMitte: Math.abs((tr.left + tr.width / 2) - window.innerWidth / 2),
+                    scrollt: getComputedStyle(i).overflowY === 'auto',
+                    emoji: /\p{Extended_Pictographic}/u.test(document.getElementById('history-view').textContent)
+                };
+            });
+            if (kopf.fehlt) melde(e, 9, 'f', 'Verlauf: Kopfzeile/Zurueck/Titel/Inhalt fehlen');
+            else {
+                if (kopf.kopfOben !== 0) melde(e, 2, 'f', 'Verlauf: Kopfzeile nicht ganz oben (' + kopf.kopfOben + ')');
+                if (kopf.titel !== 'Verlauf') melde(e, 9, 'f', 'Verlauf: Titel "' + kopf.titel + '"');
+                if (!kopf.scrollt) melde(e, 9, 'f', 'Verlauf: Inhalt scrollt nicht');
+                if (kopf.emoji) melde(e, 9, 'f', 'Verlauf: Emoji im Text');
+                if (kopf.titelMitte > 24) melde(e, 2, 'f', 'Verlauf: Titel nicht mittig (' + Math.round(kopf.titelMitte) + ' px daneben)');
+            }
             await schliesseOverlay(page, e, 'verlauf', 'f');
+
+            // Baukasten: Bestaetigungsblatt (Abbrechen -> false, Knopf -> true)
+            await page.evaluate(function () {
+                window.__antwort = 'offen';
+                window.UI.bestaetigen({ titel: 'Auszeit löschen?', text: 'Die Auszeit verschwindet aus dem Spiel.', okText: 'Löschen', gefahr: true })
+                    .then(function (a) { window.__antwort = a; });
+            });
+            await page.waitForSelector('[role="alertdialog"]', { state: 'visible', timeout: 3000 });
+            await sleep(200);
+            await messe(page, e, vp, 'f-bestaetigen', { schrift: false });
+            await foto(page, vp, 'bestaetigen');
+            await page.locator('[role="alertdialog"] button', { hasText: 'Abbrechen' }).tap({ timeout: 3000 });
+            await sleep(150);
+            if ((await page.evaluate(function () { return window.__antwort; })) !== false) melde(e, 9, 'f-bestaetigen', 'Abbrechen liefert nicht false');
+            await page.evaluate(function () {
+                window.__antwort = 'offen';
+                window.UI.bestaetigen({ titel: 'Sicher?' }).then(function (a) { window.__antwort = a; });
+            });
+            await page.locator('[role="alertdialog"] button', { hasText: 'OK' }).tap({ timeout: 3000 });
+            await sleep(150);
+            if ((await page.evaluate(function () { return window.__antwort; })) !== true) melde(e, 9, 'f-bestaetigen', 'OK liefert nicht true');
+            if (await page.$('[role="alertdialog"]')) melde(e, 9, 'f-bestaetigen', 'Blatt schliesst nicht');
         } catch (err) {
             melde(e, 9, 'f', 'Verlauf: ' + String(err.message).split('\n')[0]);
         }

@@ -2095,3 +2095,41 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     min-height: 44px; margin-top: 12px; padding: 0 16px; border-radius: var(--radius, 10px);
     background: var(--accent-strong, #2563eb); color: #fff; font-weight: 700; text-decoration: none;
 }
+
+/* ---------- Baukasten: Vollbild-Ansicht (Verlauf, spaeter Kader, Archiv ...) ---------- */
+.vollbild {
+    position: fixed; inset: 0; z-index: 1990;   /* unter den Overlays (2000), z. B. "Aktion korrigieren" */
+    display: flex; flex-direction: column;
+    background: var(--bg-color); color: var(--text-color);
+}
+.vollbild-kopf {
+    flex: 0 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center; gap: 8px; min-height: 56px;
+    padding: env(safe-area-inset-top, 0px) calc(8px + env(safe-area-inset-right, 0px)) 0 calc(8px + env(safe-area-inset-left, 0px));
+    background: var(--header-bg); border-bottom: 1px solid var(--border-color);
+}
+.vollbild-zurueck {
+    justify-self: start; display: flex; align-items: center; gap: 4px;
+    min-height: var(--touch); padding: 0 12px 0 6px;
+    background: none; border: 0; border-radius: var(--radius);
+    color: var(--text-color); font: inherit; font-weight: 600; cursor: pointer; touch-action: manipulation;
+}
+.vollbild-titel { margin: 0; font-size: 18px; font-weight: 700; text-align: center; overflow-wrap: anywhere; }
+.vollbild-aktion { justify-self: end; min-width: 0; }
+.vollbild-aktion-knopf { white-space: nowrap; }
+.vollbild-inhalt {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+    width: 100%; max-width: 640px; margin: 0 auto;
+    padding: 12px calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
+}
+.vollbild-hinweis { margin: 0 0 12px; color: var(--text-muted); font-size: 15px; }
+.vollbild-hinweis[hidden] { display: none; }
+
+/* Karten-Liste: je Eintrag eine eigene Karte */
+.karten-liste { display: grid; gap: 8px; }
+.karten-liste .history-entry {
+    min-height: var(--touch);
+    background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--radius);
+    padding: 10px 14px;
+}
+.karten-liste .history-empty { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--radius); }

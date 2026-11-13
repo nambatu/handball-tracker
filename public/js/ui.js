@@ -506,6 +506,150 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// ===================================================================
+// BAUKASTEN: Vollbild-Ansicht und Bestaetigungsblatt
+// Alle Nebenansichten (Verlauf, Kader, Archiv ...) sollen darauf aufbauen:
+// Kopfzeile mit Zurueck, Titel und hoechstens einer Aktion, darunter der
+// scrollende Inhalt. Kein confirm/prompt/alert mehr.
+// ===================================================================
+
+const Vollbild = (function () {
+    const PFEIL = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        + '<path d="M15 5l-7 7 7 7"/></svg>';
+
+    function istOffen(id) {
+        const box = document.getElementById(id);
+        return !!box && box.style.display === 'flex';
+    }
+
+    /**
+     * Oeffnet die Vollbild-Ansicht `id` (wird beim ersten Mal gebaut) und gibt
+     * den Inhaltsbereich zurueck. Optionen:
+     *   titel   - Text der Kopfzeile
+     *   hinweis - kurzer Erklaertext ueber dem Inhalt (optional)
+     *   aktion  - { text, onClick } - hoechstens ein Knopf rechts oben (optional)
+     *   onZu    - wird nach dem Schliessen gerufen (optional)
+     */
+    function oeffne(opt) {
+        let box = document.getElementById(opt.id);
+        if (!box) {
+            box = document.createElement('div');
+            box.id = opt.id;
+            box.className = 'vollbild';
+            box.style.display = 'none';
+            box.setAttribute('role', 'dialog');
+            box.setAttribute('aria-modal', 'true');
+            box.setAttribute('aria-labelledby', opt.id + '-titel');
+
+            const kopf = document.createElement('header');
+            kopf.className = 'vollbild-kopf';
+            const zurueck = document.createElement('button');
+            zurueck.type = 'button';
+            zurueck.className = 'vollbild-zurueck';
+            zurueck.innerHTML = PFEIL + '<span>Zurück</span>';
+            zurueck.addEventListener('click', function () { schliesse(opt.id); });
+            const titel = document.createElement('h2');
+            titel.id = opt.id + '-titel';
+            titel.className = 'vollbild-titel';
+            const platz = document.createElement('div');
+            platz.className = 'vollbild-aktion';
+            kopf.appendChild(zurueck);
+            kopf.appendChild(titel);
+            kopf.appendChild(platz);
+
+            const inhalt = document.createElement('div');
+            inhalt.className = 'vollbild-inhalt';
+            const hinweis = document.createElement('p');
+            hinweis.className = 'vollbild-hinweis';
+            inhalt.appendChild(hinweis);
+
+            box.appendChild(kopf);
+            box.appendChild(inhalt);
+            document.body.appendChild(box);
+        }
+        box._onZu = opt.onZu || null;
+        box.querySelector('.vollbild-titel').textContent = opt.titel || '';
+        const hinweis = box.querySelector('.vollbild-hinweis');
+        hinweis.textContent = opt.hinweis || '';
+        hinweis.hidden = !opt.hinweis;
+
+        const platz = box.querySelector('.vollbild-aktion');
+        platz.innerHTML = '';
+        if (opt.aktion) {
+            const knopf = document.createElement('button');
+            knopf.type = 'button';
+            knopf.className = 'btn vollbild-aktion-knopf';
+            knopf.textContent = opt.aktion.text;
+            knopf.addEventListener('click', opt.aktion.onClick);
+            platz.appendChild(knopf);
+        }
+
+        box.style.display = 'flex';
+        const inhalt = box.querySelector('.vollbild-inhalt');
+        inhalt.scrollTop = 0;
+        return inhalt;
+    }
+
+    function schliesse(id) {
+        const box = document.getElementById(id);
+        if (!box || box.style.display === 'none') return;
+        box.style.display = 'none';
+        if (box._onZu) box._onZu();
+    }
+
+    return { oeffne, schliesse, istOffen };
+})();
+
+/**
+ * Bestaetigungsblatt statt confirm(). Gibt ein Versprechen zurueck: true bei
+ * "Ja", false bei "Abbrechen" oder Tipp daneben.
+ *   titel, text, okText (Standard "OK"), gefahr (roter Knopf, bei Loeschen)
+ */
+function bestaetigen(opt) {
+    return new Promise(function (resolve) {
+        const sheet = document.createElement('div');
+        sheet.className = 'sheet';
+        sheet.setAttribute('role', 'alertdialog');
+        sheet.setAttribute('aria-modal', 'true');
+        sheet.setAttribute('aria-labelledby', 'bestaetigen-titel');
+        const panel = document.createElement('div');
+        panel.className = 'sheet-panel';
+        const titel = document.createElement('h2');
+        titel.id = 'bestaetigen-titel';
+        titel.className = 'sheet-titel';
+        titel.textContent = opt.titel || 'Sicher?';
+        panel.appendChild(titel);
+        if (opt.text) {
+            const text = document.createElement('p');
+            text.className = 'sheet-text';
+            text.textContent = opt.text;
+            panel.appendChild(text);
+        }
+        const ok = document.createElement('button');
+        ok.type = 'button';
+        ok.className = 'btn btn-block ' + (opt.gefahr ? 'btn-danger' : 'btn-primary');
+        ok.textContent = opt.okText || 'OK';
+        const nein = document.createElement('button');
+        nein.type = 'button';
+        nein.className = 'btn btn-block';
+        nein.textContent = 'Abbrechen';
+        panel.appendChild(ok);
+        panel.appendChild(nein);
+        sheet.appendChild(panel);
+
+        function fertig(antwort) {
+            sheet.remove();
+            resolve(antwort);
+        }
+        ok.addEventListener('click', function () { fertig(true); });
+        nein.addEventListener('click', function () { fertig(false); });
+        sheet.addEventListener('click', function (e) { if (e.target === sheet) fertig(false); });
+        document.body.appendChild(sheet);
+        nein.focus();
+    });
+}
+
 function sortPlayers() {
     // Der Kader steht immer nach Trikotnummer. Die frueheren Sortierknoepfe
     // gab es nur in der Listenansicht.
@@ -548,7 +692,7 @@ function buildHistoryInto(container, limit) {
 
         const assistPlayer = entry.assistId ? spieler.find(p => p.id === entry.assistId) : null;
         const assistText = assistPlayer
-            ? `<br><small class="history-assist">🅰️ Assist: ${escapeHtml(assistPlayer.name)}</small>` : '';
+            ? `<br><small class="history-assist">Assist: ${escapeHtml(assistPlayer.name)}</small>` : '';
 
         const el = document.createElement('div');
         el.className = 'history-entry is-editable';
@@ -560,10 +704,15 @@ function buildHistoryInto(container, limit) {
                 <strong>${escapeHtml(playerNumber)} ${escapeHtml(playerName)}</strong>
                 ${assistText}
             </span>
-            <span class="history-action">${escapeHtml(entry.label)}</span>
+            <span class="history-action">${escapeHtml(ohneEmoji(entry.label))}</span>
         `;
         container.appendChild(el);
     });
+}
+
+/** Gespeicherte Bezeichnungen tragen ein Emoji (der Ticker braucht es); die Ansicht zeigt nur den Text. */
+function ohneEmoji(text) {
+    return String(text || '').replace(/[\p{Extended_Pictographic}\uFE0F\u200D\u{1F3FB}-\u{1F3FF}]/gu, '').trim();
 }
 
 function auszeitTeamName(team) {
@@ -612,25 +761,32 @@ function baueAuszeitZeile(marke) {
 }
 
 function renderHistory() {
-    // Overlay mitziehen, falls es gerade offen ist
-    const overlay = document.getElementById('history-view');
-    if (overlay && overlay.style.display === 'flex') {
-        buildHistoryInto(document.getElementById('history-view-list'), 200);
+    // Ansicht mitziehen, falls sie gerade offen ist
+    if (Vollbild.istOffen('history-view')) {
+        buildHistoryInto(document.getElementById('history-view-liste'), 200);
     }
 
     updateScoreboard();
 }
 
 function openHistoryView() {
-    const box = document.getElementById('history-view');
-    if (!box) return;
-    buildHistoryInto(document.getElementById('history-view-list'), 200);
-    box.style.display = 'flex';
+    const inhalt = Vollbild.oeffne({
+        id: 'history-view',
+        titel: 'Verlauf',
+        hinweis: 'Eintrag antippen, um ihn zu korrigieren oder zu löschen.'
+    });
+    let liste = document.getElementById('history-view-liste');
+    if (!liste) {
+        liste = document.createElement('div');
+        liste.id = 'history-view-liste';
+        liste.className = 'karten-liste';
+        inhalt.appendChild(liste);
+    }
+    buildHistoryInto(liste, 200);
 }
 
 function closeHistoryView() {
-    const box = document.getElementById('history-view');
-    if (box) box.style.display = 'none';
+    Vollbild.schliesse('history-view');
 }
 
 // ===================================================================
@@ -2020,6 +2176,8 @@ function renderCourtView(container) {
 }
 
 window.UI = {
+    Vollbild,
+    bestaetigen,
     updateUI,
     renderHistory,
     openHistoryView,
