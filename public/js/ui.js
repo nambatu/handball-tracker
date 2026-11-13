@@ -768,6 +768,15 @@ function selectAction(actionType, category = null) {
     }
     const player = window.Store.getSPIELER().find(p => p.id === selectedPlayerId);
 
+    // Hat sich die Uhr seit dem Oeffnen des Sheets geaendert (angehalten, Pause),
+    // gilt das schon hier - nicht erst beim Speichern.
+    const gewuenscht = selectedPrimaryAction ? selectedPrimaryAction + '_' + actionType : actionType;
+    const erlaubt = window.Timer ? window.Timer.darfErfassen(gewuenscht) : { ok: true };
+    if (!erlaubt.ok) {
+        erfassenAbgelehnt(erlaubt.grund);
+        return;
+    }
+
     if (category !== null && window.Store.UNTERAKTIONEN[category]) {
         selectedPrimaryAction = actionType;
         selectedPrimaryActionCategory = category;
