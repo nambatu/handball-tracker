@@ -606,4 +606,11 @@
     if (MODUS === 'supabase') installiereSupabaseModus(); else installiereServerModus();
 
     window.Api = Object.assign({ modus: MODUS }, MODUS === 'supabase' ? supabaseApi : serverApi);
+
+    // Alte Adresse (Pi): Hinweis auf die neue App zeigen. Nur hier - auf
+    // GitHub Pages waere er sinnlos. Die Skripte stehen am Ende der Seite,
+    // die Hinweise gibt es also schon.
+    if (MODUS === 'server') {
+        document.querySelectorAll('.umzug-hinweis').forEach(function (el) { el.hidden = false; });
+    }
 })();

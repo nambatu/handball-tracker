@@ -2079,3 +2079,19 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     .menue-liste { gap: 4px; }
     .menue-gefahr { margin-top: 8px; }
 }
+
+/* Hinweis auf der alten Adresse (Pi): dorthin soll niemand mehr. Bewusst
+   gross und oben, aber nicht sperrend - fuer den Ticker und als Rueckweg
+   bleibt die alte App bedienbar, bis der Pi abgeschaltet wird. */
+.umzug-hinweis {
+    margin: 0 0 16px; padding: 14px 16px; border-radius: var(--radius, 10px);
+    border: 1px solid var(--warning-color, #e2a336);
+    background: rgba(226, 163, 54, 0.12); color: var(--text-color, #e8ebef);
+    font-size: 15px; line-height: 1.45; overflow-wrap: anywhere;
+}
+.umzug-hinweis strong { display: block; margin-bottom: 4px; }
+.umzug-link {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 44px; margin-top: 12px; padding: 0 16px; border-radius: var(--radius, 10px);
+    background: var(--accent-strong, #2563eb); color: #fff; font-weight: 700; text-decoration: none;
+}
