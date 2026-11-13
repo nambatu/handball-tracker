@@ -25,6 +25,16 @@ function registriereServiceWorker() {
         console.log('[App] Kein sicherer Kontext - Offline-Start nicht moeglich (http).');
         return;
     }
+    // Alte Adresse (Pi hinter ngrok): kein Offline-Speicher mehr, siehe
+    // sw.js. Nicht neu anmelden, vorhandene Worker abmelden. Kommt dieser
+    // Code wegen eines kaputten Caches gar nicht zum Zug, erledigt das der
+    // neue sw.js beim naechsten Update-Check des Browsers.
+    if (/\.ngrok(-free)?\.(dev|app|io)$/.test(location.hostname)) {
+        navigator.serviceWorker.getRegistrations().then(function (liste) {
+            liste.forEach(function (r) { r.unregister(); });
+        }).catch(function () { /* egal */ });
+        return;
+    }
     navigator.serviceWorker.register('sw.js').then(function (reg) {
         // Ein wartendes Update sofort uebernehmen lassen. Ohne das laeuft
         // nach einem Deploy noch tagelang die alte Fassung weiter.

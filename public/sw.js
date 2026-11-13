@@ -20,7 +20,28 @@
 // offline passiert; ein zwischengespeicherter Spielstand waere genau die
 // Art von stillem Datenverlust, gegen die der Sync gebaut wurde.
 
-const CACHE = 'handball-tracker-v20261119';
+const CACHE = 'handball-tracker-v20261120';
+
+// Alte Adresse (Pi hinter ngrok): dort soll nur noch der Hinweis auf die
+// neue App erscheinen, und zwar verlaesslich. Handys, die die alte App
+// offline gespeichert hatten, zeigten nach dem Update einen weissen
+// Bildschirm (13.11.2026). Deshalb raeumt dieser Worker dort alles weg,
+// meldet sich ab und laedt offene Fenster neu - danach kommt jede Seite
+// direkt vom Pi. Offline-Start gibt es auf der alten Adresse nicht mehr.
+const ALTE_ADRESSE = /\.ngrok(-free)?\.(dev|app|io)$/.test(self.location.hostname);
+
+if (ALTE_ADRESSE) {
+    self.addEventListener('install', function () { self.skipWaiting(); });
+    self.addEventListener('activate', function (event) {
+        event.waitUntil((async function () {
+            const namen = await caches.keys();
+            await Promise.all(namen.map(function (n) { return caches.delete(n); }));
+            await self.registration.unregister();
+            const fenster = await self.clients.matchAll({ type: 'window' });
+            fenster.forEach(function (f) { try { f.navigate(f.url); } catch (e) { /* egal */ } });
+        })());
+    });
+}
 
 // Wie lange auf den Server gewartet wird, bevor der Cache uebernimmt.
 //
@@ -122,6 +143,7 @@ function notseite() {
 }
 
 self.addEventListener('install', function (event) {
+    if (ALTE_ADRESSE) return;
     event.waitUntil((async function () {
         const cache = await caches.open(CACHE);
         // Einzeln statt addAll: eine fehlende Datei (z.B. ein Icon) soll
@@ -145,6 +167,7 @@ self.addEventListener('install', function (event) {
 });
 
 self.addEventListener('activate', function (event) {
+    if (ALTE_ADRESSE) return;
     event.waitUntil((async function () {
         const namen = await caches.keys();
         await Promise.all(namen.map(function (n) {
@@ -165,6 +188,7 @@ function aktualisiereImHintergrund(req, cache) {
 }
 
 self.addEventListener('fetch', function (event) {
+    if (ALTE_ADRESSE) return;
     const req = event.request;
     if (req.method !== 'GET') return;
 
