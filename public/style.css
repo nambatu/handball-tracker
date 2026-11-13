@@ -1751,7 +1751,17 @@ body.ansicht-spiel .spiel {
 .uhr-sync .sync-badge .sync-text { display: none; }
 .uhr-sync .sync-badge.sync-offline::after { content: "Offline"; }
 .uhr-sync .sync-badge.sync-error::after { content: "Ungesichert"; }
-.uhr-sync .sync-badge.sync-pending::after { content: "Sichere…"; }
+/* "Sichere…" bewusst ohne Text: der Zustand blitzt bei jeder Aktion kurz
+   auf, und der Text hat sich in der engen Uhrzeile ueber die Spielzeit
+   geschoben. Die Farbe des Punkts reicht dafuer. Offline und Ungesichert
+   behalten ihren Text - das muss man lesen koennen. */
+.uhr-block { flex: 0 0 auto; }
+.uhr-sync { overflow: hidden; }
+.uhr-sync .sync-badge { min-width: 0; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+@media (max-width: 359px) {
+    /* Neben Auszeit- und Hauptknopf bleibt hier kein Platz fuer Text. */
+    .uhr-sync .sync-badge::after { content: none !important; }
+}
 
 .uhr-knopf {
     flex: 0 0 auto; min-width: 100px; height: 44px; padding: 0 12px;

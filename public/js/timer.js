@@ -514,7 +514,7 @@ function auszeitWiederherstellen(marke) {
 }
 
 // ---------------------------------------------------------------
-// Anzeige
+// Anzeige von Status, Taste und Balken
 // ---------------------------------------------------------------
 
 function statusText() {
