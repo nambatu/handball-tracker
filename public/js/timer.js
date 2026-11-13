@@ -826,6 +826,35 @@ function getHalbzeitMinuten() {
     return Math.round(clock.halbzeitSekunden / 60);
 }
 
+/** Strafen (2-Minuten, Karten) sind auch bei stehender Uhr erlaubt. */
+function istStrafe(typ) {
+    return typ === 'Zeitstrafe' || typ === 'Karte' || String(typ).indexOf('Karte_') === 0;
+}
+
+/**
+ * Die EINE Regel, was die Uhr erlaubt. Store.erfasseAktion prueft hier beim
+ * Speichern, die Oberflaeche fragt hier, was sie zeigt.
+ * Laeuft die Uhr in einer Halbzeit: alles. Steht sie dort: nur Strafen.
+ * Vor dem Anpfiff, in der Pause und nach dem Abpfiff: nichts.
+ * Ohne `typ` (null) heisst die Frage: ist irgendeine Aktion erlaubt?
+ * @returns {{ok: boolean, grund?: string, nurStrafen?: boolean}}
+ */
+function darfErfassen(typ) {
+    switch (clock.phase) {
+        case 'hz1':
+        case 'hz2':
+            if (isRunning()) return { ok: true, nurStrafen: false };
+            if (typ === null || typ === undefined || istStrafe(typ)) return { ok: true, nurStrafen: true };
+            return { ok: false, nurStrafen: true, grund: 'Uhr steht – nur Strafen. „Weiter“ tippen für alles andere.' };
+        case 'vor':
+            return { ok: false, grund: 'Vor dem Anpfiff – erst „Anpfiff“ tippen.' };
+        case 'pause':
+            return { ok: false, grund: 'Halbzeitpause – Aktionen erst nach „Anpfiff 2. Halbzeit“.' };
+        default:
+            return { ok: false, grund: 'Spiel ist abgepfiffen.' };
+    }
+}
+
 function getTimerState() {
     return {
         spielzeitSekunden: elapsedSeconds(),
@@ -848,6 +877,7 @@ window.Timer = {
     spielBeendenUndArchivieren,
     endGame,
     getTimerState,
+    darfErfassen,
     getBalken,
     linkAktion,
     auszeitOeffnen,

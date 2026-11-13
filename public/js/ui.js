@@ -7,13 +7,6 @@ let selectedPrimaryAction = null;
 let selectedPrimaryActionCategory = null;
 
 let tempActionData = null;
-let uhrHinweisGezeigt = false;
-
-// "Ohne Uhr eintragen" gilt fuer das laufende Spiel und wird bewusst NICHT
-// gespeichert: nach einem Neuladen oder einem neuen Spiel fragt die App wieder.
-let ohneUhrGewaehlt = false;
-// Die Aktion, die auf die Antwort im Uhr-Hinweis wartet
-let wartendeAktion = null;
 
 // Frueher gab es zwei Ansichten (Liste und Feld), gemerkt in UI_MODE. Es gibt nur
 // noch das Feld; ein alter Wert im Browser wird beim Start einmal aufgeraeumt.
@@ -295,6 +288,12 @@ function openActionSheet(playerId, posClass) {
     label.title = titel;
     textBox.appendChild(label);
 
+    // Steht die Uhr, sind nur Strafen erlaubt: eine halb gewaehlte andere Aktion verfaellt
+    const nurStrafen = !!(window.Timer && window.Timer.darfErfassen(null).nurStrafen);
+    if (nurStrafen && selectedPrimaryAction && !window.Timer.darfErfassen(selectedPrimaryAction).ok) {
+        selectedPrimaryAction = null;
+        selectedPrimaryActionCategory = null;
+    }
     const inUnterstufe = !!(selectedPrimaryActionCategory && window.Store.UNTERAKTIONEN[selectedPrimaryActionCategory]);
     const sub = document.createElement('span');
     sub.className = 'cas-sub';
@@ -344,7 +343,7 @@ function openActionSheet(playerId, posClass) {
             grid.appendChild(btn);
         });
     } else {
-        getAvailableActionsForPlayer(playerId, posClass).forEach(a => {
+        getAvailableActionsForPlayer(playerId, posClass).filter(a => !window.Timer || window.Timer.darfErfassen(a.typ).ok).forEach(a => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = `court-action-btn ${a.farbe || 'neutral'}`;
@@ -355,6 +354,12 @@ function openActionSheet(playerId, posClass) {
     }
 
     sheet.appendChild(grid);
+    if (nurStrafen) {
+        const hinweis = document.createElement('div');
+        hinweis.className = 'cas-hinweis';
+        hinweis.textContent = 'Uhr steht – nur Strafen. „Weiter“ tippen für alles andere.';
+        sheet.appendChild(hinweis);
+    }
     document.body.appendChild(sheet);
     positionActionSheet();
 }
@@ -723,12 +728,13 @@ function getAvailableActionsForPlayer(playerId, posClassFallback) {
     return all.filter(a => !a.nurTorwart);
 }
 
-// In der Halbzeitpause und nach dem Abpfiff bleiben Eintraege moeglich
-// (Korrekturen nach dem Pfiff), aber der Tipp auf einen Spieler fragt einmal
-// nach. Wer bestaetigt hat, wird in DERSELBEN Phase nicht noch einmal gefragt:
-// fuenf Nachtraege hintereinander wollen keine fuenf Rueckfragen.
-let phaseOkFuer = null;
-let wartenderSpieler = null;
+/**
+ * Zeigt den Grund einer Ablehnung (Phase der Uhr) als kurzen Hinweis.
+ * Die Entscheidung selbst faellt in Timer.darfErfassen - nur dort.
+ */
+function zeigeErfassenAbgelehnt(grund) {
+    if (window.Toast && grund) window.Toast(grund, { type: 'warn', duration: 3500 });
+}
 
 function selectPlayer(playerId) {
     // Gesperrte Spieler (Zeitstrafe, Rot) koennen nichts tun: kurzer Hinweis, kein Sheet
@@ -737,18 +743,12 @@ function selectPlayer(playerId) {
         if (window.Toast) window.Toast(window.Store.sperreText(gewaehlt), { type: 'warn', duration: 3000 });
         return;
     }
+    // Abwaehlen geht immer. Neu waehlen nur, wenn die Uhr irgendeine Aktion zulaesst.
     if (selectedPlayerId !== playerId && window.Timer) {
-        const phase = window.Timer.getTimerState().phase;
-        if (phase === 'pause' || phase === 'ende') {
-            if (phaseOkFuer !== phase) {
-                wartenderSpieler = playerId;
-                const t = document.getElementById('phase-hinweis-titel');
-                if (t) t.textContent = phase === 'pause' ? 'Halbzeitpause – jetzt eintragen?' : 'Spiel ist beendet – trotzdem eintragen?';
-                zeigeSheet('phase-hinweis');
-                return;
-            }
-        } else {
-            phaseOkFuer = null;
+        const erlaubt = window.Timer.darfErfassen(null);
+        if (!erlaubt.ok) {
+            zeigeErfassenAbgelehnt(erlaubt.grund);
+            return;
         }
     }
     if (selectedPlayerId === playerId) {
@@ -759,15 +759,6 @@ function selectPlayer(playerId) {
     selectedPrimaryAction = null;
     selectedPrimaryActionCategory = null;
     updateUI();
-}
-
-function phaseHinweisWahl(ja) {
-    const id = wartenderSpieler;
-    wartenderSpieler = null;
-    schliesseSheet('phase-hinweis');
-    if (!ja || !id) return;
-    phaseOkFuer = window.Timer.getTimerState().phase;
-    selectPlayer(id);
 }
 
 function selectAction(actionType, category = null) {
@@ -817,34 +808,12 @@ function resetActionSelection() {
 }
 
 function handleActionFlow(player, finalActionType, finalActionLabel, category) {
-    const timerState = window.Timer ? window.Timer.getTimerState() : { isTimerRunning: false, spielzeitSekunden: 0, currentHalf: 1 };
-
-    // Die Uhr wurde noch nie angefasst: alles wuerde bei 00:00 landen, und
-    // das merkt man erst im Bericht. Der ERSTE Versuch fragt deshalb nach.
-    // "Ohne Uhr" gilt dann fuer den Rest dieses Spiels (wer ohne Uhr trackt,
-    // will nicht bei jeder Aktion gefragt werden).
-    const uhrNochNie = timerState.phase === 'vor';
-    if (uhrNochNie && !ohneUhrGewaehlt) {
-        wartendeAktion = { player: player, typ: finalActionType, label: finalActionLabel, category: category };
-        zeigeSheet('uhr-hinweis');
+    // Vorab pruefen, damit nach einer Ablehnung nicht erst der Assist abgefragt wird.
+    // Endgueltig entscheidet Store.erfasseAktion beim Speichern.
+    const erlaubt = window.Timer ? window.Timer.darfErfassen(finalActionType) : { ok: true };
+    if (!erlaubt.ok) {
+        erfassenAbgelehnt(erlaubt.grund);
         return;
-    }
-
-    // Frueher wurde hier per alert() komplett blockiert. Damit liess sich
-    // vor dem Anwurf, in der Halbzeit oder nach Spielende nichts nachtragen.
-    // Jetzt wird erfasst und nur darauf hingewiesen - danebengetippt ist
-    // dank des Rueckgaengig-Toasts in zwei Sekunden behoben.
-    //
-    // Der Hinweis kommt EINMAL pro Pausenphase. Bei jeder Aktion waere er
-    // Krach: wer in der Halbzeit fuenf Sachen nachtraegt, will ihn nicht
-    // fuenfmal lesen. (Wer "ohne Uhr" gewaehlt hat, weiss es bereits.)
-    if (timerState.isTimerRunning) {
-        uhrHinweisGezeigt = false;
-    } else if (!uhrNochNie && !uhrHinweisGezeigt && window.Toast) {
-        uhrHinweisGezeigt = true;
-        window.Toast('Uhr läuft nicht — Aktionen werden bei '
-            + (window.Timer ? window.Timer.formatTime(timerState.spielzeitSekunden) : '00:00') + ' eingetragen.',
-            { type: 'warn', duration: 4000 });
     }
 
     const isGoal = finalActionType.includes('WurfTor');
@@ -868,36 +837,36 @@ function handleActionFlow(player, finalActionType, finalActionLabel, category) {
 }
 
 /**
- * Antwort im Uhr-Hinweis. `starten` = Uhr starten und eintragen, sonst ohne Uhr.
+ * Aktion wurde abgelehnt (Uhr steht oder Spiel nicht in einer Halbzeit):
+ * Sheet und Assist-Abfrage schliessen, Auswahl aufheben, Grund zeigen.
  */
-function uhrHinweisWahl(starten) {
-    const a = wartendeAktion;
-    wartendeAktion = null;
-    schliesseSheet('uhr-hinweis');
-    if (!a) return;
-    if (starten) {
-        if (window.Timer) window.Timer.anpfiff();
-    } else {
-        ohneUhrGewaehlt = true;
-    }
-    handleActionFlow(a.player, a.typ, a.label, a.category);
+function erfassenAbgelehnt(grund) {
+    tempActionData = null;
+    const overlay = document.getElementById('assist-overlay');
+    if (overlay) overlay.style.display = 'none';
+    selectedPlayerId = null;
+    selectedPrimaryAction = null;
+    selectedPrimaryActionCategory = null;
+    updateUI();
+    zeigeErfassenAbgelehnt(grund);
 }
 
-/** Neues Spiel oder Spiel verlassen: die Uhr-Wahl gilt nur fuer EIN Spiel. */
+/** Neues Spiel oder Spiel verlassen: keine Auswahl uebernehmen. (Name bleibt, start.js und timer.js rufen ihn.) */
 function vergissUhrWahl() {
-    ohneUhrGewaehlt = false;
-    wartendeAktion = null;
-    phaseOkFuer = null;
+    selectedPlayerId = null;
+    selectedPrimaryAction = null;
+    selectedPrimaryActionCategory = null;
+    tempActionData = null;
 }
 
 // ===================================================================
-// SHEETS (Menue, Spiel-Info, Uhr-Hinweis, Zeitkorrektur)
+// SHEETS (Menue, Spiel-Info, Zeitkorrektur)
 // ===================================================================
 // Ein Sheet ist ein abgedunkelter Bereich mit Tafel: hochkant von unten,
 // quer als Dialog in der Mitte (CSS). Antippen des dunklen Bereichs und
 // Escape schliessen. Sie liegen als <div hidden> fest im HTML.
 
-const SHEET_IDS = ['menue', 'spiel-info', 'uhr-hinweis', 'time-edit', 'phase-hinweis', 'auszeit-wahl', 'archiv-frage'];
+const SHEET_IDS = ['menue', 'spiel-info', 'time-edit', 'auszeit-wahl', 'archiv-frage'];
 
 function zeigeSheet(id) {
     const box = document.getElementById(id);
@@ -920,7 +889,6 @@ function schliesseSheet(id) {
         archivFrageAntwort = null;
         r(false);
     }
-    if (id === 'phase-hinweis') wartenderSpieler = null;
 }
 
 // ---------------------------------------------------------------
@@ -980,7 +948,6 @@ function auszeitAbbrechen() {
 
 function schliesseAlleSheets() {
     SHEET_IDS.forEach(schliesseSheet);
-    wartendeAktion = null;
 }
 
 SHEET_IDS.forEach(function (id) {
@@ -994,7 +961,6 @@ SHEET_IDS.forEach(function (id) {
             // einen Spieler), und der nachgereichte Klick traefe sonst den
             // dunklen Bereich und schlosse es sofort wieder.
             if (Date.now() - letzterTapAm < 450) return;
-            if (id === 'uhr-hinweis') wartendeAktion = null;
             schliesseSheet(id);
         });
     });
@@ -1004,7 +970,7 @@ document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     for (let i = SHEET_IDS.length - 1; i >= 0; i--) {
         const box = document.getElementById(SHEET_IDS[i]);
-        if (box && !box.hidden) { schliesseSheet(SHEET_IDS[i]); wartendeAktion = null; return; }
+        if (box && !box.hidden) { schliesseSheet(SHEET_IDS[i]); return; }
     }
 });
 
@@ -1078,34 +1044,16 @@ function spielInfoNamenAendern() {
 }
 
 function executeSaveAction(player, actionType, actionLabel, category, assistId) {
-    const aktionen = window.Store.loadActions();
-    const timerState = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0, currentHalf: 1 };
+    // Der Speicherweg ist Store.erfasseAktion. Dort entscheidet die Uhr (Phase),
+    // ob erfasst werden darf - hier nur die Folgen fuer die Anzeige.
+    const ergebnis = window.Store.erfasseAktion(player, actionType, actionLabel, category, assistId);
+    if (!ergebnis.ok) {
+        erfassenAbgelehnt(ergebnis.grund);
+        return;
+    }
+    const newAction = ergebnis.aktion;
+    const timerState = { spielzeitSekunden: newAction.spielzeit };
 
-    // Torwart mitschreiben: bei einer Aktion DES Torwarts er selbst,
-    // sonst der gerade im Tor stehende Keeper. Nur so laesst sich spaeter
-    // ein Gegentor dem richtigen Torhueter zuordnen (Fangquote bei
-    // zwei Keepern getrennt berechenbar).
-    const torwartId = window.Store.isGoalkeeper(player)
-        ? player.id
-        : window.Store.getActiveGoalkeeperId();
-
-    const newAction = {
-        id: Date.now(),
-        spielId: "current_match",
-        spielerId: player.id,
-        assistId: assistId,
-        torwartId: torwartId,
-        typ: actionType,
-        label: actionLabel,
-        category: category || "Unbekannt",
-        halbzeit: timerState.currentHalf,
-        spielzeit: timerState.spielzeitSekunden,
-        timestamp: Date.now()
-    };
-
-    aktionen.push(newAction);
-    window.Store.saveActions(aktionen);
-    
     if (actionType === 'Zeitstrafe') {
         // Spieler auf die Bank, Platz sperren (Gegner: nur die Zeit)
         window.Store.sperreSetzen(player.id, timerState.spielzeitSekunden);
@@ -1915,6 +1863,12 @@ function renderCourtView(container) {
     // Wer steht wo, welche Plaetze sind wegen einer Zeitstrafe gesperrt
     const jetzt = window.Timer ? window.Timer.getTimerState().spielzeitSekunden : 0;
     const phase = window.Timer ? window.Timer.getTimerState().phase : 'vor';
+    // Laesst die Uhr gerade nichts zu (Pause, Abpfiff), bleibt keine Auswahl stehen
+    if (selectedPlayerId && window.Timer && !window.Timer.darfErfassen(null).ok) {
+        selectedPlayerId = null;
+        selectedPrimaryAction = null;
+        selectedPrimaryActionCategory = null;
+    }
     const feld = window.Store.berechneFeld(jetzt);
 
     // 1. Gegner: eigener Streifen ueber dem Feld (quer: oben in der Seitenleiste)
@@ -2067,8 +2021,6 @@ window.UI = {
     openSpielInfo,
     closeSpielInfo,
     spielInfoNamenAendern,
-    uhrHinweisWahl,
-    phaseHinweisWahl,
     frageArchivieren,
     archivFrageWahl,
     archivierenStarten,

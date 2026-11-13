@@ -112,6 +112,42 @@ function saveActions(aktionen) {
     window.Sync.touch();
 }
 
+/**
+ * DER Weg, eine Spieleraktion anzulegen. Jeder Eintrag (Spielerfeld, Gegner,
+ * Assist, Torwart) laeuft hier durch; hier entscheidet Timer.darfErfassen,
+ * ob die Uhr es zulaesst. Korrigieren, Loeschen und Rueckgaengig gehen nicht
+ * hierueber und bleiben jederzeit moeglich.
+ * @returns {{ok: boolean, grund?: string, aktion?: object}}
+ */
+function erfasseAktion(player, actionType, actionLabel, category, assistId) {
+    if (!window.Timer) return { ok: false, grund: 'Die Uhr ist nicht bereit.' };
+    const erlaubt = window.Timer.darfErfassen(actionType);
+    if (!erlaubt.ok) return { ok: false, grund: erlaubt.grund };
+    const timerState = window.Timer.getTimerState();
+
+    // Torwart mitschreiben: bei einer Aktion DES Torwarts er selbst,
+    // sonst der gerade im Tor stehende Keeper (Fangquote bei zwei Keepern).
+    const torwartId = isGoalkeeper(player) ? player.id : getActiveGoalkeeperId();
+
+    const aktion = {
+        id: Date.now(),
+        spielId: "current_match",
+        spielerId: player.id,
+        assistId: assistId,
+        torwartId: torwartId,
+        typ: actionType,
+        label: actionLabel,
+        category: category || "Unbekannt",
+        halbzeit: timerState.currentHalf,
+        spielzeit: timerState.spielzeitSekunden,
+        timestamp: Date.now()
+    };
+    const aktionen = loadActions();
+    aktionen.push(aktion);
+    saveActions(aktionen);
+    return { ok: true, aktion: aktion };
+}
+
 // ---------------------------------------------------------------
 // Marken (Zeitmarken, Auszeiten)
 // ---------------------------------------------------------------
@@ -725,6 +761,7 @@ window.Store = {
     savePlayers,
     loadActions,
     saveActions,
+    erfasseAktion,
     getMarken,
     addMarke,
     removeMarke,

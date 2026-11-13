@@ -24,9 +24,9 @@
 //   5 kein abgeschnittener Text       10 Overlays: Schliessen erreichbar
 // Die Zustaende, in denen 1-8 gemessen werden: a Feld ruhig, b Spieler
 // gewaehlt, c Unterauswahl offen, d nach 3:2, e Menue offen, f Verlauf offen
-// (dazu die Hinweis-Sheets "Uhr laeuft nicht" und "Assist", wenn sie kommen).
+// (dazu das "Assist"-Sheet, wenn es kommt).
 // Dazu kommen die Spielphasen und die Auszeit (vor, Planzeit erreicht, Auszeit-
-// Wahl, Auszeit laeuft, Verlauf mit Auszeit, Pause, Abpfiff, Phasen-Hinweis,
+// Wahl, Auszeit laeuft, Verlauf mit Auszeit, Pause, Abpfiff,
 // Archiv-Frage) - jeweils mit denselben Pruefungen 1-8 - und auf 390x844 ein
 // Durchlauf des ganzen Ablaufs (Anpfiff bis Archivieren, siehe ablaufTest).
 // ===================================================================
@@ -417,16 +417,10 @@ async function zahlen(page) {
     });
 }
 
-// Hinweis-Sheets, die nach dem Tippen auf eine Zone kommen koennen
+// Sheets, die nach dem Tippen auf eine Zone kommen koennen (nur die Assist-Abfrage)
 async function hinweiseBeantworten(page, e, vp, einmal) {
     for (let runde = 0; runde < 4; runde++) {
         await sleep(350);
-        const uhr = await page.$('#uhr-hinweis:visible');
-        if (uhr) {
-            if (!einmal.uhr) { einmal.uhr = true; await messe(page, e, vp, 'uhr', { feld: false }); }
-            await page.tap('#uhr-hinweis .btn-primary');
-            continue;
-        }
         const assist = await page.$('#assist-overlay:visible');
         if (assist) {
             if (!einmal.assist) { einmal.assist = true; await messe(page, e, vp, 'assist', { touch: false, feld: false, schrift: false, text: false }); }
@@ -578,12 +572,10 @@ async function phasenZustaende(page, e, vp, hochHandy) {
         await messe(page, e, vp, 'ende', { feld: true, hochHandy: hochHandy });
         await foto(page, vp, 'ende');
 
-        // Tipp auf einen Spieler nach dem Abpfiff fragt nach
+        // Tipp auf einen Spieler nach dem Abpfiff: kein Sheet, nur ein Hinweis
         await page.locator('.court-player-node', { hasText: 'Lukas' }).first().tap({ timeout: 8000 });
-        await page.waitForSelector('#phase-hinweis', { state: 'visible', timeout: 5000 });
-        await messe(page, e, vp, 'phase-hinweis', { feld: false });
-        await page.tap('#phase-hinweis .btn:not(.btn-primary)');
-        await sleep(300);
+        await sleep(500);
+        if (await page.$('#court-action-sheet')) melde(e, 9, 'ende', 'Aktions-Sheet nach dem Abpfiff');
 
         // Spiel archivieren fragt nach (Abbrechen laesst alles stehen)
         await tippe(page, '#timer-btn');
@@ -658,6 +650,9 @@ async function laufViewport(browser, base, vp) {
         await foto(page, vp, 'a');
         await messe(page, e, vp, 'vor', { feld: true, hochHandy: hochHandy });
         await foto(page, vp, 'vor');
+
+        // Anpfiff: ohne laufende Uhr laesst sich nichts eintragen (siehe sperrTest)
+        await tippe(page, '#timer-btn');
 
         // 9 + (b) + (c): ein Tor per Touch, dann zuruecknehmen
         try {
@@ -1025,6 +1020,135 @@ async function strafenTest(browser, base) {
     }
 }
 
+// Erfassen nur, wenn die Uhr es zulaesst (Timer.darfErfassen), auf 390x844, echte Bedienung
+async function sperrTest(browser, base) {
+    const vp = { w: 390, h: 844, handy: true };
+    const e = neu({ w: 'Sperre 390', h: '844' });
+    const t = await neuesTestSpiel(browser, base, vp);
+    const page = t.page;
+    const ok = function (bedingung, zustand, meldung) { if (!bedingung) melde(e, 9, zustand, meldung); };
+    const archive0 = [];
+    const anzahl = function () { return page.evaluate(function () { return window.Sync.getState().aktionen.length; }); };
+    const sheetDa = async function () { return !!(await page.$('#court-action-sheet')); };
+    const letzterToast = function () {
+        return page.evaluate(function () { const l = document.querySelectorAll('.toast'); return l.length ? l[l.length - 1].textContent : ''; });
+    };
+    const tippeSpieler = async function (wer) {
+        if (wer === 'gegner') await page.locator('.court-opponent-btn').tap({ timeout: 8000 });
+        else await page.locator('.court-player-node', { hasText: wer }).first().tap({ timeout: 8000 });
+        await sleep(600);
+    };
+    const knoepfe = function () {
+        return page.$$eval('#court-action-sheet .court-action-btn', function (l) { return l.map(function (b) { return b.textContent.trim(); }); });
+    };
+    // Aktion nicht erlaubt: kein Sheet, gleiche Anzahl, Hinweis mit dem Grund
+    const abgelehnt = async function (zustand, wer, grund) {
+        const vorher = await anzahl();
+        await tippeSpieler(wer);
+        ok(!(await sheetDa()), zustand, 'Aktions-Sheet offen bei ' + wer);
+        ok((await anzahl()) === vorher, zustand, 'Aktionszahl hat sich geaendert');
+        const tt = await letzterToast();
+        ok(tt.indexOf(grund) !== -1, zustand, 'Hinweis "' + tt + '" statt "' + grund + '"');
+    };
+    try {
+        archive0.push.apply(archive0, await archivListe(page));
+        await spielBereitstellen(page);
+
+        // 1. Vor dem Anpfiff: Spieler und Gegner tippen oeffnet nichts
+        const a0 = await anzahl();
+        await abgelehnt('vor', 'Lukas', 'Vor dem Anpfiff – erst „Anpfiff“ tippen.');
+        await abgelehnt('vor-gegner', 'gegner', 'Vor dem Anpfiff');
+        ok((await anzahl()) === a0, 'vor', 'Aktionszahl nach Tippen vor dem Anpfiff');
+
+        // 2. Nach dem Anpfiff: ein Tor wird eingetragen
+        await tippe(page, '#timer-btn');
+        await tor(page, e, vp, 'Lukas', {});
+        ok((await anzahl()) === a0 + 1, 'laeuft', 'Tor nach Anpfiff nicht eingetragen: ' + await anzahl());
+        const aTor = await anzahl();
+
+        // 3. Unterbrechen: Sheet zeigt nur Strafen, 2-Minuten wird eingetragen
+        await tippe(page, '#timer-btn');   // "Unterbrechen"
+        ok((await zustandUhr(page)).laeuft === false, 'steht', 'Uhr laeuft trotz Unterbrechen');
+        await tippeSpieler('Felix');
+        ok(await sheetDa(), 'steht', 'Sheet bei stehender Uhr fehlt (Strafen muessen gehen)');
+        const k = await knoepfe();
+        ok(k.length === 2 && k.some(function (x) { return x.indexOf('2-Minuten') !== -1; }) && k.some(function (x) { return x.indexOf('Karte') !== -1; }),
+            'steht', 'Tasten bei stehender Uhr: ' + JSON.stringify(k));
+        ok(/Uhr steht – nur Strafen\. „Weiter“ tippen für alles andere\./.test(await text(page, '#court-action-sheet')), 'steht', 'Hinweiszeile fehlt');
+        await foto(page, vp, 'sperre-nur-strafen');
+        await page.locator('#court-action-sheet .court-action-btn', { hasText: '2-Minuten' }).tap({ timeout: 8000 });
+        await sleep(600);
+        ok((await anzahl()) === aTor + 1, 'steht', '2-Minuten nicht eingetragen');
+        const hatStrafe = await page.evaluate(function () { return window.Sync.getState().aktionen.some(function (a) { return a.typ === 'Zeitstrafe'; }); });
+        ok(hatStrafe, 'steht', 'Zeitstrafe fehlt im Stand');
+        const aStrafe = await anzahl();
+
+        // 4. Direkter Aufruf der Speicherfunktion mit einem Tor bei stehender Uhr: abgelehnt
+        const direkt = await page.evaluate(function () {
+            const p = window.Store.getSPIELER().find(function (x) { return x.name.indexOf('Noah') === 0; });
+            const r = window.Store.erfasseAktion(p, 'WurfTor', 'Wurf mit Tor', 'Wurf', null);
+            return { ok: r.ok, grund: r.grund || '' };
+        });
+        ok(direkt.ok === false && /Uhr steht/.test(direkt.grund), 'direkt', 'Store.erfasseAktion bei stehender Uhr: ' + JSON.stringify(direkt));
+        ok((await anzahl()) === aStrafe, 'direkt', 'Aktionszahl nach direktem Aufruf geaendert');
+
+        // 5. Wettlauf: Sheet offen, Uhr haelt an, dann Tipp auf "Wurf mit Tor"
+        await tippe(page, '#timer-btn');   // "Weiter"
+        ok((await zustandUhr(page)).laeuft === true, 'wettlauf', 'Uhr laeuft nach Weiter nicht');
+        await tippeSpieler('Noah');
+        const torKnopf = await page.evaluate(function () {
+            // Knopf merken: die Uhr haelt an, ohne dass die Anzeige das Sheet neu baut (etwa ein Stopp von aussen)
+            window.__torKnopf = Array.from(document.querySelectorAll('#court-action-sheet .court-action-btn')).find(function (b) { return /Wurf mit Tor/.test(b.textContent); });
+            return !!window.__torKnopf;
+        });
+        ok(torKnopf, 'wettlauf', 'Wurf mit Tor nicht im Sheet bei laufender Uhr');
+        await page.evaluate(function () { window.Timer.hauptknopf(); });   // Unterbrechen
+        await sleep(400);
+        const vorRennen = await anzahl();
+        await page.evaluate(function () { window.__torKnopf.click(); });
+        await sleep(600);
+        ok((await anzahl()) === vorRennen, 'wettlauf', 'Tor trotz stehender Uhr eingetragen');
+        ok(!(await sheetDa()), 'wettlauf', 'Sheet nach abgelehntem Tipp noch offen');
+        ok(/Uhr steht/.test(await letzterToast()), 'wettlauf', 'Hinweis fehlt: "' + await letzterToast() + '"');
+        ok(!(await page.$('#assist-overlay:visible')), 'wettlauf', 'Assist-Abfrage offen');
+
+        // 6. Halbzeitpause: nichts geht
+        await page.evaluate(function () { window.Timer.hauptknopf(); });   // Weiter
+        await sleep(300);
+        await page.evaluate(function (s) { window.Timer.setGameTime(s); }, await page.evaluate(function () { return window.Timer.getTimerState().halbzeitSekunden; }));
+        await sleep(600);
+        await tippe(page, '#timer-btn');   // Halbzeit
+        ok((await zustandUhr(page)).phase === 'pause', 'pause', 'Phase ' + (await zustandUhr(page)).phase + ' statt pause');
+        await abgelehnt('pause', 'Lukas', 'Halbzeitpause – Aktionen erst nach „Anpfiff 2. Halbzeit“.');
+        await abgelehnt('pause-gegner', 'gegner', 'Halbzeitpause');
+        const direktPause = await page.evaluate(function () {
+            const p = window.Store.getSPIELER().find(function (x) { return x.name.indexOf('Lukas') === 0; });
+            return window.Store.erfasseAktion(p, 'Zeitstrafe', '2-Minuten', 'Strafe', null).ok;
+        });
+        ok(direktPause === false, 'pause', 'Strafe in der Pause direkt erfasst');
+
+        // 7. Abpfiff: nichts geht, Rueckgaengig einer frueheren Aktion schon
+        await tippe(page, '#timer-btn');   // Anpfiff 2. Halbzeit
+        await page.evaluate(function (s) { window.Timer.setGameTime(2 * s); }, await page.evaluate(function () { return window.Timer.getTimerState().halbzeitSekunden; }));
+        await sleep(600);
+        await tippe(page, '#timer-btn');   // Abpfiff
+        ok((await zustandUhr(page)).phase === 'ende', 'ende', 'Phase ' + (await zustandUhr(page)).phase + ' statt ende');
+        await abgelehnt('ende', 'Lukas', 'Spiel ist abgepfiffen.');
+        await abgelehnt('ende-gegner', 'gegner', 'Spiel ist abgepfiffen.');
+        const vorUndo = await anzahl();
+        await page.evaluate(function () { window.UI.undoLastAction(); });
+        await sleep(500);
+        ok((await anzahl()) === vorUndo - 1, 'ende', 'Rueckgaengig nach dem Abpfiff: ' + vorUndo + ' -> ' + await anzahl());
+    } catch (err) {
+        melde(e, 9, 'sperre', 'Ablauf abgebrochen: ' + String(err.stack || err.message).split('\n').slice(0, 4).join(' | '));
+        try { await page.screenshot({ path: path.join(OUT, 'sperre-abbruch.png') }); } catch (err2) { /* egal */ }
+    } finally {
+        t.fehler.forEach(function (x) { melde(e, 8, 'sperre', x); });
+        await testAufraeumen(page, e, archive0);
+        await t.ctx.close();
+    }
+}
+
 // Neu laden und im Spiel bleiben (mit laufendem Spiel oeffnet die App direkt das Feld)
 async function neuLadenAmSpiel(page) {
     // Erst sichern: mit ungesicherten Aenderungen fragt der Browser beim Verlassen nach
@@ -1241,6 +1365,9 @@ function ausgabe() {
         if (!nur.length || nur.indexOf('390x844') !== -1) {
             process.stdout.write('lauf Ablauf 390x844 ... ');
             await ablaufTest(browser, base);
+            console.log('fertig');
+            process.stdout.write('lauf Sperre 390x844 ... ');
+            await sperrTest(browser, base);
             console.log('fertig');
             process.stdout.write('lauf Strafen 390x844 ... ');
             await strafenTest(browser, base);

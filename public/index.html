@@ -16,7 +16,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=20261115">
+    <link rel="stylesheet" href="style.css?v=20261116">
 </head>
 
 <body class="ansicht-login">
@@ -130,25 +130,6 @@
                 <dt>Gast</dt><dd id="info-gast">-</dd>
             </dl>
             <button type="button" class="btn btn-block" onclick="window.UI.spielInfoNamenAendern()">Namen ändern</button>
-        </div>
-    </div>
-
-    <!-- Aktion trotz stehender Uhr: Der erste Versuch fragt nach, die Wahl "ohne Uhr" gilt fuer dieses Spiel -->
-    <div id="uhr-hinweis" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="uhr-hinweis-titel">
-        <div class="sheet-panel">
-            <h2 id="uhr-hinweis-titel" class="sheet-titel">Die Uhr läuft noch nicht</h2>
-            <p class="sheet-text">Die Aktion würde bei 00:00 eingetragen. Soll die Uhr jetzt starten?</p>
-            <button type="button" class="btn btn-primary btn-block" onclick="window.UI.uhrHinweisWahl(true)">Anpfiff und eintragen</button>
-            <button type="button" class="btn btn-block" onclick="window.UI.uhrHinweisWahl(false)">Ohne Uhr eintragen</button>
-        </div>
-    </div>
-
-    <!-- Spieler tippen in der Halbzeitpause oder nach dem Abpfiff: Korrekturen bleiben moeglich, aber nicht aus Versehen -->
-    <div id="phase-hinweis" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="phase-hinweis-titel">
-        <div class="sheet-panel">
-            <h2 id="phase-hinweis-titel" class="sheet-titel">Halbzeitpause – jetzt eintragen?</h2>
-            <button type="button" class="btn btn-primary btn-block" onclick="window.UI.phaseHinweisWahl(true)">Eintragen</button>
-            <button type="button" class="btn btn-block" onclick="window.UI.phaseHinweisWahl(false)">Abbrechen</button>
         </div>
     </div>
 
@@ -522,21 +503,21 @@
         </div>
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="vendor/touch-drag.js?v=20261115"></script>
-    <script src="js/config.js?v=20261115"></script>
-    <script src="vendor/supabase.js?v=20261115"></script>
-    <script src="js/api.js?v=20261115"></script>
-    <script src="js/sync.js?v=20261115"></script>
-    <script src="js/wakelock.js?v=20261115"></script>
-    <script src="js/store.js?v=20261115"></script>
-    <script src="js/timer.js?v=20261115"></script>
-    <script src="js/stats.js?v=20261115"></script>
-    <script src="js/report.js?v=20261115"></script>
-    <script src="js/whatsapp.js?v=20261115"></script>
-    <script src="js/tickerui.js?v=20261115"></script>
-    <script src="js/ui.js?v=20261115"></script>
-    <script src="js/start.js?v=20261115"></script>
-    <script src="js/app.js?v=20261115"></script>
+    <script src="vendor/touch-drag.js?v=20261116"></script>
+    <script src="js/config.js?v=20261116"></script>
+    <script src="vendor/supabase.js?v=20261116"></script>
+    <script src="js/api.js?v=20261116"></script>
+    <script src="js/sync.js?v=20261116"></script>
+    <script src="js/wakelock.js?v=20261116"></script>
+    <script src="js/store.js?v=20261116"></script>
+    <script src="js/timer.js?v=20261116"></script>
+    <script src="js/stats.js?v=20261116"></script>
+    <script src="js/report.js?v=20261116"></script>
+    <script src="js/whatsapp.js?v=20261116"></script>
+    <script src="js/tickerui.js?v=20261116"></script>
+    <script src="js/ui.js?v=20261116"></script>
+    <script src="js/start.js?v=20261116"></script>
+    <script src="js/app.js?v=20261116"></script>
 
 </body>
 
