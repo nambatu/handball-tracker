@@ -524,6 +524,13 @@
             el('start-kader').addEventListener('change', mannschaftGewaehlt);
             el('start-ticker').addEventListener('change', tickerUmschalten);
         }
+        if (el('passwort-sheet')) {
+            el('passwort-sheet').addEventListener('click', function (e) {
+                if (e.target === el('passwort-sheet')) passwortSchliessen();
+            });
+        }
+        // Passwort aendern gibt es nur in der neuen App
+        if (window.Api && window.Api.modus === 'supabase' && el('start-pw-knopf')) el('start-pw-knopf').hidden = false;
         teamsLaden();
         tickerLaden();
 
@@ -533,7 +540,61 @@
         if (laeuftSpiel()) zumSpiel(); else zeige();
     }
 
+    // ---------------------------------------------------------------
+    // Passwort aendern (nur Supabase-Modus; freiwillig)
+    // ---------------------------------------------------------------
+
+    let pwLaeuft = false;
+
+    function passwortFehler(text) {
+        const f = el('pw-fehler');
+        if (!f) return;
+        f.textContent = text || '';
+        f.hidden = !text;
+    }
+
+    function passwortOeffnen() {
+        ['pw-alt', 'pw-neu', 'pw-neu2'].forEach(function (id) { el(id).value = ''; });
+        passwortFehler('');
+        el('passwort-sheet').hidden = false;
+    }
+
+    function passwortSchliessen() {
+        if (pwLaeuft) return;
+        const b = el('passwort-sheet');
+        if (b) b.hidden = true;
+        ['pw-alt', 'pw-neu', 'pw-neu2'].forEach(function (id) { if (el(id)) el(id).value = ''; });
+        passwortFehler('');
+    }
+
+    async function passwortSpeichern() {
+        if (pwLaeuft) return;
+        const alt = el('pw-alt').value;
+        const neu = el('pw-neu').value;
+        const neu2 = el('pw-neu2').value;
+        if (!alt) { passwortFehler('Bitte das aktuelle Passwort eingeben.'); return; }
+        if (neu.length < 8 || neu.length > 72) { passwortFehler('Das neue Passwort braucht 8 bis 72 Zeichen.'); return; }
+        if (neu !== neu2) { passwortFehler('Die beiden neuen Passwörter sind nicht gleich.'); return; }
+        if (neu === alt) { passwortFehler('Das neue Passwort muss sich vom aktuellen unterscheiden.'); return; }
+        if (!navigator.onLine) { passwortFehler('Zum Ändern brauchst du Internet.'); return; }
+        passwortFehler('');
+        pwLaeuft = true;
+        const knopf = el('pw-speichern');
+        knopf.disabled = true;
+        let r;
+        try { r = await window.Api.passwortAendern(alt, neu); }
+        catch (e) { r = { ok: false, error: 'Keine Verbindung zum Server.' }; }
+        pwLaeuft = false;
+        knopf.disabled = false;
+        if (!r.ok) { passwortFehler(r.error || 'Nicht gespeichert.'); return; }
+        passwortSchliessen();
+        if (window.Toast) window.Toast('Passwort geändert.', { type: 'success' });
+    }
+
     window.Start = {
+        passwortOeffnen: passwortOeffnen,
+        passwortSchliessen: passwortSchliessen,
+        passwortSpeichern: passwortSpeichern,
         init: init,
         ansicht: ansicht,
         zeige: zeige,

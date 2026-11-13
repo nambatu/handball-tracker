@@ -120,6 +120,11 @@
         },
         logout: async function () {
             localStorage.removeItem('auth_token');
+        },
+
+        // Der alte Server kennt keine Passwort-Aenderung.
+        passwortAendern: async function () {
+            return { ok: false, error: 'Nur in der neuen App möglich.' };
         }
     };
 
@@ -557,6 +562,31 @@
                 const d = await res.json().catch(function () { return {}; });
                 if (res.ok) return { ok: true };
                 return { ok: false, error: d.error || 'Registrierung fehlgeschlagen.' };
+            } catch (e) {
+                return { ok: false, error: 'Keine Verbindung zum Server.' };
+            }
+        },
+
+        // Passwort aendern: erst das aktuelle durch erneutes Anmelden pruefen
+        // (loggt bei Fehler nicht aus), dann das neue setzen. Sync und
+        // Spielstand bleiben unberuehrt; die Sitzung bleibt gueltig.
+        passwortAendern: async function (alt, neu) {
+            try {
+                const sitzung = await holeSitzung();
+                const mail = sitzung && sitzung.user && sitzung.user.email;
+                if (!mail) return { ok: false, error: 'Nicht angemeldet.' };
+                const c = holeClient();
+                const pruef = await c.auth.signInWithPassword({ email: mail, password: alt });
+                if (pruef.error) {
+                    if (istNetzproblem(pruef.error)) return { ok: false, error: 'Keine Verbindung zum Server.' };
+                    return { ok: false, error: 'Aktuelles Passwort stimmt nicht.' };
+                }
+                const r = await c.auth.updateUser({ password: neu });
+                if (r.error) {
+                    if (istNetzproblem(r.error)) return { ok: false, error: 'Keine Verbindung zum Server.' };
+                    return { ok: false, error: 'Nicht gespeichert: ' + (r.error.message || 'Unbekannter Fehler') };
+                }
+                return { ok: true };
             } catch (e) {
                 return { ok: false, error: 'Keine Verbindung zum Server.' };
             }

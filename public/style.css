@@ -1597,6 +1597,13 @@ body.ansicht-start .start-screen {
     font-size: 0.9375rem;
 }
 .start-konto .btn-link { padding-right: 0; }
+.start-konto-knoepfe { display: flex; flex-wrap: wrap; justify-content: flex-end; flex: 0 0 auto; }
+.start-konto-knoepfe .btn-link[hidden] { display: none; }
+.start-konto-knoepfe .btn-link { padding-right: var(--abstand-2); }
+.start-konto-knoepfe .btn-link:last-child { padding-right: 0; }
+/* Passwort-Sheet: Felder und Fehlerzeile mit etwas Luft */
+#passwort-form .formfehler { margin: var(--abstand-3) 0 0; }
+#passwort-form .pw-knopf { margin-top: var(--abstand-4); }
 .start-user { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .start-sync-platz .sync-badge { margin-left: 0; }
 /* Auch auf dem Handy mit Text: hier ist Platz, und "Gesichert" sagt mehr als ein Punkt */

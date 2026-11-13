@@ -16,7 +16,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=20261116">
+    <link rel="stylesheet" href="style.css?v=20261117">
 </head>
 
 <body class="ansicht-login">
@@ -153,6 +153,22 @@
         </div>
     </div>
 
+    <!-- Passwort aendern (nur Supabase-Modus) -->
+    <div id="passwort-sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="passwort-titel">
+        <form class="sheet-panel" id="passwort-form" onsubmit="window.Start.passwortSpeichern(); return false;" novalidate>
+            <h2 id="passwort-titel" class="sheet-titel">Passwort ändern</h2>
+            <label class="feld-label" for="pw-alt">Aktuelles Passwort</label>
+            <input type="password" id="pw-alt" class="feld" autocomplete="current-password">
+            <label class="feld-label" for="pw-neu">Neues Passwort</label>
+            <input type="password" id="pw-neu" class="feld" autocomplete="new-password">
+            <label class="feld-label" for="pw-neu2">Neues Passwort wiederholen</label>
+            <input type="password" id="pw-neu2" class="feld" autocomplete="new-password">
+            <p id="pw-fehler" class="formfehler" role="alert" hidden></p>
+            <button type="submit" id="pw-speichern" class="btn btn-primary btn-block pw-knopf">Speichern</button>
+            <button type="button" class="btn btn-block" onclick="window.Start.passwortSchliessen()">Abbrechen</button>
+        </form>
+    </div>
+
     <!-- Zeitkorrektur: laufende Zeit setzen UND die Halbzeitlaenge festlegen -->
     <div id="time-edit" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="time-edit-titel">
         <div class="sheet-panel">
@@ -213,7 +229,10 @@
                     <span id="start-sync-platz" class="start-sync-platz"></span>
                     <div class="start-konto">
                         <span id="start-user" class="start-user"></span>
-                        <button type="button" class="btn-link" onclick="logoutUser()">Abmelden</button>
+                        <span class="start-konto-knoepfe">
+                            <button type="button" class="btn-link" id="start-pw-knopf" hidden onclick="window.Start.passwortOeffnen()">Passwort ändern</button>
+                            <button type="button" class="btn-link" onclick="logoutUser()">Abmelden</button>
+                        </span>
                     </div>
                 </div>
 
@@ -503,21 +522,21 @@
         </div>
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="vendor/touch-drag.js?v=20261116"></script>
-    <script src="js/config.js?v=20261116"></script>
-    <script src="vendor/supabase.js?v=20261116"></script>
-    <script src="js/api.js?v=20261116"></script>
-    <script src="js/sync.js?v=20261116"></script>
-    <script src="js/wakelock.js?v=20261116"></script>
-    <script src="js/store.js?v=20261116"></script>
-    <script src="js/timer.js?v=20261116"></script>
-    <script src="js/stats.js?v=20261116"></script>
-    <script src="js/report.js?v=20261116"></script>
-    <script src="js/whatsapp.js?v=20261116"></script>
-    <script src="js/tickerui.js?v=20261116"></script>
-    <script src="js/ui.js?v=20261116"></script>
-    <script src="js/start.js?v=20261116"></script>
-    <script src="js/app.js?v=20261116"></script>
+    <script src="vendor/touch-drag.js?v=20261117"></script>
+    <script src="js/config.js?v=20261117"></script>
+    <script src="vendor/supabase.js?v=20261117"></script>
+    <script src="js/api.js?v=20261117"></script>
+    <script src="js/sync.js?v=20261117"></script>
+    <script src="js/wakelock.js?v=20261117"></script>
+    <script src="js/store.js?v=20261117"></script>
+    <script src="js/timer.js?v=20261117"></script>
+    <script src="js/stats.js?v=20261117"></script>
+    <script src="js/report.js?v=20261117"></script>
+    <script src="js/whatsapp.js?v=20261117"></script>
+    <script src="js/tickerui.js?v=20261117"></script>
+    <script src="js/ui.js?v=20261117"></script>
+    <script src="js/start.js?v=20261117"></script>
+    <script src="js/app.js?v=20261117"></script>
 
 </body>
 
