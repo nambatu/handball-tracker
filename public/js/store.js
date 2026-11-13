@@ -113,6 +113,61 @@ function saveActions(aktionen) {
 }
 
 // ---------------------------------------------------------------
+// Marken (Zeitmarken, Auszeiten)
+// ---------------------------------------------------------------
+// Marken sind keine Spieleraktionen und duerfen deshalb nie in
+// `aktionen` landen: sonst tauchten sie in Statistik, Bericht und
+// Spielstand auf. Sie liegen in `tickerMarken` - das wird ohnehin
+// synchronisiert, beim Zusammenfuehren nach id vereinigt und mit dem
+// Spiel zurueckgesetzt.
+
+function getMarken() {
+    const s = state();
+    if (!Array.isArray(s.tickerMarken)) s.tickerMarken = [];
+    return s.tickerMarken;
+}
+
+function addMarke(marke) {
+    const liste = getMarken();
+    if (liste.some(function (m) { return String(m.id) === String(marke.id); })) return false;
+    liste.push(marke);
+    window.Sync.touch();
+    return true;
+}
+
+function removeMarke(id) {
+    const liste = getMarken();
+    const idx = liste.findIndex(function (m) { return String(m.id) === String(id); });
+    if (idx === -1) return null;
+    const entfernt = liste.splice(idx, 1)[0];
+    window.Sync.touch();
+    return entfernt;
+}
+
+/** Auszeiten des laufenden Spiels je Team. */
+function zaehleAuszeiten() {
+    const n = { heim: 0, gast: 0 };
+    getMarken().forEach(function (m) {
+        if (m && m.art === 'auszeit' && (m.team === 'heim' || m.team === 'gast')) n[m.team]++;
+    });
+    return n;
+}
+
+/** Torstand aus den Aktionen (Gegner = Gast). */
+function getStand() {
+    const spieler = state().spieler;
+    let heim = 0;
+    let gast = 0;
+    state().aktionen.forEach(function (a) {
+        if (!a.typ || a.typ.indexOf('WurfTor') === -1) return;
+        const p = spieler.find(function (x) { return x.id === a.spielerId; });
+        if (!p) return;
+        if (istGast(p)) gast++; else heim++;
+    });
+    return { heim: heim, gast: gast };
+}
+
+// ---------------------------------------------------------------
 // Heim oder Gast
 // ---------------------------------------------------------------
 // Bis September 2026 wurde die Gegnerseite am NAMEN erkannt. Das war
@@ -482,6 +537,11 @@ window.Store = {
     savePlayers,
     loadActions,
     saveActions,
+    getMarken,
+    addMarke,
+    removeMarke,
+    zaehleAuszeiten,
+    getStand,
     isGuestTeam,
     istGast,
     istGastName,

@@ -16,17 +16,38 @@ const LEGACY_CLOCK_KEY = 'gameState';
 
 const STANDARD_HALBZEIT_SEKUNDEN = 30 * 60;
 
+// Spielphasen. Die Phase sagt, WO im Spiel wir sind; ob die Uhr gerade laeuft,
+// steht weiter in `startedAt`. Beides getrennt zu halten ist Absicht: in
+// `hz1` kann die Uhr stehen (Unterbrechung, Auszeit), ohne dass sich die
+// Phase aendert.
+//   vor    vor dem Anpfiff
+//   hz1    1. Halbzeit
+//   pause  Halbzeitpause
+//   hz2    2. Halbzeit
+//   ende   abgepfiffen, noch nicht archiviert
+const PHASEN = ['vor', 'hz1', 'pause', 'hz2', 'ende'];
+
+const AUSZEIT_SEKUNDEN = 60;
+
 let clock = {
     accumulatedMs: 0,   // gesicherte Spielzeit aus abgeschlossenen Laufphasen
     startedAt: null,    // Date.now() beim Start, null wenn pausiert
-    half: 1,
+    half: 1,            // 1 in vor/hz1, 2 ab pause - andere Module lesen das
+    phase: 'vor',
+    // Stand VOR dem letzten Phasenwechsel (Halbzeit, Abpfiff): damit laesst
+    // sich ein versehentlicher Tipp zuruecknehmen, ohne dass Zeit verloren geht.
+    vorher: null,       // { phase, accumulatedMs, half }
+    // true, wenn die Uhr absichtlich angehalten wurde (Unterbrechen, Auszeit).
+    // Nur dann heisst die Taste "Weiter" - auch jenseits der Halbzeitlaenge,
+    // wo sie sonst "Halbzeit" hiesse.
+    angehalten: false,
+    // Laufende Auszeit: nur Anzeige, auf Wanduhrzeit gerechnet
+    auszeit: null,      // { team, bisMs, markeId }
     // Laenge EINER Halbzeit. Liegt bewusst bei der Uhr und nicht im
     // synchronisierten Spielstand: die Uhr gehoert zum Geraet, und eine
     // D-Jugend spielt 2x20 waehrend die Erste daneben 2x30 spielt.
     halbzeitSekunden: STANDARD_HALBZEIT_SEKUNDEN
 };
-
-let halbzeitHinweisFuer = 0;   // fuer welche Halbzeit schon gewarnt wurde
 
 let displayInterval = null;
 let lastPlaytimeSeconds = 0;
@@ -73,12 +94,7 @@ function loadGameState() {
     } catch (e) { /* ignorieren */ }
 
     if (loaded && typeof loaded.accumulatedMs === 'number') {
-        clock = {
-            accumulatedMs: loaded.accumulatedMs,
-            startedAt: loaded.startedAt || null,
-            half: loaded.half || 1,
-            halbzeitSekunden: Number(loaded.halbzeitSekunden) || STANDARD_HALBZEIT_SEKUNDEN
-        };
+        clock = normalisiereUhr(loaded);
 
         // Die Uhr lief beim letzten Mal noch. Das ist der ehrliche Zustand
         // (die Halbzeit lief ja weiter), kann aber auch heissen, dass der
@@ -97,8 +113,8 @@ function loadGameState() {
         try {
             const legacy = JSON.parse(localStorage.getItem(LEGACY_CLOCK_KEY));
             if (legacy && typeof legacy.spielzeit === 'number') {
-                clock = { accumulatedMs: legacy.spielzeit * 1000, startedAt: null,
-                          half: legacy.halbzeit || 1, halbzeitSekunden: STANDARD_HALBZEIT_SEKUNDEN };
+                clock = normalisiereUhr({ accumulatedMs: legacy.spielzeit * 1000, startedAt: null,
+                          half: legacy.halbzeit || 1, halbzeitSekunden: STANDARD_HALBZEIT_SEKUNDEN });
                 localStorage.removeItem(LEGACY_CLOCK_KEY);
                 saveGameState();
             }
@@ -106,8 +122,48 @@ function loadGameState() {
     }
 
     lastPlaytimeSeconds = elapsedSeconds();
-    if (isRunning()) startDisplayLoop();
+    if (isRunning() || clock.auszeit) startDisplayLoop();
     updateTimerDisplay();
+}
+
+/**
+ * Macht aus einer gespeicherten Uhr eine vollstaendige. Aeltere Staende kennen
+ * keine Phase: dann wird sie aus dem abgeleitet, was da ist.
+ */
+function normalisiereUhr(roh) {
+    const c = {
+        accumulatedMs: roh.accumulatedMs,
+        startedAt: roh.startedAt || null,
+        half: roh.half === 2 ? 2 : 1,
+        phase: roh.phase,
+        vorher: null,
+        angehalten: !!roh.angehalten,
+        auszeit: null,
+        halbzeitSekunden: Number(roh.halbzeitSekunden) || STANDARD_HALBZEIT_SEKUNDEN
+    };
+
+    if (PHASEN.indexOf(c.phase) === -1) {
+        if (!c.startedAt && !c.accumulatedMs) c.phase = 'vor';
+        else c.phase = c.half === 2 ? 'hz2' : 'hz1';
+    }
+    // half muss zur Phase passen, sonst rechnen Aktionen und Ticker falsch
+    c.half = (c.phase === 'vor' || c.phase === 'hz1') ? 1 : 2;
+
+    // Eine Uhr, die in pause/ende laeuft, gibt es nicht
+    if ((c.phase === 'pause' || c.phase === 'ende' || c.phase === 'vor') && c.startedAt) {
+        c.accumulatedMs += Date.now() - c.startedAt;
+        c.startedAt = null;
+    }
+
+    const v = roh.vorher;
+    if (v && PHASEN.indexOf(v.phase) !== -1 && typeof v.accumulatedMs === 'number') {
+        c.vorher = { phase: v.phase, accumulatedMs: v.accumulatedMs, half: v.half === 2 ? 2 : 1 };
+    }
+    const a = roh.auszeit;
+    if (a && (a.team === 'heim' || a.team === 'gast') && typeof a.bisMs === 'number') {
+        c.auszeit = { team: a.team, bisMs: a.bisMs, markeId: a.markeId || null };
+    }
+    return c;
 }
 
 // ---------------------------------------------------------------
