@@ -2133,3 +2133,29 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     padding: 10px 14px;
 }
 .karten-liste .history-empty { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--radius); }
+
+/* ---------- Kader (Vollbild): Spieler, Mannschaften, Spiel ---------- */
+.kader-liste { display: grid; gap: 8px; margin-bottom: var(--abstand-3, 12px); }
+.kader-liste:last-child { margin-bottom: 0; }
+.kader-zeile {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px;
+    padding: 6px 12px; text-align: left; font: inherit; color: var(--text-color);
+    background: var(--raised-bg); border: 1px solid var(--border-color); border-radius: var(--radius);
+    cursor: pointer; touch-action: manipulation;
+}
+.kader-zeile:active { background: #2c333d; }
+.kader-bild {
+    flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-strong, #2563eb); color: #fff; font-weight: 700;
+}
+.kader-text { display: flex; flex-direction: column; min-width: 0; }
+.kader-name { font-weight: 600; overflow-wrap: anywhere; }
+.kader-zusatz { color: var(--text-muted); font-size: 13px; }
+.kader-schalter { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
+.kader-schalter input { width: 22px; height: 22px; flex: 0 0 auto; }
+.kader-inhalt .feld-label { margin-top: var(--abstand-4, 16px); }
+.kader-inhalt > .btn-danger { margin-top: 4px; }
+.sheet-panel .roster-ticker { margin-top: 8px; }
+.sheet-panel .roster-ticker:empty { display: none; }
+.sheet-panel .btn-primary.kader-ok { margin-top: 16px; }

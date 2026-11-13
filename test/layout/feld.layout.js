@@ -802,6 +802,121 @@ async function laufViewport(browser, base, vp) {
             }
         }
 
+        // (g) Kader (Vollbild): Spieler anlegen, bearbeiten, loeschen, Mannschaft speichern/loeschen
+        // je Groesse ein eigener Name: die Laeufe teilen sich das Testkonto
+        const teamName = 'Tagesbau-Probe ' + vp.w + 'x' + vp.h;
+        try {
+            await page.evaluate(async function (n) {
+                const alt = await window.Store.getTeams();
+                for (const t of alt) { if (t.name === n) await window.Store.deleteTeam(t.id); }
+            }, teamName);
+            await overlayOeffnen(page, 'kader');
+            await page.waitForSelector('#player-management-view', { state: 'visible', timeout: 5000 });
+            await sleep(700);
+            await messe(page, e, vp, 'g-kader', { schrift: false });
+            await foto(page, vp, 'kader');
+            const kk = await page.evaluate(function () {
+                const v = document.getElementById('player-management-view');
+                const t = v.querySelector('.vollbild-titel');
+                return {
+                    titel: t && t.textContent.trim(),
+                    aktion: v.querySelectorAll('.vollbild-aktion button').length,
+                    emoji: /\p{Extended_Pictographic}/u.test(v.textContent),
+                    inlineStil: Array.from(v.querySelectorAll('[style]')).filter(function (x) { return x.getAttribute('style'); }).map(function (x) { return x.tagName + '#' + x.id + '.' + x.className + '[' + x.getAttribute('style') + ']'; }).join(','),
+                    scrollt: getComputedStyle(v.querySelector('.vollbild-inhalt')).overflowY === 'auto',
+                    zeilen: v.querySelectorAll('.kader-zeile').length
+                };
+            });
+            if (kk.titel !== 'Kader') melde(e, 9, 'g-kader', 'Titel "' + kk.titel + '" statt "Kader"');
+            if (kk.aktion !== 1) melde(e, 9, 'g-kader', kk.aktion + ' Aktionen in der Kopfzeile statt 1');
+            if (kk.emoji) melde(e, 9, 'g-kader', 'Emoji im Text');
+            if (kk.inlineStil) melde(e, 9, 'g-kader', 'Inline-Stile an ' + kk.inlineStil);
+            if (!kk.scrollt) melde(e, 9, 'g-kader', 'Inhalt scrollt nicht');
+            if (kk.zeilen < 2) melde(e, 9, 'g-kader', 'Spielerzeilen fehlen (' + kk.zeilen + ')');
+            const vorher = await page.evaluate(function () { return window.Store.getSPIELER().length; });
+
+            // Neuer Spieler ueber das Blatt
+            await page.locator('#player-management-view .vollbild-aktion button').tap({ timeout: 5000 });
+            await page.waitForSelector('.sheet-panel #input-name', { state: 'visible', timeout: 3000 });
+            await sleep(200);
+            await messe(page, e, vp, 'g-spielerblatt', { schrift: false });
+            await foto(page, vp, 'kader-blatt');
+            await page.fill('#input-name', 'Testi Kader');
+            await page.fill('#input-number', '77');
+            await page.locator('.sheet-panel .kader-ok').tap({ timeout: 3000 });
+            await sleep(500);
+            const nach = await page.evaluate(function () { return window.Store.getSPIELER().map(function (p) { return p.name; }); });
+            if (nach.length !== vorher + 1 || nach.indexOf('Testi Kader') < 0) melde(e, 9, 'g-kader', 'Neuer Spieler nicht angelegt');
+            await page.locator('.sheet-panel button', { hasText: 'Fertig' }).tap({ timeout: 3000 });
+            await sleep(200);
+
+            // Bearbeiten: Zeile antippen, Namen aendern
+            await page.locator('#player-management-view .kader-zeile', { hasText: 'Testi Kader' }).tap({ timeout: 3000 });
+            await page.waitForSelector('.sheet-panel #input-name', { state: 'visible', timeout: 3000 });
+            await sleep(200);
+            await messe(page, e, vp, 'g-bearbeiten', { schrift: false });
+            await page.fill('#input-name', 'Testi Zwei');
+            await page.locator('.sheet-panel .kader-ok').tap({ timeout: 3000 });
+            await sleep(500);
+            if (!(await page.evaluate(function () { return window.Store.getSPIELER().some(function (p) { return p.name === 'Testi Zwei'; }); }))) {
+                melde(e, 9, 'g-kader', 'Namensaenderung nicht gespeichert');
+            }
+
+            // Loeschen ueber das Bestaetigungsblatt
+            await page.locator('#player-management-view .kader-zeile', { hasText: 'Testi Zwei' }).tap({ timeout: 3000 });
+            await page.waitForSelector('.sheet-panel #input-name', { state: 'visible', timeout: 3000 });
+            await page.locator('.sheet-panel .btn-danger', { hasText: 'Spieler löschen' }).tap({ timeout: 3000 });
+            await page.waitForSelector('[role="alertdialog"]', { state: 'visible', timeout: 3000 });
+            await messe(page, e, vp, 'g-loeschen', { schrift: false });
+            await page.locator('[role="alertdialog"] button', { hasText: 'Löschen' }).tap({ timeout: 3000 });
+            await sleep(500);
+            const ende = await page.evaluate(function () { return window.Store.getSPIELER().length; });
+            if (ende !== vorher) melde(e, 9, 'g-kader', 'Spieler nach Loeschen: ' + ende + ' statt ' + vorher);
+            if (await page.isVisible('.sheet-panel #input-name')) melde(e, 9, 'g-kader', 'Blatt nach Loeschen noch offen');
+
+            // Mannschaft speichern, laden (ersetzen/hinzufuegen), loeschen
+            await page.locator('#player-management-view button', { hasText: 'Aktuellen Kader als Mannschaft speichern' }).tap({ timeout: 3000 });
+            await page.waitForSelector('.sheet-panel #new-team-name', { state: 'visible', timeout: 3000 });
+            await sleep(200);
+            await messe(page, e, vp, 'g-teamspeichern', { schrift: false });
+            await page.fill('#new-team-name', teamName);
+            await page.locator('.sheet-panel .kader-ok').tap({ timeout: 3000 });
+            await page.locator('#player-management-view .kader-zeile', { hasText: teamName }).waitFor({ state: 'visible', timeout: 8000 });
+            await page.locator('#player-management-view .kader-zeile', { hasText: teamName }).tap({ timeout: 3000 });
+            await sleep(250);
+            await messe(page, e, vp, 'g-teamblatt', { schrift: false });
+            await foto(page, vp, 'kader-team');
+            await page.locator('.sheet-panel button', { hasText: 'In den Kader laden' }).tap({ timeout: 3000 });
+            // Im laufenden Spiel (hier sind Tore erfasst) kommt statt der Wahl nur "Hinzufuegen?"
+            await page.waitForSelector('[role="alertdialog"]', { state: 'visible', timeout: 3000 });
+            await sleep(200);
+            await messe(page, e, vp, 'g-teamladen', { schrift: false });
+            await page.locator('[role="alertdialog"] button', { hasText: 'Hinzufügen' }).tap({ timeout: 3000 });
+            await sleep(600);
+            const geladen = await page.evaluate(function () { return window.Store.getSPIELER().length; });
+            if (geladen < ende) melde(e, 9, 'g-kader', 'Mannschaft hinzufuegen: ' + geladen + ' Spieler, vorher ' + ende);
+            // Aufraeumen: geladene Doppelte weg, Mannschaft loeschen
+            await page.evaluate(async function (n) {
+                const s = window.Store.getSPIELER();
+                s.slice(n).forEach(function (p) { if (!window.Store.istGast(p)) window.Store.removePlayerFromStore(p.id); });
+                window.UI.renderRosterList();
+            }, ende);
+            await page.locator('#player-management-view .kader-zeile', { hasText: teamName }).tap({ timeout: 3000 });
+            await page.locator('.sheet-panel .btn-danger', { hasText: 'Mannschaft löschen' }).tap({ timeout: 3000 });
+            await page.locator('[role="alertdialog"] button', { hasText: 'Löschen' }).tap({ timeout: 3000 });
+            // Bei vielen gleichzeitigen Laeufen braucht das Loeschen etwas laenger
+            try {
+                await page.waitForSelector('#player-management-view .kader-zeile:has-text("' + teamName + '")', { state: 'detached', timeout: 10000 });
+            } catch (err) { melde(e, 9, 'g-kader', 'Mannschaft nicht geloescht'); }
+            await schliesseOverlay(page, e, 'kader', 'g-kader');
+        } catch (err) {
+            melde(e, 9, 'g-kader', 'Kader: ' + String(err.message).split('\n').slice(0, 4).join(' | '));
+            await page.evaluate(function () {
+                document.querySelectorAll('.sheet').forEach(function (o) { o.remove(); });
+                if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('player-management-view');
+            });
+        }
+
         // Phasen, Auszeit (Zustaende, die nur nach dem Anpfiff vorkommen)
         await phasenZustaende(page, e, vp, hochHandy);
     } catch (err) {

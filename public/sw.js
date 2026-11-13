@@ -20,7 +20,7 @@
 // offline passiert; ein zwischengespeicherter Spielstand waere genau die
 // Art von stillem Datenverlust, gegen die der Sync gebaut wurde.
 
-const CACHE = 'handball-tracker-v20261121';
+const CACHE = 'handball-tracker-v20261122';
 
 // Alte Adresse (Pi hinter ngrok): dort soll nur noch der Hinweis auf die
 // neue App erscheinen, und zwar verlaesslich. Handys, die die alte App

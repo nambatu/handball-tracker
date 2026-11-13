@@ -16,7 +16,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=20261121">
+    <link rel="stylesheet" href="style.css?v=20261122">
 </head>
 
 <body class="ansicht-login">
@@ -398,101 +398,6 @@
         </div>
     </div>
 
-    <div id="player-management-view" class="overlay-view" style="display:none;">
-        <div class="overlay-content management-content glass-panel">
-            <h2>Spielerverwaltung</h2>
-            
-            <!-- TEAMS SECTION -->
-            <div id="team-management-section" style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border-color);">
-                <h3 style="margin-top: 0; color: var(--accent-color);">Teams verwalten</h3>
-                
-                <div class="form-row" style="align-items: center;">
-                    <select id="team-select" style="flex: 1;">
-                        <option value="">-- Team auswählen --</option>
-                    </select>
-                    <button onclick="window.UI.loadTeam()" class="add-btn" style="background: var(--success-color);">Team Laden</button>
-                    <button onclick="window.UI.deleteSelectedTeam()" class="cancel-btn" style="padding: 12px;">🗑️</button>
-                </div>
-
-                <hr style="border-color: rgba(255,255,255,0.05); margin: 15px 0;">
-
-                <div class="form-row" style="align-items: center; margin-bottom: 0;">
-                    <input type="text" id="new-team-name" placeholder="Name für neues Team" style="flex: 1;">
-                    <button onclick="window.UI.saveCurrentRosterAsTeam()" class="add-btn">Neues Team speichern</button>
-                    <button onclick="window.UI.updateSelectedTeam()" class="add-btn" style="background: var(--warning-color); border-color: var(--warning-color);" title="Ausgewähltes Team mit aktuellem Kader überschreiben">Team aktualisieren</button>
-                </div>
-            </div>
-
-            <hr style="border-color: var(--border-color); margin: 20px 0;">
-
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3 style="margin: 0;">Aktueller Kader (Live)</h3>
-                <button onclick="window.UI.clearAllPlayers()" class="cancel-btn" style="padding: 8px 12px; font-size: 0.9em;">Alle Spieler löschen</button>
-            </div>
-
-            <div id="einstellungen" class="settings-box">
-                <label class="setting-row">
-                    <input type="checkbox" id="setting-assist" onchange="window.UI.setAssistAbfrage(this.checked)">
-                    <span>Nach jedem Tor nach dem Vorlagengeber fragen</span>
-                </label>
-                <div class="setting-row">
-                    <label>Torwart</label>
-                    <button onclick="window.UI.openGoalkeeperPicker()" class="add-btn" id="setting-gk">
-                        Aktiven Torwart wählen
-                    </button>
-                </div>
-                <div class="setting-row">
-                    <label for="setting-halbzeit">Spielzeit</label>
-                    <select id="setting-halbzeit" onchange="window.UI.setHalbzeitLaenge(this.value)">
-                        <option value="30">2 × 30 Minuten (Erwachsene)</option>
-                        <option value="25">2 × 25 Minuten (A-/B-Jugend)</option>
-                        <option value="20">2 × 20 Minuten (C-/D-Jugend)</option>
-                        <option value="15">2 × 15 Minuten (E-/F-Jugend)</option>
-                        <option value="10">2 × 10 Minuten (Turnier)</option>
-                    </select>
-                </div>
-            </div>
-
-            <div id="add-player-form">
-                <h3>Neuen Spieler hinzufügen</h3>
-                <!-- Reihenfolge ist Absicht: Name, Nummer, Position, dann sofort der
-                     Button. Das Dateifeld fuers Foto stand frueher dazwischen und hat
-                     den Button auf dem Handy hinter die Tastatur geschoben. -->
-                <div class="form-row add-player-row">
-                    <input type="text" id="input-name" placeholder="Name" autocomplete="off"
-                           enterkeyhint="done" required>
-                    <input type="number" id="input-number" placeholder="Nr." min="1"
-                           inputmode="numeric" enterkeyhint="done" required>
-                    <select id="input-position">
-                        <option value="TW">Torwart (TW)</option>
-                        <option value="LA">Linksaußen (LA)</option>
-                        <option value="RL">Rückraum Links (RL)</option>
-                        <option value="M">Mitte (RM)</option>
-                        <option value="RR">Rückraum Rechts (RR)</option>
-                        <option value="RA">Rechtsaußen (RA)</option>
-                        <option value="K">Kreis (K)</option>
-                        <option value="N/A">N/A</option>
-                    </select>
-                    <button onclick="window.UI.addPlayer()" class="add-btn">Hinzufügen</button>
-                </div>
-                <div class="form-row add-player-optional">
-                    <label for="input-avatar">Foto (optional)</label>
-                    <input type="file" id="input-avatar" accept="image/*">
-                </div>
-            </div>
-
-            <hr>
-
-            <div id="current-roster">
-                <h3>Aktueller Kader</h3>
-                <ul id="roster-list">
-                </ul>
-            </div>
-
-            <button onclick="window.UI.togglePlayerManagement()" class="back-btn">Zurück</button>
-        </div>
-    </div>
-
     <!-- Ticker-Einstellungen. Der QR-Code steckt nicht mehr hier, sondern
          im wa-gateway: eine gekoppelte Nummer fuer Tracker und
          handball.net-Bot zusammen. -->
@@ -522,21 +427,21 @@
         </div>
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="vendor/touch-drag.js?v=20261121"></script>
-    <script src="js/config.js?v=20261121"></script>
-    <script src="vendor/supabase.js?v=20261121"></script>
-    <script src="js/api.js?v=20261121"></script>
-    <script src="js/sync.js?v=20261121"></script>
-    <script src="js/wakelock.js?v=20261121"></script>
-    <script src="js/store.js?v=20261121"></script>
-    <script src="js/timer.js?v=20261121"></script>
-    <script src="js/stats.js?v=20261121"></script>
-    <script src="js/report.js?v=20261121"></script>
-    <script src="js/whatsapp.js?v=20261121"></script>
-    <script src="js/tickerui.js?v=20261121"></script>
-    <script src="js/ui.js?v=20261121"></script>
-    <script src="js/start.js?v=20261121"></script>
-    <script src="js/app.js?v=20261121"></script>
+    <script src="vendor/touch-drag.js?v=20261122"></script>
+    <script src="js/config.js?v=20261122"></script>
+    <script src="vendor/supabase.js?v=20261122"></script>
+    <script src="js/api.js?v=20261122"></script>
+    <script src="js/sync.js?v=20261122"></script>
+    <script src="js/wakelock.js?v=20261122"></script>
+    <script src="js/store.js?v=20261122"></script>
+    <script src="js/timer.js?v=20261122"></script>
+    <script src="js/stats.js?v=20261122"></script>
+    <script src="js/report.js?v=20261122"></script>
+    <script src="js/whatsapp.js?v=20261122"></script>
+    <script src="js/tickerui.js?v=20261122"></script>
+    <script src="js/ui.js?v=20261122"></script>
+    <script src="js/start.js?v=20261122"></script>
+    <script src="js/app.js?v=20261122"></script>
 
 </body>
 

@@ -24,8 +24,13 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       `UI.bestaetigen({titel,text,okText,gefahr})` (Versprechen, ersetzt
       `confirm`). Verlauf nutzt es; Pruefungen im Layouttest (Zustand f).
       Der Verlauf zeigt Aktionsnamen ohne Emoji (`ohneEmoji`). (M)
-- [ ] 1.2 Kader / Spielerverwaltung: Spieler anlegen/bearbeiten in einem
-      Blatt, Mannschaft speichern/laden ohne Farbknoepfe, Avatar-Upload. (M)
+- [x] 13.11.2026 (Branch claude/dazzling-heisenberg-m8exuq) 1.2 Kader als
+      Vollbild: Karten "Spieler", "Gespeicherte Mannschaften", "Spiel"; Spieler
+      anlegen/bearbeiten/loeschen im Blatt (Foto-Upload dort), Mannschaft
+      speichern/laden/ueberschreiben/loeschen ueber Blaetter, keine
+      `confirm`, keine Inline-Stile, keine Emojis. Layouttest Zustand g
+      (alle zehn Groessen). Nicht automatisch getestet: "Kader ersetzen"
+      (geht nur ohne erfasste Aktionen) und Foto-Upload. (M)
 - [ ] 1.3 Archiv: Liste als Karten (Name, Datum, Ergebnis), Umbenennen und
       Loeschen ueber Blaetter statt `prompt/confirm`. (S)
 - [ ] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
@@ -90,6 +95,12 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       Countdown bei gesperrtem Bildschirm, iPhone-Notch.
 
 ## Ideen (ungeprueft, erst nach Ruecksprache mit Julian nach oben)
+
+- (aus 1.2) Der Test legt Mannschaften "Tagesbau-Probe ..." an und loescht sie
+  wieder; bleibt ein Lauf mittendrin haengen, bleiben sie im Testkonto stehen.
+  Gehoert zu 3.1 (Wegwerfkonten).
+- (aus 1.2) Eigener Ticker-Spruch je Spieler steckt jetzt im Spieler-Blatt;
+  bei 1.6 pruefen, ob er besser zu den Ticker-Einstellungen gehoert.
 
 - (aus 1.1) Emojis stecken auch in den gespeicherten Aktions-Bezeichnungen
   (`store.js`, Feld `label`) und damit in Statistik/Bericht/Auswahl; bei

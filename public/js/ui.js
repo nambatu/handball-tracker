@@ -82,6 +82,7 @@ function selectGoalkeeper(playerId) {
     if (window.Store.setActiveGoalkeeper(playerId)) {
         const gk = window.Store.getActiveGoalkeeper();
         closeGoalkeeperPicker();
+        renderRosterList();   // die Kader-Ansicht zeigt den Torwart
         if (window.Toast && gk) {
             window.Toast('Im Tor: #' + gk.nummer + ' ' + gk.name, { type: 'success', duration: 2500 });
         }
@@ -489,22 +490,6 @@ function getPlayerDisplayHtml(player, size = '40px') {
         ${inner}${suspensionOverlay}
     </span>`;
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-    // Enter legt den Spieler an. Auf dem Handy verdeckt die Tastatur den
-    // Hinzufuegen-Button; ohne das hier musste man nach jedem Namen erst
-    // die Tastatur schliessen und scrollen. Einen ganzen Kader einzugeben
-    // war damit eine Qual - und ohne <form> tat "Fertig" gar nichts.
-    ['input-name', 'input-number'].forEach(function (id) {
-        const feld = document.getElementById(id);
-        if (!feld) return;
-        feld.addEventListener('keydown', function (e) {
-            if (e.key !== 'Enter') return;
-            e.preventDefault();
-            addPlayer();
-        });
-    });
-});
 
 // ===================================================================
 // BAUKASTEN: Vollbild-Ansicht und Bestaetigungsblatt
@@ -1597,34 +1582,12 @@ function confirmAssist(assistPlayerId) {
     closeAssistOverlay();
 }
 
-// MANAGEMENT / ROSTER
-async function togglePlayerManagement() {
-    const managementView = document.getElementById("player-management-view");
-
-    if (managementView.style.display === 'none' || managementView.style.display === '') {
-        // Das Overlay deckt den ganzen Bildschirm ab; die Spielansicht muss
-        // dafuer nicht mehr ausgeblendet werden (frueher: #app-container).
-        managementView.style.display = 'block';
-        bearbeiteterSpieler = null;
-        const assistBox = document.getElementById('setting-assist');
-        if (assistBox) assistBox.checked = assistAbfrageAktiv();
-        const hzBox = document.getElementById('setting-halbzeit');
-        if (hzBox && window.Timer) hzBox.value = String(window.Timer.getHalbzeitMinuten());
-        const gkBtn = document.getElementById('setting-gk');
-        if (gkBtn) {
-            const gk = window.Store.getActiveGoalkeeper();
-            gkBtn.innerText = gk ? `🧤 #${gk.nummer} ${String(gk.name).split(' ')[0]}` : 'Kein Torwart — wählen';
-        }
-        renderRosterList();
-        await populateTeamsDropdown();
-    } else {
-        managementView.style.display = 'none';
-        updateUI();
-    }
-}
-
-// Welcher Spieler wird gerade bearbeitet (null = keiner)
-let bearbeiteterSpieler = null;
+// ===================================================================
+// KADER (Vollbild): Spieler, Mannschaften, Spiel-Einstellungen
+// Aufgebaut auf dem Baukasten (Vollbild, bestaetigen). Spieler anlegen und
+// bearbeiten, Mannschaften laden und speichern laufen ueber Blaetter statt
+// ueber Inline-Formulare und confirm().
+// ===================================================================
 
 const POSITIONS_AUSWAHL = [
     ['TW', 'Torwart (TW)'], ['LA', 'Linksaußen (LA)'], ['RL', 'Rückraum Links (RL)'],
@@ -1632,254 +1595,426 @@ const POSITIONS_AUSWAHL = [
     ['K', 'Kreis (K)'], ['N/A', 'Bank / keine Position']
 ];
 
-function startEditPlayer(playerId) {
-    bearbeiteterSpieler = String(playerId);
-    renderRosterList();
-    const feld = document.getElementById('edit-name');
-    if (feld) { feld.focus(); feld.select(); }
+const KADER_ID = 'player-management-view';
+let kaderTeams = [];
+let kaderTeamsStatus = 'lade';   // 'lade' | 'ok' | 'fehler'
+
+/**
+ * Blatt von unten (wie das Bestaetigungsblatt) mit Titel und Schliessen-Kreuz.
+ * baue(panel, zu) fuellt es; zu() schliesst. beiZu (optional) laeuft bei jedem
+ * Schliessen, auch bei Tipp daneben. Gibt zu zurueck.
+ */
+function blatt(titel, baue, beiZu) {
+    const sheet = document.createElement('div');
+    sheet.className = 'sheet';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    const panel = document.createElement('div');
+    panel.className = 'sheet-panel';
+    const kopf = document.createElement('div');
+    kopf.className = 'sheet-kopf';
+    const h = document.createElement('h2');
+    h.className = 'sheet-titel';
+    h.textContent = titel;
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'sheet-zu';
+    x.setAttribute('aria-label', 'Schließen');
+    x.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        + 'stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    kopf.appendChild(h);
+    kopf.appendChild(x);
+    panel.appendChild(kopf);
+    sheet.appendChild(panel);
+    function zu() {
+        if (!sheet.isConnected) return;
+        sheet.remove();
+        if (beiZu) beiZu();
+    }
+    x.addEventListener('click', zu);
+    sheet.addEventListener('click', function (e) { if (e.target === sheet) zu(); });
+    document.body.appendChild(sheet);
+    baue(panel, zu);
+    return zu;
 }
 
-function cancelEditPlayer() {
-    bearbeiteterSpieler = null;
-    renderRosterList();
+/** Kleines Hilfsstueck: Element mit Klasse und Text. */
+function bauEl(tag, klasse, text) {
+    const e = document.createElement(tag);
+    if (klasse) e.className = klasse;
+    if (text !== undefined) e.textContent = text;
+    return e;
 }
 
-function saveEditedPlayer(playerId) {
-    const name = document.getElementById('edit-name');
-    const nummer = document.getElementById('edit-nummer');
-    const position = document.getElementById('edit-position');
-    if (!name || !nummer || !position) return;
+function bauKnopf(text, klasse, onClick) {
+    const b = bauEl('button', 'btn ' + klasse, text);
+    b.type = 'button';
+    b.addEventListener('click', onClick);
+    return b;
+}
 
-    if (!String(name.value).trim() || String(nummer.value).trim() === '') {
-        if (window.Toast) window.Toast('Name und Nummer dürfen nicht leer sein.', { type: 'warn' });
+async function togglePlayerManagement() {
+    if (Vollbild.istOffen(KADER_ID)) {
+        Vollbild.schliesse(KADER_ID);
         return;
     }
-
-    window.Store.updatePlayerData(playerId, {
-        name: name.value,
-        nummer: nummer.value,
-        position: position.value
+    const inhalt = Vollbild.oeffne({
+        id: KADER_ID,
+        titel: 'Kader',
+        aktion: { text: 'Spieler +', onClick: function () { spielerBlatt(null); } },
+        onZu: function () { updateUI(); }
     });
-
-    bearbeiteterSpieler = null;
-    renderRosterList();
-    if (window.UI) updateUI();
-    if (window.Toast) window.Toast('Spieler geändert.', { type: 'success', duration: 2500 });
+    let wurzel = document.getElementById('kader-inhalt');
+    if (!wurzel) {
+        wurzel = bauEl('div', 'kader-inhalt');
+        wurzel.id = 'kader-inhalt';
+        inhalt.appendChild(wurzel);
+    }
+    zeichneKader();
+    kaderTeamsStatus = 'lade';
+    zeichneKader();
+    kaderTeams = await window.Store.getTeams();
+    kaderTeamsStatus = 'ok';
+    zeichneKader();
 }
 
-function renderRosterList() {
-    const rosterList = document.getElementById("roster-list");
-    if (!rosterList) return;
-    rosterList.innerHTML = '';
+/** Kleines Rundbild: Foto oder Trikotnummer. */
+function kaderBild(p) {
+    if (p.avatarUrl) {
+        const img = bauEl('img', 'kader-bild');
+        img.src = p.avatarUrl;
+        img.alt = '';
+        return img;
+    }
+    return bauEl('span', 'kader-bild kader-nummer', String(p.nummer));
+}
+
+function zeichneKader() {
+    const wurzel = document.getElementById('kader-inhalt');
+    if (!wurzel) return;
+    wurzel.innerHTML = '';
     sortPlayers();
-
     const spieler = window.Store.getSPIELER();
-    spieler.forEach(p => {
-        const li = document.createElement("li");
+
+    // ---- Spieler ----
+    const kSpieler = bauEl('section', 'karte');
+    kSpieler.appendChild(bauEl('h3', 'karte-titel', 'Spieler (' + spieler.length + ')'));
+    const liste = bauEl('div', 'kader-liste');
+    spieler.forEach(function (p) {
+        const zeile = bauEl('button', 'kader-zeile');
+        zeile.type = 'button';
+        zeile.appendChild(kaderBild(p));
+        const mitte = bauEl('span', 'kader-text');
+        mitte.appendChild(bauEl('span', 'kader-name', p.name));
+        const posText = (POSITIONS_AUSWAHL.find(function (x) { return x[0] === p.position; }) || [0, p.position])[1];
         const istGast = window.Store.istGast(p);
-
-        if (String(p.id) === bearbeiteterSpieler) {
-            // Bearbeiten statt loeschen und neu anlegen: die Aktionen haengen
-            // an der Spieler-id und waeren beim Neuanlegen alle weg.
-            const optionen = POSITIONS_AUSWAHL.map(([wert, text]) =>
-                `<option value="${wert}"${p.position === wert ? ' selected' : ''}>${escapeHtml(text)}</option>`).join('');
-            li.className = 'roster-edit';
-            li.innerHTML = `
-                <input type="number" id="edit-nummer" value="${escapeHtml(p.nummer)}" min="0" inputmode="numeric" aria-label="Nummer">
-                <input type="text" id="edit-name" value="${escapeHtml(p.name)}" aria-label="Name">
-                <select id="edit-position" aria-label="Position">${optionen}</select>
-                <button class="add-btn js-save">Speichern</button>
-                <button class="cancel-btn js-cancel">Abbrechen</button>
-            `;
-            li.querySelector('.js-save').onclick = () => saveEditedPlayer(p.id);
-            li.querySelector('.js-cancel').onclick = cancelEditPlayer;
-            li.querySelectorAll('input').forEach(el => {
-                el.addEventListener('keydown', e => {
-                    if (e.key === 'Enter') { e.preventDefault(); saveEditedPlayer(p.id); }
-                    if (e.key === 'Escape') { e.preventDefault(); cancelEditPlayer(); }
-                });
-            });
-        } else {
-            // Der Gegner-Eintrag ist sichtbar als solcher markiert: er zaehlt
-            // die gegnerischen Tore und laesst sich deshalb nicht loeschen.
-            // Umbenennen ist seit der Umstellung auf das team-Feld gefahrlos.
-            // Ticker-Sprueche stehen bewusst hier und nicht in einem
-            // eigenen Regel-Editor: man stellt sie dort ein, wo man den
-            // Spieler ohnehin anfasst.
-            const hatSprueche = window.TickerUI && window.TickerUI.hatRegeln(p.id);
-            li.innerHTML = `
-                <span>#${escapeHtml(p.nummer)} ${escapeHtml(p.name)} (${escapeHtml(p.position)})${
-                    istGast ? ' <span class="gast-marke">Gegnerseite</span>' : ''}</span>
-                <span class="roster-btns">
-                    <button class="js-ticker" title="Eigener Ticker-Spruch">📡${hatSprueche ? ' ✓' : ''}</button>
-                    <button class="js-edit">Bearbeiten</button>
-                    ${istGast ? '' : '<button class="js-del">Löschen</button>'}
-                </span>
-                <div class="roster-ticker"></div>
-            `;
-            li.querySelector('.js-ticker').onclick = () => {
-                if (window.TickerUI) window.TickerUI.toggleSpielerRegeln(p.id, li.querySelector('.roster-ticker'));
-            };
-            li.querySelector('.js-edit').onclick = () => startEditPlayer(p.id);
-            const del = li.querySelector('.js-del');
-            if (del) del.onclick = () => removePlayer(p.id);
-        }
-        rosterList.appendChild(li);
+        const posAnzeige = istGast ? 'Gegnerseite' : posText;
+        // Die Nummer steht schon im Rundbild; nur bei einem Foto fehlt sie dort.
+        mitte.appendChild(bauEl('span', 'kader-zusatz', p.avatarUrl ? '#' + p.nummer + ' · ' + posAnzeige : posAnzeige));
+        zeile.appendChild(mitte);
+        zeile.addEventListener('click', function () { spielerBlatt(p.id); });
+        liste.appendChild(zeile);
     });
-}
+    if (!spieler.length) liste.appendChild(bauEl('p', 'history-empty', 'Noch keine Spieler. Oben „Spieler +“ antippen.'));
+    kSpieler.appendChild(liste);
+    wurzel.appendChild(kSpieler);
 
-async function addPlayer() {
-    const nameEl = document.getElementById("input-name");
-    const numEl = document.getElementById("input-number");
-    const posEl = document.getElementById("input-position");
-    const avatarEl = document.getElementById("input-avatar");
-
-    const name = nameEl.value;
-    const number = parseInt(numEl.value);
-
-    if (!name || isNaN(number)) {
-        if (window.Toast) window.Toast("Bitte Name und Nummer angeben.", { type: "warn" });
-        return;
+    // ---- Mannschaften ----
+    const kTeam = bauEl('section', 'karte');
+    kTeam.appendChild(bauEl('h3', 'karte-titel', 'Gespeicherte Mannschaften'));
+    const tListe = bauEl('div', 'kader-liste');
+    if (kaderTeamsStatus === 'lade') {
+        tListe.appendChild(bauEl('p', 'feld-hinweis', 'Lade …'));
+    } else if (!kaderTeams.length) {
+        tListe.appendChild(bauEl('p', 'feld-hinweis', 'Noch keine Mannschaft gespeichert.'));
     }
-    
-    let avatarUrl = null;
-    if (avatarEl && avatarEl.files.length > 0) {
-        const formData = new FormData();
-        formData.append('avatar', avatarEl.files[0]);
-        try {
-            const res = await fetch('/api/upload-avatar', {
-                method: 'POST',
-                // Don't set Content-Type header manually for FormData, let browser do it
-                body: formData
-            });
-            const data = await res.json();
-            if (res.ok && data.avatarUrl) {
-                avatarUrl = data.avatarUrl;
-            } else {
-                if (window.Toast) window.Toast(data.error || "Avatar-Upload fehlgeschlagen.", { type: "error" });
-            }
-        } catch(e) {
-            console.error("Upload failed", e);
-        }
-    }
+    kaderTeams.forEach(function (t) {
+        const zeile = bauEl('button', 'kader-zeile');
+        zeile.type = 'button';
+        const mitte = bauEl('span', 'kader-text');
+        mitte.appendChild(bauEl('span', 'kader-name', t.name));
+        const n = (t.players || []).filter(function (p) { return !window.Store.istGast(p); }).length;
+        mitte.appendChild(bauEl('span', 'kader-zusatz', n + ' Spieler'));
+        zeile.appendChild(mitte);
+        zeile.addEventListener('click', function () { teamBlatt(t); });
+        tListe.appendChild(zeile);
+    });
+    kTeam.appendChild(tListe);
+    kTeam.appendChild(bauKnopf('Aktuellen Kader als Mannschaft speichern', 'btn-block', teamSpeichernBlatt));
+    wurzel.appendChild(kTeam);
 
-    window.Store.addPlayerToStore(name, number, posEl.value, avatarUrl);
+    // ---- Spiel-Einstellungen (Ids bleiben: setAssistAbfrage/setHalbzeitLaenge ziehen sie nach) ----
+    const kSpiel = bauEl('section', 'karte');
+    kSpiel.appendChild(bauEl('h3', 'karte-titel', 'Spiel'));
+    const assist = bauEl('label', 'kader-schalter');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.id = 'setting-assist';
+    box.checked = assistAbfrageAktiv();
+    box.addEventListener('change', function () { setAssistAbfrage(box.checked); });
+    assist.appendChild(box);
+    assist.appendChild(bauEl('span', '', 'Nach jedem Tor nach dem Vorlagengeber fragen'));
+    kSpiel.appendChild(assist);
 
-    nameEl.value = "";
-    numEl.value = "";
-    if (avatarEl) avatarEl.value = "";
-    renderRosterList();
-
-    // Kurze Rueckmeldung und Fokus zurueck ins Namensfeld: so laesst sich
-    // ein ganzer Kader am Stueck eintippen, ohne die Tastatur zu schliessen.
-    if (window.Toast) window.Toast(`#${number} ${name} hinzugefügt.`, { type: "success", duration: 2000 });
-    try { nameEl.focus({ preventScroll: true }); } catch (e) { nameEl.focus(); }
-}
-
-function removePlayer(playerId) {
-    const p = window.Store.getSPIELER().find(x => String(x.id) === String(playerId));
-    // "Gegner" ist kein Spieler, sondern der Platzhalter, ueber den alle
-    // gegnerischen Tore laufen. Ohne ihn passiert auf der Gegnerseite nichts
-    // mehr - und der Spielstand bleibt einseitig stehen.
-    if (p && window.Store.istGast(p)) {
-        if (window.Toast) window.Toast('„Gegner" wird zum Zählen der gegnerischen Tore gebraucht und kann nicht gelöscht werden.',
-            { type: 'warn', duration: 6000 });
-        return;
-    }
-    if (!confirm("Wirklich löschen?")) return;
-    window.Store.removePlayerFromStore(playerId);
-    if (selectedPlayerId && String(selectedPlayerId) === String(playerId)) {
-        selectedPlayerId = null;
-    }
-    renderRosterList();
-}
-
-async function populateTeamsDropdown() {
-    const select = document.getElementById('team-select');
-    if (!select) return;
-    
-    select.innerHTML = '<option value="">-- Team auswählen --</option>';
-    const teams = await window.Store.getTeams();
-    
-    teams.forEach(t => {
+    kSpiel.appendChild(bauEl('label', 'feld-label', 'Spielzeit')).htmlFor = 'setting-halbzeit';
+    const sel = bauEl('select', 'feld');
+    sel.id = 'setting-halbzeit';
+    [[30, '2 × 30 Minuten (Erwachsene)'], [25, '2 × 25 Minuten (A-/B-Jugend)'], [20, '2 × 20 Minuten (C-/D-Jugend)'],
+     [15, '2 × 15 Minuten (E-/F-Jugend)'], [10, '2 × 10 Minuten (Turnier)']].forEach(function (o) {
         const opt = document.createElement('option');
-        opt.value = t.id;
-        opt.textContent = t.name;
-        select.appendChild(opt);
+        opt.value = String(o[0]);
+        opt.textContent = o[1];
+        sel.appendChild(opt);
+    });
+    if (window.Timer) sel.value = String(window.Timer.getHalbzeitMinuten());
+    sel.addEventListener('change', function () { setHalbzeitLaenge(sel.value); });
+    kSpiel.appendChild(sel);
+
+    kSpiel.appendChild(bauEl('span', 'feld-label', 'Torwart im Tor'));
+    const gk = window.Store.getActiveGoalkeeper();
+    const gkKnopf = bauKnopf(gk ? '#' + gk.nummer + ' ' + String(gk.name).split(' ')[0] : 'Kein Torwart – wählen',
+        'btn-block', openGoalkeeperPicker);
+    gkKnopf.id = 'setting-gk';
+    kSpiel.appendChild(gkKnopf);
+    wurzel.appendChild(kSpiel);
+
+    // ---- Gefahrenzone ----
+    if (spieler.some(function (p) { return !window.Store.istGast(p); })) {
+        wurzel.appendChild(bauKnopf('Alle Spieler löschen', 'btn-block btn-danger', clearAllPlayers));
+    }
+}
+
+/** Seit dem Umbau nur noch ein Neuzeichnen (wird auch vom Ticker gerufen). */
+function renderRosterList() {
+    if (Vollbild.istOffen(KADER_ID)) zeichneKader();
+}
+
+/** Foto hochladen; gibt die Adresse zurueck oder null. */
+async function ladeFotoHoch(datei) {
+    const formData = new FormData();
+    formData.append('avatar', datei);
+    try {
+        const res = await fetch('/api/upload-avatar', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (res.ok && data.avatarUrl) return data.avatarUrl;
+        if (window.Toast) window.Toast(data.error || 'Foto-Upload fehlgeschlagen.', { type: 'error' });
+    } catch (e) {
+        console.error('Upload failed', e);
+        if (window.Toast) window.Toast('Foto-Upload fehlgeschlagen – keine Verbindung?', { type: 'error' });
+    }
+    return null;
+}
+
+/** Blatt zum Anlegen (id = null) oder Bearbeiten eines Spielers. */
+function spielerBlatt(id) {
+    const p = id === null ? null : window.Store.getSPIELER().find(function (x) { return String(x.id) === String(id); });
+    if (id !== null && !p) return;
+    const istGast = !!p && window.Store.istGast(p);
+
+    blatt(p ? 'Spieler bearbeiten' : 'Neuer Spieler', function (panel, zu) {
+        const name = document.createElement('input');
+        name.type = 'text'; name.id = 'input-name'; name.className = 'feld';
+        name.autocomplete = 'off'; name.enterKeyHint = 'done'; name.placeholder = 'Name';
+        name.value = p ? p.name : '';
+        const nr = document.createElement('input');
+        nr.type = 'number'; nr.id = 'input-number'; nr.className = 'feld';
+        nr.min = '0'; nr.inputMode = 'numeric'; nr.enterKeyHint = 'done'; nr.placeholder = 'Nr.';
+        nr.value = p ? p.nummer : '';
+        const pos = document.createElement('select');
+        pos.id = 'input-position'; pos.className = 'feld';
+        POSITIONS_AUSWAHL.forEach(function (o) {
+            const opt = document.createElement('option');
+            opt.value = o[0]; opt.textContent = o[1];
+            pos.appendChild(opt);
+        });
+        pos.value = p ? p.position : 'N/A';
+        const foto = document.createElement('input');
+        foto.type = 'file'; foto.id = 'input-avatar'; foto.className = 'feld'; foto.accept = 'image/*';
+
+        // Reihenfolge ist Absicht: Name, Nummer, Position, dann der Knopf. Das
+        // Foto steht ganz unten, damit die Tastatur den Knopf nicht verdeckt.
+        const l1 = bauEl('label', 'feld-label', 'Name'); l1.htmlFor = 'input-name';
+        const l2 = bauEl('label', 'feld-label', 'Nummer'); l2.htmlFor = 'input-number';
+        const l3 = bauEl('label', 'feld-label', 'Position'); l3.htmlFor = 'input-position';
+        const l4 = bauEl('label', 'feld-label', 'Foto (optional)'); l4.htmlFor = 'input-avatar';
+        [l1, name, l2, nr, l3, pos].forEach(function (e) { panel.appendChild(e); });
+
+        const speichern = bauKnopf(p ? 'Speichern' : 'Hinzufügen', 'btn-primary btn-block kader-ok', async function () {
+            const n = String(name.value).trim();
+            const num = parseInt(nr.value, 10);
+            if (!n || isNaN(num)) {
+                if (window.Toast) window.Toast('Bitte Name und Nummer angeben.', { type: 'warn' });
+                return;
+            }
+            speichern.disabled = true;
+            let url = null;
+            if (foto.files.length > 0) url = await ladeFotoHoch(foto.files[0]);
+            if (p) {
+                window.Store.updatePlayerData(p.id, { name: n, nummer: num, position: pos.value });
+                if (url) window.Store.updatePlayerAvatar(p.id, url);
+                zu();
+                if (window.Toast) window.Toast('Spieler geändert.', { type: 'success', duration: 2500 });
+            } else {
+                window.Store.addPlayerToStore(n, num, pos.value, url);
+                name.value = ''; nr.value = ''; foto.value = '';
+                if (window.Toast) window.Toast('#' + num + ' ' + n + ' hinzugefügt.', { type: 'success', duration: 2000 });
+                // Offen lassen: so tippt man einen ganzen Kader am Stueck ein.
+                try { name.focus({ preventScroll: true }); } catch (e) { name.focus(); }
+            }
+            speichern.disabled = false;
+            zeichneKader();
+            updateUI();
+        });
+        [name, nr].forEach(function (f) {
+            f.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); speichern.click(); }
+            });
+        });
+        panel.appendChild(l4);
+        panel.appendChild(foto);
+        speichern.style.marginTop = '16px';
+        panel.appendChild(speichern);
+
+        if (!p) {
+            panel.appendChild(bauKnopf('Fertig', 'btn-block', zu));
+            return;
+        }
+
+        // Eigener Ticker-Spruch (liegt hier, weil man den Spieler ohnehin anfasst)
+        if (!istGast && window.TickerUI) {
+            const behaelter = bauEl('div', 'roster-ticker');
+            const hat = window.TickerUI.hatRegeln(p.id);
+            panel.appendChild(bauKnopf('Eigener Ticker-Spruch' + (hat ? ' (gesetzt)' : ''), 'btn-block',
+                function () { window.TickerUI.toggleSpielerRegeln(p.id, behaelter); }));
+            panel.appendChild(behaelter);
+        }
+        if (!istGast) {
+            panel.appendChild(bauKnopf('Spieler löschen', 'btn-block btn-danger', async function () {
+                const ja = await bestaetigen({
+                    titel: '#' + p.nummer + ' ' + p.name + ' löschen?',
+                    text: 'Der Spieler verschwindet aus dem Kader.', okText: 'Löschen', gefahr: true
+                });
+                if (!ja) return;
+                window.Store.removePlayerFromStore(p.id);
+                if (selectedPlayerId && String(selectedPlayerId) === String(p.id)) selectedPlayerId = null;
+                zu();
+                zeichneKader();
+                updateUI();
+            }));
+        } else {
+            panel.appendChild(bauEl('p', 'sheet-text', '„Gegner“ zählt die gegnerischen Tore und kann nicht gelöscht werden.'));
+        }
+    });
+    const erstes = document.getElementById('input-name');
+    if (erstes && !p) { try { erstes.focus({ preventScroll: true }); } catch (e) { /* egal */ } }
+}
+
+/** Blatt: aktuellen Kader als neue Mannschaft speichern. */
+function teamSpeichernBlatt() {
+    const spieler = window.Store.getSPIELER();
+    if (!spieler.some(function (p) { return !window.Store.istGast(p); })) {
+        if (window.Toast) window.Toast('Der Kader ist leer.', { type: 'warn' });
+        return;
+    }
+    blatt('Mannschaft speichern', function (panel, zu) {
+        const l = bauEl('label', 'feld-label', 'Name der Mannschaft'); l.htmlFor = 'new-team-name';
+        const f = document.createElement('input');
+        f.type = 'text'; f.id = 'new-team-name'; f.className = 'feld'; f.autocomplete = 'off'; f.enterKeyHint = 'done';
+        panel.appendChild(l);
+        panel.appendChild(f);
+        const ok = bauKnopf('Speichern', 'btn-primary btn-block kader-ok', async function () {
+            const name = f.value.trim();
+            if (!name) {
+                if (window.Toast) window.Toast('Bitte einen Namen eingeben.', { type: 'warn' });
+                return;
+            }
+            ok.disabled = true;
+            const r = await window.Store.saveTeam({ name, players: window.Store.getSPIELER() });
+            ok.disabled = false;
+            if (!r) return;
+            zu();
+            if (window.Toast) window.Toast('Mannschaft „' + name + '“ gespeichert.', { type: 'success' });
+            await ladeTeamsNeu();
+        });
+        f.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ok.click(); } });
+        ok.style.marginTop = '16px';
+        panel.appendChild(ok);
+        try { f.focus({ preventScroll: true }); } catch (e) { /* egal */ }
     });
 }
 
-async function saveCurrentRosterAsTeam() {
-    const nameInput = document.getElementById('new-team-name');
-    const name = nameInput.value.trim();
-    if (!name) {
-        if (window.Toast) window.Toast("Bitte einen Teamnamen eingeben.", { type: "warn" });
-        return;
-    }
-    const players = window.Store.getSPIELER();
-    if (players.length === 0) {
-        if (window.Toast) window.Toast("Der Kader ist leer.", { type: "warn" });
-        return;
-    }
-    
-    await window.Store.saveTeam({ name, players });
-    if (window.Toast) window.Toast(`Team „${name}" gespeichert.`, { type: "success" });
-    nameInput.value = "";
-    await populateTeamsDropdown();
+async function ladeTeamsNeu() {
+    kaderTeams = await window.Store.getTeams();
+    kaderTeamsStatus = 'ok';
+    if (Vollbild.istOffen(KADER_ID)) zeichneKader();
 }
 
-async function updateSelectedTeam() {
-    const select = document.getElementById('team-select');
-    const teamId = select.value;
-    if (!teamId) {
-        if (window.Toast) window.Toast("Bitte zuerst ein Team auswählen.", { type: "warn" });
-        return;
-    }
-    
-    const teams = await window.Store.getTeams();
-    const team = teams.find(t => t.id === teamId);
-    if (!team) return;
-
-    const players = window.Store.getSPIELER();
-    if (players.length === 0) {
-        if (window.Toast) window.Toast("Der aktuelle Kader ist leer.", { type: "warn" });
-        return;
-    }
-
-    if (!confirm(`Möchtest du das gespeicherte Team "${team.name}" wirklich mit dem aktuellen Kader überschreiben?`)) {
-        return;
-    }
-
-    await window.Store.saveTeam({ id: team.id, name: team.name, players });
-    if (window.Toast) window.Toast(`Team „${team.name}" aktualisiert.`, { type: "success" });
+/** Blatt zu einer gespeicherten Mannschaft: laden, ueberschreiben, loeschen. */
+function teamBlatt(team) {
+    blatt(team.name, function (panel, zu) {
+        const n = (team.players || []).filter(function (p) { return !window.Store.istGast(p); }).length;
+        panel.appendChild(bauEl('p', 'sheet-text', n + ' Spieler' + ' gespeichert.'));
+        panel.appendChild(bauKnopf('In den Kader laden', 'btn-primary btn-block', function () {
+            zu();
+            teamLaden(team);
+        }));
+        panel.appendChild(bauKnopf('Mit aktuellem Kader überschreiben', 'btn-block', async function () {
+            if (!window.Store.getSPIELER().some(function (p) { return !window.Store.istGast(p); })) {
+                if (window.Toast) window.Toast('Der aktuelle Kader ist leer.', { type: 'warn' });
+                return;
+            }
+            const ja = await bestaetigen({
+                titel: '„' + team.name + '“ überschreiben?',
+                text: 'Die gespeicherte Mannschaft bekommt den aktuellen Kader.', okText: 'Überschreiben'
+            });
+            if (!ja) return;
+            const r = await window.Store.saveTeam({ id: team.id, name: team.name, players: window.Store.getSPIELER() });
+            if (!r) return;
+            zu();
+            if (window.Toast) window.Toast('Mannschaft „' + team.name + '“ aktualisiert.', { type: 'success' });
+            await ladeTeamsNeu();
+        }));
+        panel.appendChild(bauKnopf('Mannschaft löschen', 'btn-block btn-danger', async function () {
+            const ja = await bestaetigen({
+                titel: '„' + team.name + '“ löschen?', text: 'Der aktuelle Kader bleibt unverändert.',
+                okText: 'Löschen', gefahr: true
+            });
+            if (!ja) return;
+            const r = await window.Store.deleteTeam(team.id);
+            if (!r) return;
+            zu();
+            await ladeTeamsNeu();
+        }));
+    });
 }
 
-async function loadTeam() {
-    const select = document.getElementById('team-select');
-    const teamId = select.value;
-    if (!teamId) {
-        if (window.Toast) window.Toast("Bitte zuerst ein Team auswählen.", { type: "warn" });
-        return;
-    }
-
-    const teams = await window.Store.getTeams();
-    const team = teams.find(t => t.id === teamId);
+async function teamLaden(team) {
     if (!team || !team.players) return;
-
-    const eigene = window.Store.getSPIELER().filter(p => !window.Store.istGast(p));
+    const eigene = window.Store.getSPIELER().filter(function (p) { return !window.Store.istGast(p); });
     const spielLaeuft = window.Store.loadActions().length > 0;
     let modus = 'hinzufuegen';   // ohne eigene Spieler gibt es nichts zu ersetzen
 
     if (eigene.length > 0 && spielLaeuft) {
         // Aktionen haengen an der Spieler-id: ein Austausch mitten im Spiel
         // wuerde sie verwaisen. Hinzufuegen geht trotzdem.
-        const hinzufuegen = confirm('Im laufenden Spiel kann der Kader nicht ersetzt werden, weil schon Aktionen '
-            + 'erfasst sind. Sollen die Spieler des Teams stattdessen HINZUGEFÜGT werden?');
-        if (!hinzufuegen) return;
-        modus = 'hinzufuegen';
+        const ja = await bestaetigen({
+            titel: 'Spieler hinzufügen?',
+            text: 'Im laufenden Spiel kann der Kader nicht ersetzt werden, weil schon Aktionen erfasst sind. '
+                + 'Die Spieler der Mannschaft werden stattdessen hinzugefügt.',
+            okText: 'Hinzufügen'
+        });
+        if (!ja) return;
     } else if (eigene.length > 0) {
-        modus = confirm("Soll das Team den aktuellen Kader ERSETZEN (OK) oder HINZUGEFÜGT werden (Abbrechen)?")
-            ? 'ersetzen' : 'hinzufuegen';
+        modus = await new Promise(function (fertig) {
+            // Jeder Weg schliesst das Blatt; fertig(null) nach einer Antwort ist wirkungslos.
+            blatt('Mannschaft laden', function (panel, schliesse) {
+                panel.appendChild(bauEl('p', 'sheet-text', 'Soll „' + team.name + '“ den aktuellen Kader ersetzen oder dazukommen?'));
+                panel.appendChild(bauKnopf('Kader ersetzen', 'btn-primary btn-block', function () { fertig('ersetzen'); schliesse(); }));
+                panel.appendChild(bauKnopf('Dazu hinzufügen', 'btn-block', function () { fertig('hinzufuegen'); schliesse(); }));
+                panel.appendChild(bauKnopf('Abbrechen', 'btn-block', schliesse));
+            }, function () { fertig(null); });
+        });
+        if (!modus) return;
     }
 
     const r = window.Store.ladeMannschaft(team.players, modus);
@@ -1889,37 +2024,23 @@ async function loadTeam() {
         return;
     }
     selectedPlayerId = null;
-
-    if (window.Toast) {
-        window.Toast(`Team „${team.name}" geladen (${r.hinzugefuegt} Spieler).`, { type: "success" });
-    }
-    renderRosterList();
+    if (window.Toast) window.Toast('Mannschaft „' + team.name + '“ geladen (' + r.hinzugefuegt + ' Spieler).', { type: 'success' });
+    zeichneKader();
+    updateUI();
 }
 
-async function deleteSelectedTeam() {
-    const select = document.getElementById('team-select');
-    const teamId = select.value;
-    if (!teamId) {
-        if (window.Toast) window.Toast("Bitte ein Team zum Löschen auswählen.", { type: "warn" });
-        return;
-    }
-    
-    if (!confirm("Team wirklich löschen?")) return;
-    
-    await window.Store.deleteTeam(teamId);
-    await populateTeamsDropdown();
-}
-
-function clearAllPlayers() {
-    const currentPlayers = window.Store.getSPIELER();
-    if (currentPlayers.length === 0) return;
-    
-    if (!confirm("Wirklich ALLE Spieler aus dem aktuellen Kader löschen?")) return;
-    
-    const allIds = currentPlayers.map(p => p.id);
-    allIds.forEach(id => window.Store.removePlayerFromStore(id));
+async function clearAllPlayers() {
+    const eigene = window.Store.getSPIELER().filter(function (p) { return !window.Store.istGast(p); });
+    if (eigene.length === 0) return;
+    const ja = await bestaetigen({
+        titel: 'Alle Spieler löschen?', text: 'Der ganze Kader (' + eigene.length + ' Spieler) wird entfernt.',
+        okText: 'Alle löschen', gefahr: true
+    });
+    if (!ja) return;
+    eigene.forEach(function (p) { window.Store.removePlayerFromStore(p.id); });
     selectedPlayerId = null;
-    renderRosterList();
+    zeichneKader();
+    updateUI();
 }
 
 function handleDragStart(e, playerId) {
@@ -2220,18 +2341,8 @@ window.UI = {
     setAssistAbfrage,
     setHalbzeitLaenge,
     assistAbfrageAktiv,
-    saveEditedPlayer,
-    startEditPlayer,
-    cancelEditPlayer,
     togglePlayerManagement,
     renderRosterList,
-    addPlayer,
-    removePlayer,
-    populateTeamsDropdown,
-    saveCurrentRosterAsTeam,
-    updateSelectedTeam,
-    loadTeam,
-    deleteSelectedTeam,
     clearAllPlayers,
     openTimeEdit,
     closeTimeEdit,
