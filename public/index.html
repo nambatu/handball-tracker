@@ -16,7 +16,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=20261114">
+    <link rel="stylesheet" href="style.css?v=20261115">
 </head>
 
 <body class="ansicht-login">
@@ -36,13 +36,19 @@
                 <!-- Der ganze Stand ist EIN Knopf: Antippen zeigt die vollen Namen -->
                 <button type="button" id="spielstand" class="spielstand" onclick="window.UI.openSpielInfo()"
                         aria-label="Spielstand - Antippen zeigt die vollen Namen">
-                    <span id="team-name" class="sb-name sb-heim">HEIM</span>
+                    <span class="sb-seite sb-heim">
+                        <span id="team-name" class="sb-name">HEIM</span>
+                        <span id="az-heim" class="sb-az"></span>
+                    </span>
                     <span class="sb-stand">
                         <span id="score-home" class="score-number">0</span>
                         <span class="score-divider">:</span>
                         <span id="score-guest" class="score-number">0</span>
                     </span>
-                    <span id="guest-name" class="sb-name sb-gast">GAST</span>
+                    <span class="sb-seite sb-gast">
+                        <span id="guest-name" class="sb-name">GAST</span>
+                        <span id="az-gast" class="sb-az"></span>
+                    </span>
                 </button>
                 <button type="button" id="menue-btn" class="kopf-knopf kopf-menue" onclick="window.UI.openMenue()"
                         aria-haspopup="dialog" aria-label="Menü">
@@ -60,11 +66,15 @@
                         <span id="game-timer" class="timer-value">00:00</span>
                         <span id="timer-target" class="timer-target" title="Ende der laufenden Halbzeit">/ 30:00</span>
                     </span>
-                    <span id="half-indicator" class="uhr-hz">1. Hz</span>
+                    <span id="half-indicator" class="uhr-hz"><span id="hz-zusatz" class="hz-zusatz"></span><span id="hz-text">Vor dem Spiel</span></span>
                 </button>
                 <!-- Der Sync-Punkt wohnt hier (sync.js zeichnet ihn, start.js zieht ihn auf die Startseite um) -->
                 <span id="uhr-sync" class="uhr-sync"><span id="sync-status" class="sync-badge sync-ok" title="Synchronisierung"></span></span>
-                <button type="button" onclick="window.Timer.toggleGameTimer()" id="timer-btn" class="uhr-knopf primaer">Uhr starten</button>
+                <!-- Auszeit: nur in den Halbzeiten. Schmal wird daraus "AZ" (der Name bleibt im aria-label). -->
+                <button type="button" id="az-btn" class="uhr-knopf uhr-az" hidden aria-label="Auszeit"
+                        onclick="window.Timer.auszeitOeffnen()"><span class="az-lang">Auszeit</span><span class="az-kurz" aria-hidden="true">AZ</span></button>
+                <!-- Die Haupttaste zeigt immer den naechsten Schritt (timer.js: hauptAktion) -->
+                <button type="button" onclick="window.Timer.hauptknopf()" id="timer-btn" class="uhr-knopf primaer">Anpfiff</button>
             </div>
         </header>
 
@@ -84,9 +94,9 @@
                 </button>
             </div>
             <div class="menue-liste">
-                <button type="button" class="menue-eintrag" data-menue="halbzeit" onclick="window.UI.menueWahl('halbzeit')">
-                    <span id="menue-halbzeit-text">Halbzeit beenden</span>
-                </button>
+                <div id="menue-ablauf" class="menue-gruppe">Spielablauf</div>
+                <button type="button" class="menue-eintrag" id="menue-halbzeit" data-menue="halbzeit" onclick="window.UI.menueWahl('halbzeit')" hidden>Halbzeit vorzeitig</button>
+                <button type="button" class="menue-eintrag" id="menue-abpfiff" data-menue="abpfiff" onclick="window.UI.menueWahl('abpfiff')" hidden>Abpfiff vorzeitig</button>
                 <button type="button" class="menue-eintrag" data-menue="statistik" onclick="window.UI.menueWahl('statistik')">Statistik</button>
                 <button type="button" class="menue-eintrag" data-menue="bericht" onclick="window.UI.menueWahl('bericht')">Spielbericht</button>
                 <button type="button" class="menue-eintrag" data-menue="verlauf" onclick="window.UI.menueWahl('verlauf')">
@@ -99,7 +109,7 @@
                     <span id="ticker-status" class="ticker-badge" hidden title="Ticker"></span>
                 </button>
                 <button type="button" class="menue-eintrag" data-menue="archiv" onclick="window.UI.menueWahl('archiv')">Archiv</button>
-                <button type="button" class="menue-eintrag menue-gefahr" data-menue="beenden" onclick="window.UI.menueWahl('beenden')">Spiel beenden und archivieren</button>
+                <button type="button" class="menue-eintrag menue-gefahr" id="menue-beenden" data-menue="beenden" onclick="window.UI.menueWahl('beenden')">Spiel beenden und archivieren</button>
             </div>
         </div>
     </div>
@@ -128,8 +138,37 @@
         <div class="sheet-panel">
             <h2 id="uhr-hinweis-titel" class="sheet-titel">Die Uhr läuft noch nicht</h2>
             <p class="sheet-text">Die Aktion würde bei 00:00 eingetragen. Soll die Uhr jetzt starten?</p>
-            <button type="button" class="btn btn-primary btn-block" onclick="window.UI.uhrHinweisWahl(true)">Uhr starten und eintragen</button>
+            <button type="button" class="btn btn-primary btn-block" onclick="window.UI.uhrHinweisWahl(true)">Anpfiff und eintragen</button>
             <button type="button" class="btn btn-block" onclick="window.UI.uhrHinweisWahl(false)">Ohne Uhr eintragen</button>
+        </div>
+    </div>
+
+    <!-- Spieler tippen in der Halbzeitpause oder nach dem Abpfiff: Korrekturen bleiben moeglich, aber nicht aus Versehen -->
+    <div id="phase-hinweis" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="phase-hinweis-titel">
+        <div class="sheet-panel">
+            <h2 id="phase-hinweis-titel" class="sheet-titel">Halbzeitpause – jetzt eintragen?</h2>
+            <button type="button" class="btn btn-primary btn-block" onclick="window.UI.phaseHinweisWahl(true)">Eintragen</button>
+            <button type="button" class="btn btn-block" onclick="window.UI.phaseHinweisWahl(false)">Abbrechen</button>
+        </div>
+    </div>
+
+    <!-- Auszeit: die Uhr steht schon, hier wird nur noch gewaehlt, wer sie nimmt -->
+    <div id="auszeit-wahl" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="auszeit-wahl-titel">
+        <div class="sheet-panel">
+            <h2 id="auszeit-wahl-titel" class="sheet-titel">Wer nimmt die Auszeit?</h2>
+            <button type="button" id="auszeit-heim" class="btn btn-block btn-gross" onclick="window.UI.auszeitWahl('heim')"></button>
+            <button type="button" id="auszeit-gast" class="btn btn-block btn-gross" onclick="window.UI.auszeitWahl('gast')"></button>
+            <button type="button" class="btn btn-block" onclick="window.UI.auszeitAbbrechen()">Abbrechen</button>
+        </div>
+    </div>
+
+    <!-- Archivieren: der eine Schritt mit Rueckfrage -->
+    <div id="archiv-frage" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="archiv-frage-titel">
+        <div class="sheet-panel">
+            <h2 id="archiv-frage-titel" class="sheet-titel">Spiel archivieren?</h2>
+            <p class="sheet-text">Das Spiel wird ins Archiv verschoben und das Feld geleert.</p>
+            <button type="button" class="btn btn-primary btn-block" onclick="window.UI.archivFrageWahl(true)">Archivieren</button>
+            <button type="button" class="btn btn-block" onclick="window.UI.archivFrageWahl(false)">Abbrechen</button>
         </div>
     </div>
 
@@ -205,7 +244,7 @@
                         <span id="laufend-stand" class="laufend-stand">0 : 0</span>
                         <span id="laufend-meta" class="laufend-meta"></span>
                     </div>
-                    <button type="button" class="btn btn-primary btn-block" id="start-weiter" onclick="window.Start.zumSpiel()">Weiter tracken</button>
+                    <button type="button" class="btn btn-primary btn-block" id="start-weiter" onclick="window.Start.weiter()">Weiter tracken</button>
                     <button type="button" class="btn btn-block" id="start-neu-knopf" onclick="window.Start.neuesSpielZeigen()">Neues Spiel beginnen</button>
                     <div id="start-neu-hinweis" class="hinweisbox" hidden>
                         <p>Ein neues Spiel geht erst, wenn das laufende beendet ist. Es wird dabei archiviert
@@ -483,21 +522,21 @@
         </div>
     </div>
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="vendor/touch-drag.js?v=20261114"></script>
-    <script src="js/config.js?v=20261114"></script>
-    <script src="vendor/supabase.js?v=20261114"></script>
-    <script src="js/api.js?v=20261114"></script>
-    <script src="js/sync.js?v=20261114"></script>
-    <script src="js/wakelock.js?v=20261114"></script>
-    <script src="js/store.js?v=20261114"></script>
-    <script src="js/timer.js?v=20261114"></script>
-    <script src="js/stats.js?v=20261114"></script>
-    <script src="js/report.js?v=20261114"></script>
-    <script src="js/whatsapp.js?v=20261114"></script>
-    <script src="js/tickerui.js?v=20261114"></script>
-    <script src="js/ui.js?v=20261114"></script>
-    <script src="js/start.js?v=20261114"></script>
-    <script src="js/app.js?v=20261114"></script>
+    <script src="vendor/touch-drag.js?v=20261115"></script>
+    <script src="js/config.js?v=20261115"></script>
+    <script src="vendor/supabase.js?v=20261115"></script>
+    <script src="js/api.js?v=20261115"></script>
+    <script src="js/sync.js?v=20261115"></script>
+    <script src="js/wakelock.js?v=20261115"></script>
+    <script src="js/store.js?v=20261115"></script>
+    <script src="js/timer.js?v=20261115"></script>
+    <script src="js/stats.js?v=20261115"></script>
+    <script src="js/report.js?v=20261115"></script>
+    <script src="js/whatsapp.js?v=20261115"></script>
+    <script src="js/tickerui.js?v=20261115"></script>
+    <script src="js/ui.js?v=20261115"></script>
+    <script src="js/start.js?v=20261115"></script>
+    <script src="js/app.js?v=20261115"></script>
 
 </body>
 

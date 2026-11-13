@@ -227,6 +227,355 @@ function pruefeZeitmarken() {
     if (neu) window.Sync.touch();
 }
 
+// ---------------------------------------------------------------
+// Phasen und die eine Haupttaste
+// ---------------------------------------------------------------
+// Die Haupttaste zeigt immer den NAECHSTEN Schritt. Was sie zeigt und was sie
+// tut, kommt aus derselben Funktion (hauptAktion) - so kann die Beschriftung
+// nie etwas anderes versprechen als der Tipp bewirkt.
+
+/** Spielzeit (s), bei der die Halbzeit bzw. das Spiel nach Plan endet. */
+function zielSekunden() {
+    return (clock.phase === 'hz2' || clock.phase === 'ende' ? 2 : 1) * clock.halbzeitSekunden;
+}
+
+function inHalbzeit() {
+    return clock.phase === 'hz1' || clock.phase === 'hz2';
+}
+
+/** Ist die Planzeit der laufenden Halbzeit erreicht? Nur Anzeige - die Uhr laeuft weiter. */
+function planzeitErreicht() {
+    return inHalbzeit() && elapsedSeconds() >= zielSekunden();
+}
+
+/**
+ * @returns {{ art: string, text: string, primaer: boolean }}
+ */
+function hauptAktion() {
+    switch (clock.phase) {
+        case 'vor':
+            return { art: 'anpfiff', text: 'Anpfiff', primaer: true };
+        case 'hz1':
+        case 'hz2': {
+            const endeArt = clock.phase === 'hz1' ? 'halbzeit' : 'abpfiff';
+            const endeText = clock.phase === 'hz1' ? 'Halbzeit' : 'Abpfiff';
+            if (isRunning()) {
+                return planzeitErreicht()
+                    ? { art: endeArt, text: endeText, primaer: true }
+                    : { art: 'unterbrechen', text: 'Unterbrechen', primaer: false };
+            }
+            // Steht die Uhr jenseits der Planzeit, ohne dass jemand sie angehalten
+            // hat (etwa nach "Zurueck in die 1. Halbzeit"), ist der naechste
+            // Schritt der Pfiff. Nur wer sie selbst angehalten hat (Unterbrechen,
+            // Auszeit), bekommt "Weiter".
+            if (planzeitErreicht() && !clock.angehalten) {
+                return { art: endeArt, text: endeText, primaer: true };
+            }
+            return { art: 'weiter', text: 'Weiter', primaer: true };
+        }
+        case 'pause':
+            return { art: 'anpfiff2', text: 'Anpfiff 2. Halbzeit', primaer: true };
+        default:
+            return { art: 'archivieren', text: 'Spiel archivieren', primaer: true };
+    }
+}
+
+function hauptknopf() {
+    switch (hauptAktion().art) {
+        case 'anpfiff': anpfiff(); break;
+        case 'unterbrechen': unterbrechen(); break;
+        case 'weiter': weiter(); break;
+        case 'halbzeit': halbzeit(); break;
+        case 'anpfiff2': anpfiff2(); break;
+        case 'abpfiff': abpfiff(); break;
+        case 'archivieren':
+            if (window.UI) window.UI.archivierenStarten();
+            break;
+    }
+}
+
+function uhrStarten() {
+    if (isRunning()) return;
+    clock.startedAt = Date.now();
+    clock.angehalten = false;
+    lastPlaytimeSeconds = elapsedSeconds();
+    startDisplayLoop();
+    // Solange das Spiel laeuft, darf sich das Handy nicht sperren
+    if (window.WakeLock) window.WakeLock.enable(true);
+}
+
+function uhrStoppen() {
+    if (!isRunning()) return;
+    clock.accumulatedMs += Date.now() - clock.startedAt;
+    clock.startedAt = null;
+    if (window.WakeLock) window.WakeLock.release();
+}
+
+/** Nach jedem Schritt: sichern, Anzeige und Feld nachziehen. */
+function schrittFertig(sichern) {
+    saveGameState();
+    if (!isRunning() && !clock.auszeit) stopDisplayLoop();
+    tick();
+    updateTimerDisplay();
+    if (window.UI) window.UI.updateUI();
+    if (sichern && window.Sync) window.Sync.flush();
+}
+
+function wechslePhase(phase) {
+    clock.phase = phase;
+    clock.half = (phase === 'vor' || phase === 'hz1') ? 1 : 2;
+}
+
+function merkeVorher() {
+    clock.vorher = { phase: clock.phase, accumulatedMs: elapsedMs(), half: clock.half };
+}
+
+function anpfiff() {
+    if (clock.phase !== 'vor') return;
+    wechslePhase('hz1');
+    uhrStarten();
+    schrittFertig(false);
+}
+
+function unterbrechen() {
+    if (!isRunning()) return;
+    uhrStoppen();
+    clock.angehalten = true;
+    schrittFertig(true);
+}
+
+function weiter() {
+    if (isRunning() || !inHalbzeit()) return;
+    // Mit "Weiter" ist die Auszeit vorbei, egal wie viel von der Minute uebrig war
+    clock.auszeit = null;
+    uhrStarten();
+    schrittFertig(false);
+}
+
+/**
+ * Halbzeit. Die Uhr haelt an und rastet auf die Halbzeitlaenge ein, wenn sie
+ * dort oder dahinter steht (der Pfiff kam nach der Anzeige). Steht sie davor
+ * (Halbzeit vorzeitig), behaelt sie ihren Wert; die zweite Halbzeit beginnt
+ * dann trotzdem bei der vollen Halbzeitlaenge, denn Handballuhren laufen durch.
+ */
+function halbzeit() {
+    if (clock.phase !== 'hz1') return;
+    merkeVorher();
+    uhrStoppen();
+    const ziel = clock.halbzeitSekunden * 1000;
+    if (clock.accumulatedMs >= ziel) clock.accumulatedMs = ziel;
+    clock.auszeit = null;
+    clock.angehalten = false;
+    wechslePhase('pause');
+    lastPlaytimeSeconds = elapsedSeconds();
+    schrittFertig(true);
+}
+
+/** Zurueck aus der Pause in die 1. Halbzeit: gestoppt, mit dem Wert von vor dem Tipp. */
+function zurueckInHalbzeit1() {
+    if (clock.phase !== 'pause') return;
+    const v = clock.vorher;
+    wechslePhase('hz1');
+    if (v && v.phase === 'hz1') clock.accumulatedMs = v.accumulatedMs;
+    clock.vorher = null;
+    clock.angehalten = false;
+    lastPlaytimeSeconds = elapsedSeconds();
+    schrittFertig(true);
+}
+
+function anpfiff2() {
+    if (clock.phase !== 'pause') return;
+    wechslePhase('hz2');
+    // Nach einer vorzeitigen Halbzeit steht die Uhr noch davor: die zweite
+    // Halbzeit zaehlt trotzdem ab der vollen Halbzeitlaenge.
+    const ziel = clock.halbzeitSekunden * 1000;
+    if (clock.accumulatedMs < ziel) clock.accumulatedMs = ziel;
+    clock.vorher = null;
+    uhrStarten();
+    schrittFertig(false);
+}
+
+/**
+ * Abpfiff: die Uhr haelt an, das Spiel ist aus, aber noch nicht archiviert.
+ * Der Schlusspfiff-Eintrag fuer den Ticker entsteht bewusst erst beim
+ * Archivieren (endGame) - dort stand er schon immer, und dort ist das Spiel
+ * sicher gespeichert.
+ */
+function abpfiff() {
+    if (clock.phase === 'ende') return;
+    merkeVorher();
+    uhrStoppen();
+    const ziel = clock.halbzeitSekunden * 2000;
+    if (clock.accumulatedMs >= ziel) clock.accumulatedMs = ziel;
+    clock.auszeit = null;
+    clock.angehalten = false;
+    wechslePhase('ende');
+    lastPlaytimeSeconds = elapsedSeconds();
+    schrittFertig(true);
+}
+
+/** Weiterspielen nach einem Abpfiff: zurueck in die Phase davor, gestoppt, mit dem alten Wert. */
+function weiterspielen() {
+    if (clock.phase !== 'ende') return;
+    const v = clock.vorher;
+    if (v) {
+        wechslePhase(v.phase);
+        clock.accumulatedMs = v.accumulatedMs;
+    } else {
+        wechslePhase('hz2');
+    }
+    clock.vorher = null;
+    clock.angehalten = false;
+    lastPlaytimeSeconds = elapsedSeconds();
+    schrittFertig(true);
+}
+
+/** Menue "Halbzeit vorzeitig" / "Abpfiff vorzeitig": dieselben Schritte wie die Haupttaste. */
+function vorzeitig(art) {
+    if (art === 'halbzeit') halbzeit();
+    else if (art === 'abpfiff') abpfiff();
+}
+
+/**
+ * Menue "Spiel beenden und archivieren": erst Abpfiff, dann die Rueckfrage.
+ * Bricht man dort ab, bleibt es beim Abpfiff - "Weiterspielen" macht ihn rueckgaengig.
+ */
+async function spielBeendenUndArchivieren() {
+    if (clock.phase !== 'ende') abpfiff();
+    return endGame();
+}
+
+// ---------------------------------------------------------------
+// Auszeit
+// ---------------------------------------------------------------
+
+/** Verbleibende Sekunden der laufenden Auszeit, null wenn keine laeuft. */
+function auszeitRest() {
+    if (!clock.auszeit) return null;
+    return Math.max(0, Math.ceil((clock.auszeit.bisMs - Date.now()) / 1000));
+}
+
+/** Auszeit-Taste: Uhr sofort anhalten, dann fragt das Sheet, wer sie nimmt. */
+function auszeitOeffnen() {
+    if (!inHalbzeit()) return;
+    if (isRunning()) {
+        uhrStoppen();
+        clock.angehalten = true;
+        schrittFertig(true);
+    } else {
+        clock.angehalten = true;
+        saveGameState();
+        updateTimerDisplay();
+    }
+    if (window.UI) window.UI.zeigeAuszeitWahl();
+}
+
+/** Auszeit eintragen. @param {'heim'|'gast'} team */
+function auszeitEintragen(team) {
+    if (!inHalbzeit() || (team !== 'heim' && team !== 'gast')) return null;
+    const s = window.Sync.getState();
+    const jetzt = Date.now();
+    // Die spielId gehoert in jede Marken-id: sonst gilt eine Auszeit im
+    // naechsten Spiel als "schon bekannt" (Merkzettel des Servers).
+    const marke = {
+        id: 'auszeit-' + (s.spielId || 'spiel') + '-' + jetzt,
+        art: 'auszeit',
+        team: team,
+        halbzeit: clock.half,
+        spielzeit: elapsedSeconds(),
+        timestamp: jetzt
+    };
+    window.Store.addMarke(marke);
+    clock.auszeit = { team: team, bisMs: jetzt + AUSZEIT_SEKUNDEN * 1000, markeId: marke.id };
+    clock.angehalten = true;
+    saveGameState();
+    startDisplayLoop();
+    updateTimerDisplay();
+    if (window.UI) window.UI.updateScoreboard();
+    return marke;
+}
+
+/** Auszeit zurueckziehen (Rueckgaengig, Verlauf). Die Uhr bleibt stehen. */
+function auszeitEntfernen(markeId) {
+    const weg = window.Store.removeMarke(markeId);
+    if (clock.auszeit && clock.auszeit.markeId === markeId) {
+        clock.auszeit = null;
+        saveGameState();
+        if (!isRunning()) stopDisplayLoop();
+    }
+    updateTimerDisplay();
+    if (window.UI) window.UI.updateScoreboard();
+    return weg;
+}
+
+/** Wiederherstellen nach "Rueckgaengig" im Verlauf (die Uhr wird dabei nicht angefasst). */
+function auszeitWiederherstellen(marke) {
+    return window.Store.addMarke(marke);
+}
+
+// ---------------------------------------------------------------
+// Anzeige
+// ---------------------------------------------------------------
+
+function statusText() {
+    switch (clock.phase) {
+        case 'vor': return { zusatz: '', text: 'Vor dem Spiel' };
+        case 'pause': return { zusatz: '', text: 'Halbzeitpause' };
+        case 'ende': {
+            const st = window.Store && window.Store.getStand ? window.Store.getStand() : null;
+            return { zusatz: '', text: 'Spiel beendet' + (st ? ' · ' + st.heim + ':' + st.gast : '') };
+        }
+        default:
+            return {
+                zusatz: isRunning() ? '' : 'Unterbrochen · ',
+                text: clock.half + '. Halbzeit'
+            };
+    }
+}
+
+/**
+ * Was der schmale Hinweisbalken auf dem Feld zeigen soll (null = nichts).
+ * Vorrang: laufende Auszeit, dann "Planzeit erreicht", dann der Rueckweg
+ * (Pause, Ende).
+ */
+function getBalken() {
+    if (inHalbzeit() && clock.auszeit) {
+        const n = window.Store.getTeamNames();
+        const rest = auszeitRest();
+        return {
+            art: 'auszeit',
+            name: 'Auszeit ' + (clock.auszeit.team === 'heim' ? n.heim : n.gast),
+            vorbei: rest === 0,
+            zeit: formatRest(rest)
+        };
+    }
+    if (planzeitErreicht()) {
+        return {
+            art: 'hinweis',
+            text: clock.phase === 'hz1'
+                ? formatTime(zielSekunden()) + ' erreicht – Halbzeit, sobald abgepfiffen ist.'
+                : 'Spielzeit erreicht – Abpfiff, sobald abgepfiffen ist.'
+        };
+    }
+    if (clock.phase === 'pause') {
+        return { art: 'link', text: 'Zurück in die 1. Halbzeit', aktion: 'zurueck' };
+    }
+    if (clock.phase === 'ende') {
+        return { art: 'link', text: 'Weiterspielen', aktion: 'weiterspielen' };
+    }
+    return null;
+}
+
+function formatRest(sekunden) {
+    const s = Math.max(0, Math.floor(sekunden || 0));
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+function linkAktion(aktion) {
+    if (aktion === 'zurueck') zurueckInHalbzeit1();
+    else if (aktion === 'weiterspielen') weiterspielen();
+}
+
 function updateTimerDisplay() {
     const timerEl = document.getElementById("game-timer");
     if (timerEl) timerEl.innerText = formatTime(elapsedSeconds());
@@ -235,20 +584,33 @@ function updateTimerDisplay() {
     // im Vorbeigehen ablesen, ohne nachzurechnen wie lange noch zu spielen ist.
     const zielEl = document.getElementById("timer-target");
     if (zielEl) {
-        zielEl.innerText = '/ ' + formatTime(halbzeitEndeSekunden());
-        zielEl.classList.toggle('is-over', elapsedSeconds() >= halbzeitEndeSekunden());
+        zielEl.innerText = '/ ' + formatTime(zielSekunden());
+        zielEl.classList.toggle('is-over', planzeitErreicht());
     }
 
-    // Eine Uhrtaste fuer beides: "Uhr starten" solange sie steht (dann ist sie
-    // die Hauptaktion in Blau), "Pause" waehrend sie laeuft.
+    // Die Haupttaste zeigt den naechsten Schritt (siehe hauptAktion)
     const btn = document.getElementById("timer-btn");
     if (btn) {
-        btn.textContent = isRunning() ? "Pause" : "Uhr starten";
-        btn.classList.toggle('primaer', !isRunning());
+        const h = hauptAktion();
+        if (btn.textContent !== h.text) btn.textContent = h.text;
+        btn.classList.toggle('primaer', h.primaer);
+        btn.dataset.art = h.art;
     }
 
+    // Auszeit gibt es nur in den Halbzeiten
+    const az = document.getElementById("az-btn");
+    if (az) az.hidden = !inHalbzeit();
+
+    const zusatzEl = document.getElementById("hz-zusatz");
     const hzEl = document.getElementById("half-indicator");
-    if (hzEl) hzEl.textContent = clock.half + ". Hz";
+    if (hzEl) {
+        const st = statusText();
+        if (zusatzEl) zusatzEl.textContent = st.zusatz;
+        const textEl = document.getElementById("hz-text");
+        if (textEl) textEl.textContent = st.text;
+    }
+
+    if (window.UI && window.UI.refreshBalken) window.UI.refreshBalken();
 }
 
 function startDisplayLoop() {
@@ -267,19 +629,12 @@ function tick() {
     updateTimerDisplay();
     pruefeZeitmarken();
 
-    // Einmal pro Halbzeit Bescheid geben. Die Uhr laeuft bewusst WEITER -
-    // wann abgepfiffen wird, entscheidet der Schiedsrichter, nicht die App.
-    if (isRunning() && halbzeitHinweisFuer !== clock.half
-        && elapsedSeconds() >= halbzeitEndeSekunden()) {
-        halbzeitHinweisFuer = clock.half;
-        if (window.Toast) {
-            window.Toast(
-                (clock.half === 1 ? 'Halbzeit' : 'Spielzeit') + ' erreicht ('
-                + formatTime(halbzeitEndeSekunden()) + '). Die Uhr läuft weiter.',
-                { type: 'warn', duration: 8000 }
-            );
-        }
-    }
+    // Steht die Uhr und laeuft auch keine Auszeit mehr, braucht es kein Neuzeichnen
+    if (!isRunning() && (!clock.auszeit || auszeitRest() === 0)) stopDisplayLoop();
+
+    // Die Planzeit meldet nur Hinweisbalken und Taste (updateTimerDisplay).
+    // Die Uhr laeuft bewusst WEITER - wann abgepfiffen wird, entscheidet der
+    // Schiedsrichter, nicht die App.
 
     // Zeitstrafen sekundengenau mitlaufen lassen. Gezielt, nicht ueber
     // einen kompletten Rerender - der wuerde jede Sekunde das Drag&Drop
@@ -300,35 +655,16 @@ function tick() {
 // Nach Sperrbildschirm / Tab-Wechsel sofort nachziehen, statt auf den
 // naechsten (gedrosselten) Tick zu warten.
 document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && isRunning()) tick();
+    if (document.visibilityState === 'visible' && (isRunning() || clock.auszeit)) tick();
 });
 
 // ---------------------------------------------------------------
 // Steuerung
 // ---------------------------------------------------------------
 
-function toggleGameTimer() {
-    if (isRunning()) {
-        clock.accumulatedMs += Date.now() - clock.startedAt;
-        clock.startedAt = null;
-        stopDisplayLoop();
-        tick();
-        if (window.WakeLock) window.WakeLock.release();
-        if (window.Sync) window.Sync.flush();
-    } else {
-        clock.startedAt = Date.now();
-        lastPlaytimeSeconds = elapsedSeconds();
-        startDisplayLoop();
-        // Solange das Spiel laeuft, darf sich das Handy nicht sperren
-        if (window.WakeLock) window.WakeLock.enable(true);
-    }
-    saveGameState();
-    updateTimerDisplay();
-}
-
 /**
  * Spielzeit manuell setzen (Schiedsrichteruhr weicht ab, App lief im
- * Hintergrund weiter, Fehlbedienung).
+ * Hintergrund weiter, Fehlbedienung). Aendert nie die Phase.
  * @param {number} seconds
  */
 function setGameTime(seconds) {
@@ -341,31 +677,17 @@ function setGameTime(seconds) {
     if (window.UI) window.UI.updateUI();
 }
 
-/**
- * Erste Halbzeit beenden. Die Uhr haelt an, die zweite Halbzeit beginnt mit
- * dem naechsten Druck auf "Uhr starten". Das Spiel selbst beendet nur
- * endGame() - ueber das Menue, bewusst nicht mehr als Knopf in der Kopfzeile,
- * wo er mit der Uhr verwechselt werden konnte.
- */
-function halbzeitBeenden() {
-    if (clock.half !== 1) return;
-    if (isRunning()) toggleGameTimer();
-
-    if (confirm("1. Halbzeit beenden?")) {
-        clock.half = 2;
-        halbzeitHinweisFuer = 0;
-    }
-    saveGameState();
-
-    updateTimerDisplay();
-    if (window.UI) window.UI.updateUI();
-}
-
 // Rueckgabe: true, wenn das Spiel archiviert UND zurueckgesetzt ist. Die
 // Startseite braucht das, um erst danach das Formular fuer ein neues Spiel
 // zu oeffnen - bei Abbruch oder Fehler bleibt das laufende Spiel stehen.
-async function endGame() {
-    if (!confirm("SPIEL BEENDEN? Das aktuelle Spiel wird ins Archiv verschoben und hier zurückgesetzt.")) return false;
+//
+// opt.bestaetigt: die Rueckfrage ist schon beantwortet (nur dann ueberspringen).
+async function endGame(opt) {
+    const bestaetigt = !!(opt && opt.bestaetigt);
+    if (!bestaetigt) {
+        const ok = window.UI && window.UI.frageArchivieren ? await window.UI.frageArchivieren() : false;
+        if (!ok) return false;
+    }
 
     const spieler = window.Store.getSPIELER();
     const aktionen = window.Store.loadActions();
@@ -402,8 +724,6 @@ async function endGame() {
         if (window.Toast) {
             window.Toast('Archivieren fehlgeschlagen - das Spiel bleibt erhalten. Bitte bei Verbindung erneut beenden.',
                 { type: 'error', duration: 10000 });
-        } else {
-            alert('Archivieren fehlgeschlagen - das Spiel bleibt erhalten.');
         }
         return false;
     }
@@ -445,14 +765,18 @@ async function endGame() {
 
     const resetSpieler = spieler.map(p => Object.assign({}, p, {
         playtimeSeconds: 0,
-        suspendedUntilGameTime: null
+        suspendedUntilGameTime: null,
+        sperrePlatz: null
     }));
     // Neue Spielkennung: daran haengen die Ticker-Zeitmarken, damit sie im
-    // naechsten Spiel nicht als "schon getickert" gelten.
+    // naechsten Spiel nicht als "schon getickert" gelten. Marken (Zeitmarken,
+    // Auszeiten) bleiben absichtlich weg - sie gehoeren zum alten Spiel.
     await window.Sync.reset({ spieler: resetSpieler, aktionen: [], spielId: 'g' + Date.now() });
 
-    clock = { accumulatedMs: 0, startedAt: null, half: 1, halbzeitSekunden: clock.halbzeitSekunden };
-    halbzeitHinweisFuer = 0;
+    clock = normalisiereUhr({
+        accumulatedMs: 0, startedAt: null, half: 1, phase: 'vor',
+        halbzeitSekunden: clock.halbzeitSekunden
+    });
     lastPlaytimeSeconds = 0;
     stopDisplayLoop();
     saveGameState();
@@ -464,6 +788,7 @@ async function endGame() {
         window.UI.updateUI();
         window.UI.updateScoreboard();
     }
+    updateTimerDisplay();
 
     if (window.Toast) {
         window.Toast('Spiel archiviert und zurückgesetzt.', { type: 'success' });
@@ -478,7 +803,6 @@ async function endGame() {
 function setHalbzeitLaenge(minuten) {
     const m = Math.max(1, Math.min(60, Math.round(Number(minuten) || 0)));
     clock.halbzeitSekunden = m * 60;
-    halbzeitHinweisFuer = 0;
     saveGameState();
     updateTimerDisplay();
 
@@ -506,6 +830,7 @@ function getTimerState() {
     return {
         spielzeitSekunden: elapsedSeconds(),
         currentHalf: clock.half,
+        phase: clock.phase,
         isTimerRunning: isRunning(),
         halbzeitSekunden: clock.halbzeitSekunden,
         halbzeitEndeSekunden: halbzeitEndeSekunden()
@@ -515,11 +840,22 @@ function getTimerState() {
 window.Timer = {
     formatTime,
     updateTimerDisplay,
-    toggleGameTimer,
+    hauptknopf,
+    hauptAktion,
+    anpfiff,
     loadGameState,
-    halbzeitBeenden,
+    vorzeitig,
+    spielBeendenUndArchivieren,
     endGame,
     getTimerState,
+    getBalken,
+    linkAktion,
+    auszeitOeffnen,
+    auszeitEintragen,
+    auszeitEntfernen,
+    auszeitWiederherstellen,
+    auszeitRest,
+    formatRest,
     setGameTime,
     elapsedSeconds,
     setHalbzeitLaenge,

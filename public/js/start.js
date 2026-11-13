@@ -105,8 +105,9 @@
     // Laeuft schon ein Spiel?
     // ---------------------------------------------------------------
     // Regel: ja, wenn mindestens eine Aktion erfasst ist ODER die Uhr
-    // angefasst wurde (laeuft, steht auf mehr als 0:00 oder ist schon in der
-    // 2. Halbzeit). Die Uhr zaehlt mit, weil man vor dem ersten Tor oft schon
+    // angefasst wurde (laeuft, steht auf mehr als 0:00 oder ist nicht mehr in
+    // der Phase "vor dem Spiel" - dazu zaehlt auch "abgepfiffen, noch nicht
+    // archiviert"). Die Uhr zaehlt mit, weil man vor dem ersten Tor oft schon
     // angepfiffen hat - ein "neues Spiel" duerfte das nicht ueberschreiben.
     // Die Uhr liegt lokal auf dem Geraet (timer.js), die Aktionen im
     // synchronisierten Stand: auf einem zweiten Geraet entscheiden also die
@@ -115,7 +116,7 @@
         const aktionen = window.Store.loadActions();
         if (aktionen && aktionen.length > 0) return true;
         const t = window.Timer.getTimerState();
-        return !!(t.isTimerRunning || t.spielzeitSekunden > 0 || t.currentHalf > 1);
+        return !!(t.isTimerRunning || t.spielzeitSekunden > 0 || t.phase !== 'vor');
     }
 
     function eigeneSpieler(liste) {
@@ -169,9 +170,22 @@
 
         el('laufend-name').textContent = name;
         el('laufend-stand').textContent = stand.heim + ' : ' + stand.gast;
-        el('laufend-meta').textContent = anzahl + (anzahl === 1 ? ' Aktion' : ' Aktionen')
-            + ' · ' + window.Timer.formatTime(t.spielzeitSekunden)
-            + ' · ' + t.currentHalf + '. Halbzeit';
+        let phase;
+        if (t.phase === 'pause') phase = 'Halbzeitpause';
+        else if (t.phase === 'ende') phase = 'Spiel beendet';
+        else if (t.phase === 'vor') phase = 'Vor dem Spiel';
+        else phase = t.currentHalf + '. Halbzeit · ' + window.Timer.formatTime(t.spielzeitSekunden);
+        el('laufend-meta').textContent = anzahl + (anzahl === 1 ? ' Aktion' : ' Aktionen') + ' · ' + phase;
+
+        // Nach dem Abpfiff ist der naechste Schritt das Archivieren
+        const abgepfiffen = t.phase === 'ende';
+        el('start-weiter').textContent = abgepfiffen ? 'Spiel archivieren' : 'Weiter tracken';
+    }
+
+    // "Weiter tracken" bzw. nach dem Abpfiff "Spiel archivieren"
+    async function weiter() {
+        if (window.Timer.getTimerState().phase !== 'ende') { zumSpiel(); return; }
+        await laufendesBeenden();
     }
 
     // Die Zeit des laufenden Spiels laeuft auch auf der Startseite weiter
@@ -528,6 +542,7 @@
         starten: starten,
         neuesSpielZeigen: neuesSpielZeigen,
         laufendesBeenden: laufendesBeenden,
+        weiter: weiter,
         kaderVerwalten: kaderVerwalten,
         archivOeffnen: archivOeffnen,
         laeuftSpiel: laeuftSpiel

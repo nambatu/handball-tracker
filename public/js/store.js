@@ -242,21 +242,222 @@ function updatePlayerAvatar(playerId, avatarUrl) {
     }
 }
 
-function applySuspension(playerId, currentGameTimeSeconds) {
-    const player = state().spieler.find(p => String(p.id) === String(playerId));
-    if (player) {
-        // 2 minutes = 120 seconds
-        player.suspendedUntilGameTime = currentGameTimeSeconds + 120;
-        savePlayers();
+// ---------------------------------------------------------------
+// Zeitstrafen und gesperrte Plaetze
+// ---------------------------------------------------------------
+// EINE Quelle fuer die Dauer: `suspendedUntilGameTime` am Spieler (Spielzeit in
+// Sekunden, bis zu der er gesperrt ist). Die Restzeit wird immer aus der
+// Spieluhr gerechnet - steht die Uhr, steht auch die Strafe.
+//
+// Dazu kommt `sperrePlatz` am selben Spieler: welcher Feldplatz wegen dieser
+// Strafe gesperrt ist. Beides liegt im Spielerobjekt und damit im
+// synchronisierten Stand: nach einem Neuladen (oder auf einem zweiten Geraet)
+// stimmen Sperre und Restzeit weiter. Gesperrte Plaetze werden nicht
+// gespeichert, sondern aus diesen beiden Feldern abgeleitet.
+//
+// Rote Karte: kein eigenes Feld. Wer in diesem Spiel eine Aktion "Karte_Rot"
+// hat, ist fuer den Rest des Spiels gesperrt (Rueckgaengig hebt das von selbst
+// auf), blockiert aber keinen Platz.
+
+const SPERRE_SEKUNDEN = 120;
+// Reihenfolge, in der ein Platz gesperrt wird, wenn der Bestrafte nicht auf
+// dem Feld stand oder der Torwart ist: zuerst der Kreislaeufer. Das Tor
+// wird nie gesperrt - eine Mannschaft hat immer einen Torwart.
+const SPERR_PLAETZE = ['KM', 'RM', 'RL', 'RR', 'LA', 'RA'];
+
+function spielzeitJetzt() {
+    return window.Timer ? window.Timer.getTimerState().spielzeitSekunden : 0;
+}
+
+/** Verbleibende Sekunden der Zeitstrafe (0 = keine laufende). */
+function sperreRest(p, jetzt) {
+    const bis = p && p.suspendedUntilGameTime;
+    if (bis === null || bis === undefined) return 0;
+    return Math.max(0, bis - (jetzt === undefined ? spielzeitJetzt() : jetzt));
+}
+
+function istDisqualifiziert(p) {
+    if (!p || istGast(p)) return false;
+    return state().aktionen.some(function (a) {
+        return String(a.spielerId) === String(p.id) && a.typ && a.typ.indexOf('Karte_Rot') !== -1;
+    });
+}
+
+/** Zeitstrafe oder Rote Karte: kann nicht spielen, nicht gewaehlt, nicht gezogen werden. */
+function istGesperrt(p, jetzt) {
+    if (!p || istGast(p)) return false;
+    return sperreRest(p, jetzt) > 0 || istDisqualifiziert(p);
+}
+
+/** Satz fuer den Hinweis beim Antippen eines gesperrten Spielers. */
+function sperreText(p, jetzt) {
+    const name = p.name;
+    if (istDisqualifiziert(p)) return name + ' hat Rot und ist für den Rest des Spiels gesperrt';
+    const rest = sperreRest(p, jetzt);
+    return name + ' ist noch ' + Math.floor(rest / 60) + ':' + String(rest % 60).padStart(2, '0') + ' gesperrt';
+}
+
+/**
+ * Wer steht wo? Rein abgeleitet aus Positionen, Strafen und Karten.
+ *   belegt     Platz -> Spieler auf dem Feld
+ *   blockiert  Platz -> gesperrter Spieler, dessen Strafe den Platz sperrt
+ *   bank       alle uebrigen eigenen Spieler (auch Gesperrte)
+ * Regel wie bisher: pro Platz zaehlt der erste passende Spieler.
+ */
+function berechneFeld(jetzt) {
+    const t = jetzt === undefined ? spielzeitJetzt() : jetzt;
+    const belegt = {};
+    const blockiert = {};
+    const bank = [];
+    const eigene = state().spieler.filter(p => !istGast(p));
+    eigene.forEach(p => {
+        const platz = p.sperrePlatz;
+        if (platz && COURT_POSITIONEN.indexOf(platz) !== -1 && platz !== 'TW' && sperreRest(p, t) > 0) {
+            blockiert[platz] = p;
+        }
+    });
+    eigene.forEach(p => {
+        const pos = normalisiertePosition(p);
+        if (!istGesperrt(p, t) && COURT_POSITIONEN.indexOf(pos) !== -1 && !blockiert[pos] && !belegt[pos]) {
+            belegt[pos] = p;
+        } else {
+            bank.push(p);
+        }
+    });
+    return { belegt: belegt, blockiert: blockiert, bank: bank };
+}
+
+function platzVon(feld, p) {
+    return Object.keys(feld.belegt).find(function (k) { return feld.belegt[k].id === p.id; }) || null;
+}
+
+/**
+ * Nimmt einen Spieler vom Feld auf die Bank. War er der Torwart, rutscht kein
+ * anderer Torwart nach: doppelte Torwart-Eintraege auf der Bank werden auf
+ * "Bank" gesetzt (und als frueherer Torwart gemerkt), sonst fuellte die
+ * Feldansicht das leere Tor von selbst. Der Platz bleibt leer, bis jemand
+ * bewusst dort hingestellt wird.
+ */
+function vomFeldNehmen(p, feld) {
+    const platz = platzVon(feld, p);
+    if (!platz) return null;
+    p.position = 'Bank';
+    if (platz === 'TW') {
+        p.warTorwart = true;
+        const s = state();
+        if (String(s.aktiverTorwartId) === String(p.id)) s.aktiverTorwartId = null;
+        feld.bank.forEach(function (q) {
+            if (q.id !== p.id && normalisiertePosition(q) === 'TW') {
+                q.position = 'Bank';
+                q.warTorwart = true;
+            }
+        });
     }
+    return platz;
+}
+
+/**
+ * Zeitstrafe (2 Minuten) eintragen. Beim eigenen Team: der Spieler geht auf die
+ * Bank und ein Platz wird fuer die Dauer gesperrt (siehe SPERR_PLAETZE).
+ * Beim Gegner nur die Zeit - dort gibt es keine Plaetze.
+ */
+function sperreSetzen(playerId, spielzeit) {
+    const p = state().spieler.find(x => String(x.id) === String(playerId));
+    if (!p) return;
+    const schonGesperrt = sperreRest(p, spielzeit) > 0 && p.sperrePlatz;
+    const feld = berechneFeld(spielzeit);
+    p.suspendedUntilGameTime = spielzeit + SPERRE_SEKUNDEN;
+
+    if (!istGast(p)) {
+        const eigenerPlatz = platzVon(feld, p);
+        if (eigenerPlatz) vomFeldNehmen(p, feld);
+        if (!schonGesperrt) {
+            let platz;
+            if (eigenerPlatz && eigenerPlatz !== 'TW') platz = eigenerPlatz;
+            else platz = SPERR_PLAETZE.find(function (k) { return !feld.blockiert[k]; }) || null;
+            if (platz && feld.belegt[platz] && feld.belegt[platz].id !== p.id) feld.belegt[platz].position = 'Bank';
+            p.sperrePlatz = platz;
+        }
+    }
+    savePlayers();
+}
+
+/** Rote Karte: runter vom Feld, aber kein Platz wird gesperrt. */
+function disqualifiziere(playerId) {
+    const p = state().spieler.find(x => String(x.id) === String(playerId));
+    if (!p || istGast(p)) return;
+    vomFeldNehmen(p, berechneFeld());
+    savePlayers();
+}
+
+/** Kompatibel zu frueher; die Dauer kommt weiter aus derselben Quelle. */
+function applySuspension(playerId, currentGameTimeSeconds) {
+    sperreSetzen(playerId, currentGameTimeSeconds);
 }
 
 function clearSuspension(playerId) {
     const player = state().spieler.find(p => String(p.id) === String(playerId));
-    if (player && player.suspendedUntilGameTime !== null) {
+    if (player && (player.suspendedUntilGameTime !== null || player.sperrePlatz)) {
         player.suspendedUntilGameTime = null;
+        player.sperrePlatz = null;
         savePlayers();
     }
+}
+
+/**
+ * Hebt abgelaufene Strafen auf: Platz frei, Spieler wieder waehlbar (er bleibt
+ * auf der Bank - niemand wird von selbst aufs Feld gestellt).
+ * @returns {Array} die freigegebenen Spieler
+ */
+function beendeAbgelaufeneSperren(jetzt) {
+    const t = jetzt === undefined ? spielzeitJetzt() : jetzt;
+    const frei = [];
+    state().spieler.forEach(function (p) {
+        const bis = p.suspendedUntilGameTime;
+        if (bis === null || bis === undefined || t < bis) return;
+        p.suspendedUntilGameTime = null;
+        p.sperrePlatz = null;
+        if (!istGast(p)) frei.push(p);
+    });
+    if (frei.length) {
+        window.Sync.touch();
+        frei.forEach(function (p) { if (window.UI && window.UI.sperreBeendet) window.UI.sperreBeendet(p); });
+    } else if (state().spieler.some(function (p) { return p.suspendedUntilGameTime === null && p.sperrePlatz; })) {
+        // Platz ohne Strafe (etwa nach einer Umbuchung): aufraeumen
+        state().spieler.forEach(function (p) { if (p.suspendedUntilGameTime === null) p.sperrePlatz = null; });
+        window.Sync.touch();
+    }
+    return frei;
+}
+
+/**
+ * Spieler auf einen Feldplatz stellen (Ziehen). Ein gesperrter Platz nimmt
+ * niemanden auf - AUSSER einen Spieler vom Feld: der tauscht, sein bisheriger
+ * Platz wird dann der gesperrte (so entscheidet der Trainer, WER fehlt).
+ * @returns {{ ok: boolean, grund?: string }}
+ */
+function platziereSpieler(playerId, platz, jetzt) {
+    const p = state().spieler.find(x => String(x.id) === String(playerId));
+    if (!p) return { ok: false, grund: 'Spieler nicht gefunden.' };
+    const feld = berechneFeld(jetzt);
+    if (istGesperrt(p, jetzt)) return { ok: false, grund: sperreText(p, jetzt) + '.' };
+
+    const blocker = feld.blockiert[platz];
+    if (blocker) {
+        const alt = platzVon(feld, p);
+        if (!alt) return { ok: false, grund: 'Dieser Platz ist gesperrt. Nur ein Spieler vom Feld kann tauschen.' };
+        if (alt === 'TW') return { ok: false, grund: 'Der Torwart-Platz kann nicht gesperrt werden.' };
+        blocker.sperrePlatz = alt;
+        p.position = platz;
+        savePlayers();
+        return { ok: true };
+    }
+
+    const insasse = feld.belegt[platz];
+    if (insasse && insasse.id !== p.id) insasse.position = 'Bank';
+    p.position = platz;
+    savePlayers();
+    return { ok: true };
 }
 
 function removePlayerFromStore(playerId) {
@@ -380,7 +581,7 @@ function isGoalkeeper(p) {
 
 /** Alle Torhueter des eigenen Teams (auch die auf der Bank). */
 function getGoalkeepers() {
-    return state().spieler.filter(p => !istGast(p) && (isGoalkeeper(p) || p.warTorwart));
+    return state().spieler.filter(p => !istGast(p) && !istGesperrt(p) && (isGoalkeeper(p) || p.warTorwart));
 }
 
 /**
@@ -391,9 +592,9 @@ function getActiveGoalkeeper() {
     const s = state();
     if (s.aktiverTorwartId) {
         const chosen = s.spieler.find(p => String(p.id) === String(s.aktiverTorwartId));
-        if (chosen) return chosen;
+        if (chosen && !istGesperrt(chosen)) return chosen;
     }
-    return s.spieler.find(p => !istGast(p) && isGoalkeeper(p)) || null;
+    return s.spieler.find(p => !istGast(p) && !istGesperrt(p) && isGoalkeeper(p)) || null;
 }
 
 function getActiveGoalkeeperId() {
@@ -404,7 +605,7 @@ function getActiveGoalkeeperId() {
 function setActiveGoalkeeper(playerId) {
     const s = state();
     const player = s.spieler.find(p => String(p.id) === String(playerId));
-    if (!player) return false;
+    if (!player || istGesperrt(player)) return false;
 
     s.aktiverTorwartId = player.id;
     // Merken, dass dieser Spieler schon einmal im Tor stand - sonst
@@ -443,17 +644,9 @@ function normalisiertePosition(p) {
  * nicht auseinanderlaufen koennen.
  */
 function getPlayersOnCourt() {
-    const belegt = new Set();
-    const aufDemFeld = [];
-    state().spieler.forEach(p => {
-        if (istGast(p)) return;
-        const pos = normalisiertePosition(p);
-        if (COURT_POSITIONEN.indexOf(pos) === -1) return;
-        if (belegt.has(pos)) return;
-        belegt.add(pos);
-        aufDemFeld.push(p);
-    });
-    return aufDemFeld;
+    const feld = berechneFeld();
+    const ids = new Set(Object.keys(feld.belegt).map(k => String(feld.belegt[k].id)));
+    return state().spieler.filter(p => ids.has(String(p.id)));
 }
 
 /**
@@ -489,15 +682,10 @@ function tickPlaytime(deltaSeconds, gameTimeSeconds) {
     let needsRedraw = false;
     let changed = false;
 
-    state().spieler.forEach(p => {
-        // Abgelaufene Zeitstrafe aufheben
-        if (p.suspendedUntilGameTime !== null && p.suspendedUntilGameTime !== undefined
-            && gameTimeSeconds >= p.suspendedUntilGameTime) {
-            p.suspendedUntilGameTime = null;
-            changed = true;
-            needsRedraw = true;
-        }
+    // Abgelaufene Zeitstrafen aufheben (Platz frei, Hinweis "darf wieder spielen")
+    if (beendeAbgelaufeneSperren(gameTimeSeconds).length) needsRedraw = true;
 
+    state().spieler.forEach(p => {
         if (typeof p.playtimeSeconds !== 'number') {
             p.playtimeSeconds = 0;
         }
@@ -557,6 +745,15 @@ window.Store = {
     updatePlayerAvatar,
     applySuspension,
     clearSuspension,
+    sperreSetzen,
+    disqualifiziere,
+    beendeAbgelaufeneSperren,
+    platziereSpieler,
+    berechneFeld,
+    istGesperrt,
+    istDisqualifiziert,
+    sperreRest,
+    sperreText,
     tickPlaytime,
 
     // Team API Wrappers

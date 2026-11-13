@@ -1711,13 +1711,17 @@ body.ansicht-spiel .spiel {
     border: 0; border-radius: var(--radius); padding: 0;
     font: inherit; cursor: pointer; touch-action: manipulation;
 }
+.sb-seite { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.sb-heim { align-items: flex-end; text-align: right; }
+.sb-gast { align-items: flex-start; text-align: left; color: var(--text-muted); }
 .sb-name {
-    flex: 1 1 0; min-width: 0;
+    flex: 0 1 auto; min-width: 0; max-width: 100%;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 13px; font-weight: 600; line-height: 1.2;
 }
-.sb-heim { text-align: right; }
-.sb-gast { text-align: left; color: var(--text-muted); }
+/* Auszeiten des Teams in diesem Spiel: erst sichtbar, wenn es eine gibt */
+.sb-az { font-size: 11px; line-height: 1.2; color: var(--warning-color); font-weight: 600; white-space: nowrap; }
+.sb-az:empty { display: none; }
 .sb-stand { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
 .score-number {
     background: none; border: 0; padding: 0; min-width: 0;
@@ -1737,7 +1741,7 @@ body.ansicht-spiel .spiel {
 .timer-value { font-size: 17px; font-weight: 700; line-height: 1.15; color: var(--text-color); }
 .timer-target { font-size: 13px; line-height: 1.15; color: var(--text-muted); margin: 0; font-weight: 500; }
 .timer-target.is-over { color: var(--warning-color); font-weight: 600; }
-.uhr-hz { font-size: 12px; line-height: 1.1; color: var(--text-muted); }
+.uhr-hz { font-size: 12px; line-height: 1.1; color: var(--text-muted); white-space: nowrap; }
 
 .uhr-sync { flex: 1 1 auto; display: flex; justify-content: flex-end; align-items: center; min-width: 0; }
 .uhr-sync .sync-badge {
@@ -1756,6 +1760,39 @@ body.ansicht-spiel .spiel {
     font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; touch-action: manipulation;
 }
 .uhr-knopf.primaer { background: var(--accent-strong); border-color: var(--accent-strong); color: #fff; }
+.uhr-knopf { white-space: nowrap; }
+.uhr-az { min-width: 44px; padding: 0 10px; font-weight: 600; }
+.az-kurz { display: none; }
+/* Schmal (320 px): Auszeit wird zu "AZ", und vom Status bleibt nur die Halbzeit -
+   "Weiter" auf der Haupttaste sagt ohnehin, dass die Uhr steht. */
+@media (max-width: 359px) {
+    .az-lang { display: none; }
+    .az-kurz { display: inline; }
+    .uhr-knopf { min-width: 0; padding: 0 10px; }
+    .uhr-az { min-width: 44px; padding: 0; }
+    .hz-zusatz { display: none; }
+}
+
+/* Hinweisbalken am oberen Feldrand (siehe ui.js refreshBalken) */
+.spiel-balken {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 4;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    min-height: 28px; padding: 4px 8px;
+    font-size: 12px; line-height: 1.25; font-weight: 600; color: var(--text-color);
+    background: #3a2f14; border-bottom: 1px solid var(--warning-color);
+    pointer-events: none;
+}
+.balken-auszeit { background: #14283f; border-bottom-color: var(--accent-color); }
+.balken-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.balken-zeit { flex: 0 0 auto; white-space: pre; font-variant-numeric: tabular-nums; }
+.spiel-balken.balken-link { padding: 0; background: rgba(23, 27, 33, 0.92); border-bottom-color: var(--border-color); }
+.balken-knopf {
+    pointer-events: auto;
+    min-height: 44px; width: 100%; padding: 0 12px; background: none; border: 0;
+    color: var(--accent-color); font: inherit; font-size: 14px; font-weight: 600;
+    cursor: pointer; touch-action: manipulation;
+}
+.balken-knopf:active { background: rgba(255,255,255,0.08); }
 
 /* ---------- Feld ---------- */
 #app-container { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -1825,6 +1862,19 @@ body.is-dragging-player .court-drop-zone .dz-label { display: block; color: rgba
 .court-player-node.dragging { opacity: 0.5; }
 body.is-dragging-player .court-player-node { pointer-events: none; }
 .court-player-node:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 2px; border-radius: 8px; }
+
+/* Gesperrter Platz (Zeitstrafe): grau, gestrichelt, ohne Spieler, mit Restzeit */
+.court-drop-zone.is-blocked {
+    flex-direction: column; gap: 0; border: 2px dashed rgba(255,255,255,0.32);
+    background: rgba(120, 128, 140, 0.22);
+}
+.dz-sperre { font-size: 12px; font-weight: 700; line-height: 1.1; color: var(--text-muted); }
+.dz-rest { font-size: 14px; font-weight: 800; line-height: 1.1; color: var(--text-color); font-variant-numeric: tabular-nums; }
+/* Leeres Tor, obwohl es Torhueter gibt */
+.court-drop-zone.is-fehlt { border-color: var(--warning-color); background: rgba(226, 163, 54, 0.14); }
+.court-drop-zone.is-fehlt .dz-label { color: var(--warning-color); font-size: 11px; line-height: 1.15; letter-spacing: 0; text-align: center; }
+/* Gesperrter Spieler: grau, nicht ziehbar */
+.court-player-node.is-gesperrt { opacity: 0.6; cursor: default; }
 
 /* Positionen in Prozent; Aussen bei 14/86 %, damit der 64-px-Knoten auch auf 296 px Feldbreite drinnen bleibt */
 .pos-TW { position: absolute; bottom: 15%; left: 50%; transform: translate(-50%, 50%); }
@@ -1920,6 +1970,14 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .menue-zusatz { color: var(--text-muted); font-size: 13px; font-weight: 500; }
 .menue-eintrag .ticker-badge { margin: 0; border: 0; background: none; padding: 0; }
 .menue-eintrag .ticker-badge .ticker-text { display: inline; }
+.menue-gruppe {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--text-muted); padding: 2px 2px 0;
+}
+.menue-gruppe[hidden], .menue-eintrag[hidden] { display: none; }
+.btn-gross { min-height: 64px; font-size: 18px; font-weight: 700; text-align: center; overflow-wrap: anywhere; }
+.sheet-panel .btn-gross + .btn-gross { margin-top: 8px; }
+.sheet-panel .btn-gross + .btn { margin-top: 16px; }
 .menue-gefahr {
     margin-top: 12px; background: transparent; color: var(--danger-color);
     border-color: var(--danger-color); justify-content: center; text-align: center;
@@ -1961,8 +2019,9 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
     .spielstand { order: 2; }
     .uhr-block { order: 3; }
     .uhr-sync { order: 4; flex: 0 0 auto; }
-    .uhr-knopf { order: 5; }
-    .kopf-menue { order: 6; }
+    .uhr-az { order: 5; }
+    .uhr-knopf { order: 6; }
+    .kopf-menue { order: 7; }
     .spiel-kopf { gap: 6px; }
     .court-action-sheet { top: calc(env(safe-area-inset-top, 0px) + 56px); }
     .menue-liste { grid-template-columns: 1fr 1fr; }
@@ -1985,3 +2044,20 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
    lagen sonst ueber der Bank und dem Aktions-Sheet - ein Tipp daneben nahm das
    vorletzte Tor zurueck. */
 #toast-container .toast:not(:last-child) { display: none; }
+
+/* Verlauf: Auszeiten stehen zwischen den Aktionen, mit Loeschknopf */
+.history-marke { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; }
+.history-marke-text { display: flex; flex-direction: column; min-width: 0; }
+.history-marke .history-action { color: var(--warning-color); font-weight: 600; }
+.history-weg {
+    flex: 0 0 auto; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+    background: var(--raised-bg); border: 1px solid var(--border-color); border-radius: var(--radius);
+    color: var(--text-color); cursor: pointer; touch-action: manipulation;
+}
+
+/* Niedrige Handys hochkant (320x568): das Menue muss ohne Scrollen passen */
+@media (max-height: 600px) {
+    .menue-eintrag { min-height: 44px; }
+    .menue-liste { gap: 4px; }
+    .menue-gefahr { margin-top: 8px; }
+}

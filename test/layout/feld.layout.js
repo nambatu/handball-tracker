@@ -25,6 +25,10 @@
 // Die Zustaende, in denen 1-8 gemessen werden: a Feld ruhig, b Spieler
 // gewaehlt, c Unterauswahl offen, d nach 3:2, e Menue offen, f Verlauf offen
 // (dazu die Hinweis-Sheets "Uhr laeuft nicht" und "Assist", wenn sie kommen).
+// Dazu kommen die Spielphasen und die Auszeit (vor, Planzeit erreicht, Auszeit-
+// Wahl, Auszeit laeuft, Verlauf mit Auszeit, Pause, Abpfiff, Phasen-Hinweis,
+// Archiv-Frage) - jeweils mit denselben Pruefungen 1-8 - und auf 390x844 ein
+// Durchlauf des ganzen Ablaufs (Anpfiff bis Archivieren, siehe ablaufTest).
 // ===================================================================
 
 const fs = require('fs');
@@ -457,6 +461,142 @@ async function tor(page, e, vp, wer, einmal, zwischen) {
     await sleep(250);
 }
 
+// ---------------------------------------------------------------
+// Spielphasen und Auszeit
+// ---------------------------------------------------------------
+const tippe = async function (page, sel) { await page.tap(sel, { timeout: 8000 }); await sleep(350); };
+const text = async function (page, sel) { return ((await page.textContent(sel)) || '').replace(/\s+/g, ' ').trim(); };
+const zustandUhr = function (page) {
+    return page.evaluate(function () {
+        const t = window.Timer.getTimerState();
+        return { phase: t.phase, half: t.currentHalf, laeuft: t.isTimerRunning, sek: t.spielzeitSekunden, hz: t.halbzeitSekunden };
+    });
+};
+const balkenText = async function (page) {
+    return page.evaluate(function () {
+        const b = document.getElementById('spiel-balken');
+        return b ? b.textContent.replace(/\s+/g, ' ').trim() : null;
+    });
+};
+
+// Zeitstrafe (2 Minuten) ueber die Oberflaeche geben
+async function strafe(page, wer) {
+    await waehle(page, wer);
+    await page.locator('#court-action-sheet .court-action-btn', { hasText: '2-Minuten' }).tap({ timeout: 8000 });
+    await sleep(600);
+}
+
+const sperrZahl = function (page) { return page.locator('.court-drop-zone.is-blocked').count(); };
+
+// Kader und Uhr nach den Strafen-Zustaenden zuruecksetzen
+async function kaderWiederherstellen(page) {
+    await page.evaluate(function (kader) {
+        window.Store.getSPIELER().forEach(function (p) {
+            const k = kader.find(function (x) { return x[0] === p.name; });
+            if (k) p.position = k[2];
+            p.suspendedUntilGameTime = null;
+            p.sperrePlatz = null;
+        });
+        window.Sync.touch();
+        window.UI.updateUI();
+    }, KADER);
+    await sleep(300);
+}
+
+// Die Phasen der Reihe nach. Die Uhr laeuft dabei in der 1. Halbzeit (vorher
+// hat ein Tor sie angepfiffen). Gemessen wird in jedem neuen Zustand wie sonst.
+async function phasenZustaende(page, e, vp, hochHandy) {
+    const sollText = async function (zustand, sel, erwartet) {
+        const t = await text(page, sel);
+        if (t.indexOf(erwartet) === -1) melde(e, 9, zustand, sel + ' zeigt "' + t + '" statt "' + erwartet + '"');
+    };
+    try {
+        const hz = (await zustandUhr(page)).hz;
+
+        // Zeitstrafen: ein gesperrter Platz mit grauem Bankspieler, dann auch der Torwart
+        await strafe(page, 'Lukas');
+        if ((await sperrZahl(page)) !== 1) melde(e, 9, 'strafe', 'erwartet 1 gesperrten Platz, gefunden ' + await sperrZahl(page));
+        if (!(await page.$('.court-bench-area .court-player-node.is-gesperrt'))) melde(e, 9, 'strafe', 'kein grauer Spieler auf der Bank');
+        await messe(page, e, vp, 'strafe', { feld: true, hochHandy: hochHandy });
+        await foto(page, vp, 'strafe');
+        await strafe(page, 'Maximilian');
+        if ((await sperrZahl(page)) !== 2) melde(e, 9, 'strafe-torwart', 'erwartet 2 gesperrte Plaetze, gefunden ' + await sperrZahl(page));
+        if (!(await page.$('.court-drop-zone.pos-TW.is-fehlt'))) melde(e, 9, 'strafe-torwart', 'Torwart-Platz nicht als "fehlt" markiert');
+        await messe(page, e, vp, 'strafe-torwart', { feld: true, hochHandy: hochHandy });
+        await foto(page, vp, 'strafe-torwart');
+        await kaderWiederherstellen(page);
+
+        // Planzeit erreicht: Taste "Halbzeit" und schmaler Balken, die Uhr laeuft weiter
+        await page.evaluate(function (s) { window.Timer.setGameTime(s); }, hz);
+        await sleep(800);
+        await sollText('planzeit', '#timer-btn', 'Halbzeit');
+        const b1 = await balkenText(page);
+        if (!b1 || b1.indexOf('30:00 erreicht') === -1) melde(e, 9, 'planzeit', 'Balken fehlt oder falsch: ' + b1);
+        if (!(await zustandUhr(page)).laeuft) melde(e, 9, 'planzeit', 'Uhr hat von selbst angehalten');
+        await messe(page, e, vp, 'planzeit', { feld: true, hochHandy: hochHandy });
+        await foto(page, vp, 'planzeit');
+
+        // Auszeit: Wahl-Sheet, dann der Zaehler im Balken
+        await tippe(page, '#az-btn');
+        await page.waitForSelector('#auszeit-wahl', { state: 'visible', timeout: 5000 });
+        if ((await zustandUhr(page)).laeuft) melde(e, 9, 'az-wahl', 'Uhr laeuft nach dem Tipp auf Auszeit weiter');
+        await messe(page, e, vp, 'az-wahl', { feld: false });
+        await foto(page, vp, 'az-wahl');
+        await tippe(page, '#auszeit-heim');
+        await sleep(500);
+        const b2 = await balkenText(page);
+        if (!b2 || !/^Auszeit .* · [01]:\d\d$/.test(b2)) melde(e, 9, 'az-lauft', 'Auszeit-Balken fehlt oder falsch: ' + b2);
+        await messe(page, e, vp, 'az-lauft', { feld: true, hochHandy: hochHandy });
+        await foto(page, vp, 'az-lauft');
+
+        // Verlauf zeigt die Auszeit mit Loeschknopf
+        await overlayOeffnen(page, 'verlauf');
+        await page.waitForSelector('#history-view', { state: 'visible', timeout: 5000 });
+        await sleep(300);
+        if (!(await page.$('#history-view .history-weg'))) melde(e, 9, 'verlauf-az', 'keine Auszeit im Verlauf');
+        await messe(page, e, vp, 'verlauf-az', { schrift: false });
+        await schliesseOverlay(page, e, 'verlauf', 'verlauf-az');
+
+        // Weiter, dann Halbzeit -> Pause
+        await tippe(page, '#timer-btn');
+        if (await balkenText(page) === null || (await balkenText(page)).indexOf('Auszeit') !== -1) melde(e, 9, 'az-weiter', 'Auszeit-Balken nach "Weiter" noch da');
+        await tippe(page, '#timer-btn');
+        const pz = await zustandUhr(page);
+        if (pz.phase !== 'pause') melde(e, 9, 'pause', 'Phase ' + pz.phase + ' statt pause');
+        await messe(page, e, vp, 'pause', { feld: true, hochHandy: hochHandy });
+        await foto(page, vp, 'pause');
+
+        // Anpfiff 2. Halbzeit, Planzeit, Abpfiff -> Ende
+        await tippe(page, '#timer-btn');
+        await page.evaluate(function (s) { window.Timer.setGameTime(2 * s); }, hz);
+        await sleep(800);
+        await sollText('abpfiff-erreicht', '#timer-btn', 'Abpfiff');
+        await messe(page, e, vp, 'abpfiff-erreicht', { feld: true, hochHandy: hochHandy });
+        await tippe(page, '#timer-btn');
+        const ez = await zustandUhr(page);
+        if (ez.phase !== 'ende') melde(e, 9, 'ende', 'Phase ' + ez.phase + ' statt ende');
+        await messe(page, e, vp, 'ende', { feld: true, hochHandy: hochHandy });
+        await foto(page, vp, 'ende');
+
+        // Tipp auf einen Spieler nach dem Abpfiff fragt nach
+        await page.locator('.court-player-node', { hasText: 'Lukas' }).first().tap({ timeout: 8000 });
+        await page.waitForSelector('#phase-hinweis', { state: 'visible', timeout: 5000 });
+        await messe(page, e, vp, 'phase-hinweis', { feld: false });
+        await page.tap('#phase-hinweis .btn:not(.btn-primary)');
+        await sleep(300);
+
+        // Spiel archivieren fragt nach (Abbrechen laesst alles stehen)
+        await tippe(page, '#timer-btn');
+        await page.waitForSelector('#archiv-frage', { state: 'visible', timeout: 5000 });
+        await messe(page, e, vp, 'archiv-frage', { feld: false });
+        await page.tap('#archiv-frage .btn:not(.btn-primary)');
+        await sleep(300);
+        if ((await zustandUhr(page)).phase !== 'ende') melde(e, 9, 'archiv-frage', 'Abbrechen hat die Phase veraendert');
+    } catch (err) {
+        melde(e, 9, 'phasen', 'Ablauf abgebrochen: ' + String(err.message).split('\n').slice(0, 5).join(' | '));
+    }
+}
+
 async function overlayOeffnen(page, name) {
     const hatMenue = await page.$('#menue-btn');
     if (hatMenue) {
@@ -511,9 +651,13 @@ async function laufViewport(browser, base, vp) {
         await spielBereitstellen(page);
         const nullStand = await zahlen(page);
 
-        // (a) ruhiges Feld
+        // (a) ruhiges Feld - zugleich der Zustand "vor dem Spiel"
+        if ((await text(page, '#timer-btn')) !== 'Anpfiff') melde(e, 9, 'vor', 'Haupttaste vor dem Spiel: "' + await text(page, '#timer-btn') + '" statt "Anpfiff"');
+        if ((await page.isVisible('#az-btn'))) melde(e, 9, 'vor', 'Auszeit-Taste schon vor dem Anpfiff sichtbar');
         await messe(page, e, vp, 'a', { feld: true, hochHandy: hochHandy });
         await foto(page, vp, 'a');
+        await messe(page, e, vp, 'vor', { feld: true, hochHandy: hochHandy });
+        await foto(page, vp, 'vor');
 
         // 9 + (b) + (c): ein Tor per Touch, dann zuruecknehmen
         try {
@@ -616,6 +760,9 @@ async function laufViewport(browser, base, vp) {
                 });
             }
         }
+
+        // Phasen, Auszeit (Zustaende, die nur nach dem Anpfiff vorkommen)
+        await phasenZustaende(page, e, vp, hochHandy);
     } catch (err) {
         melde(e, 9, 'lauf', 'Lauf abgebrochen: ' + String(err.stack || err.message).split('\n').slice(0, 3).join(' | '));
     } finally {
@@ -667,6 +814,390 @@ async function schliesseOverlay(page, e, name, zustand) {
     if (!feld) melde(e, 10, zustand, 'Nach dem Schliessen ist das Spielfeld nicht wieder da');
 }
 
+// ---------------------------------------------------------------
+// Durchlauf des ganzen Ablaufs auf 390x844 (echte Bedienung, eigener Browser)
+// ---------------------------------------------------------------
+async function neuesTestSpiel(browser, base, vp) {
+    const ctx = await browser.newContext({
+        viewport: { width: vp.w, height: vp.h }, deviceScaleFactor: 1,
+        isMobile: true, hasTouch: true, serviceWorkers: 'block'
+    });
+    const page = await ctx.newPage();
+    const fehler = [];
+    page.on('pageerror', function (err) { fehler.push('pageerror: ' + err.message); });
+    page.on('console', function (m) {
+        if (m.type() !== 'error') return;
+        const u = (m.location() && m.location().url) || '';
+        if (u.indexOf(base) === 0 || u === '') fehler.push('console.error: ' + m.text());
+    });
+    page.on('dialog', function (d) { d.dismiss().catch(function () {}); fehler.push('Browser-Dialog: ' + d.message()); });
+    await anmelden(page, base);
+    return { ctx: ctx, page: page, fehler: fehler };
+}
+
+// Neu laden: mit laufendem Spiel kommt die App direkt ins Feld; zur Startseite geht es dann ueber Start.zeige()
+async function neuLaden(page) {
+    await page.evaluate(function () { return window.Sync.flush(); });
+    await page.reload();
+    await page.waitForFunction(function () {
+        const b = document.body.classList;
+        const i = document.getElementById('start-inhalt');
+        return (b.contains('ansicht-spiel') || (b.contains('ansicht-start') && i && !i.hidden)) && window.Timer && window.Sync;
+    }, null, { timeout: 30000 });
+    await sleep(700);
+    await page.evaluate(function () { window.Start.zeige(); });
+    await sleep(400);
+}
+
+const archivListe = function (page) {
+    return page.evaluate(async function () {
+        const r = await fetch('/api/archives');
+        const l = await r.json();
+        return (Array.isArray(l) ? l : []).map(function (x) { return x.filename; });
+    });
+};
+
+// Test-Spiel archivieren (ohne Rueckfrage), Stand leeren, Kader wie erwartet, Test-Archive loeschen
+async function testAufraeumen(page, e, archive0) {
+    try {
+        await page.evaluate(async function (kader) {
+            window.Store.getSPIELER().forEach(function (p) {
+                const k = kader.find(function (x) { return x[0] === p.name; });
+                if (k) p.position = k[2];
+                p.suspendedUntilGameTime = null;
+                p.sperrePlatz = null;
+            });
+            if (window.Timer.getTimerState().phase !== 'vor' || window.Sync.getState().aktionen.length) {
+                await window.Timer.endGame({ bestaetigt: true });
+            }
+            await window.Sync.reset({ spieler: window.Store.getSPIELER(), aktionen: [], spielId: 'g' + Date.now() });
+        }, KADER);
+        const alle = await archivListe(page);
+        const weg = alle.filter(function (f) { return archive0.indexOf(f) === -1; });
+        for (const f of weg) {
+            await page.evaluate(function (name) { return fetch('/api/archive/' + encodeURIComponent(name), { method: 'DELETE' }); }, f);
+        }
+        if ((await archivListe(page)).length !== archive0.length) e.notiz.push('Aufraeumen: Test-Archive nicht vollstaendig geloescht');
+    } catch (err) { e.notiz.push('Aufraeumen: ' + err.message); }
+}
+
+// Drop auf ein Element, wie ihn der Browser beim Ziehen schickt (mit Spieler-id)
+const ziehe = function (page, spielerId, zielSelektor) {
+    return page.evaluate(function (a) {
+        const ziel = document.querySelector(a.sel);
+        if (!ziel) throw new Error('Ziel fehlt: ' + a.sel);
+        const dt = new DataTransfer();
+        dt.setData('text/plain', a.id);
+        ziel.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        ziel.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    }, { id: spielerId, sel: zielSelektor });
+};
+
+// Zeitstrafen und gesperrte Plaetze auf 390x844, echte Bedienung
+async function strafenTest(browser, base) {
+    const vp = { w: 390, h: 844, handy: true };
+    const e = neu({ w: 'Strafen 390', h: '844' });
+    const t = await neuesTestSpiel(browser, base, vp);
+    const page = t.page;
+    const ok = function (bedingung, zustand, meldung) { if (!bedingung) melde(e, 9, zustand, meldung); };
+    const archive0 = [];
+    const info = function () {
+        return page.evaluate(function () {
+            const feld = window.Store.berechneFeld();
+            const pos = {};
+            window.Store.getSPIELER().forEach(function (p) { pos[p.name.split(' ')[0]] = p.position; });
+            return {
+                blockiert: Object.keys(feld.blockiert).sort(),
+                belegt: Object.keys(feld.belegt).sort().map(function (k) { return k + ':' + feld.belegt[k].name.split(' ')[0]; }),
+                pos: pos,
+                aktionen: window.Sync.getState().aktionen.length
+            };
+        });
+    };
+    const idVon = function (vorname) {
+        return page.evaluate(function (n) {
+            const p = window.Store.getSPIELER().find(function (x) { return x.name.split(' ')[0] === n; });
+            return p ? p.id : null;
+        }, vorname);
+    };
+    try {
+        archive0.push.apply(archive0, await archivListe(page));
+        await spielBereitstellen(page);
+        await tippe(page, '#timer-btn');            // Anpfiff: die Uhr laeuft
+
+        // 1. Feldspieler (Lukas, LA) bekommt 2 Minuten
+        await strafe(page, 'Lukas');
+        let i = await info();
+        ok(i.pos.Lukas === 'Bank', 'strafe', 'Lukas nicht auf der Bank: ' + i.pos.Lukas);
+        ok(JSON.stringify(i.blockiert) === '["LA"]', 'strafe', 'gesperrt: ' + i.blockiert);
+        ok(!i.belegt.some(function (b) { return b.indexOf('Lukas') !== -1; }), 'strafe', 'Lukas steht noch im Feld');
+        const zone = await text(page, '.court-drop-zone.pos-LA');
+        ok(/^2 Min\s*[01]:\d\d$/.test(zone), 'strafe', 'Text im gesperrten Platz: "' + zone + '"');
+        ok(!!(await page.$('.court-active-area .court-player-node.pos-LA')) === false, 'strafe', 'Spielerknoten im gesperrten Platz');
+        const bankKnoten = page.locator('.court-bench-area .court-player-node.is-gesperrt', { hasText: 'Lukas' });
+        ok((await bankKnoten.count()) === 1, 'strafe', 'Lukas nicht grau auf der Bank');
+        ok(/[01]:\d\d/.test(await bankKnoten.innerText()), 'strafe', 'Restzeit fehlt am Bankspieler');
+        ok((await bankKnoten.getAttribute('draggable')) === 'false', 'strafe', 'Lukas ist ziehbar');
+        await foto(page, vp, 'strafen-feld');
+
+        // 2. Antippen: Hinweis statt Sheet
+        await bankKnoten.tap();
+        await sleep(500);
+        ok(!(await page.$('#court-action-sheet')), 'tippen', 'Aktions-Sheet fuer gesperrten Spieler');
+        const toastText = await page.evaluate(function () { const l = document.querySelectorAll('.toast'); return l.length ? l[l.length - 1].textContent : ''; });
+        ok(/Lukas .*ist noch [01]:\d\d gesperrt/.test(toastText), 'tippen', 'Hinweis: "' + toastText + '"');
+
+        // 3. Ziehen: gesperrter Spieler -> Platz, Bankspieler -> gesperrter Platz, beides abgelehnt
+        const lukas = await idVon('Lukas');
+        await ziehe(page, lukas, '.court-drop-zone.pos-RA');
+        i = await info();
+        ok(i.pos.Lukas === 'Bank' && i.belegt.indexOf('RA:Noah') !== -1, 'ziehen', 'gesperrter Spieler liess sich ziehen: ' + JSON.stringify(i.pos));
+        await ziehe(page, await idVon('Paul'), '.court-drop-zone.pos-LA');
+        i = await info();
+        ok(i.pos.Paul === 'N/A' && JSON.stringify(i.blockiert) === '["LA"]', 'ziehen', 'Bankspieler auf gesperrten Platz: ' + JSON.stringify(i.pos));
+
+        // 4. Tausch: Felix (RL) auf den gesperrten Platz -> RL wird gesperrt
+        await ziehe(page, await idVon('Felix'), '.court-drop-zone.pos-LA');
+        i = await info();
+        ok(JSON.stringify(i.blockiert) === '["RL"]' && i.belegt.indexOf('LA:Felix') !== -1 && i.pos.Felix === 'LA', 'tausch', 'nach Tausch: ' + JSON.stringify(i));
+        ok((await sperrZahl(page)) === 1, 'tausch', 'Zahl gesperrter Plaetze ' + await sperrZahl(page));
+
+        // 5. Uhr 2 Minuten vor: Platz frei, Lukas waehlbar, bleibt auf der Bank
+        const sek = await page.evaluate(function () { return window.Timer.getTimerState().spielzeitSekunden; });
+        await page.evaluate(function (s) { window.Timer.setGameTime(s + 125); }, sek);
+        await sleep(700);
+        i = await info();
+        ok(i.blockiert.length === 0 && (await sperrZahl(page)) === 0, 'ablauf', 'Platz noch gesperrt: ' + i.blockiert);
+        ok(i.pos.Lukas === 'Bank', 'ablauf', 'Lukas wurde aufs Feld gestellt');
+        const toast2 = await page.evaluate(function () { return Array.from(document.querySelectorAll('.toast')).map(function (x) { return x.textContent; }).join(' / '); });
+        ok(toast2.indexOf('Lukas Meier darf wieder spielen') !== -1, 'ablauf', 'Hinweis "darf wieder spielen" fehlt: ' + toast2);
+        await page.locator('.court-bench-area .court-player-node', { hasText: 'Lukas' }).tap();
+        await page.waitForSelector('#court-action-sheet', { state: 'visible', timeout: 4000 });
+        await page.evaluate(function (id) { window.UI.selectPlayer(id); }, lukas);
+        await kaderWiederherstellen(page);
+
+        // 6. Torwart: Tor leer und markiert, Sperre auf dem Kreislaeufer-Platz
+        await strafe(page, 'Maximilian');
+        i = await info();
+        ok(i.pos.Maximilian === 'Bank', 'torwart', 'Torwart nicht auf der Bank: ' + i.pos.Maximilian);
+        ok(JSON.stringify(i.blockiert) === '["KM"]', 'torwart', 'gesperrt: ' + i.blockiert);
+        ok(!i.belegt.some(function (b) { return b.indexOf('TW:') === 0; }), 'torwart', 'Tor nicht leer: ' + i.belegt);
+        ok(i.pos.Emil === 'Bank', 'torwart', 'Kreislaeufer nicht auf der Bank: ' + i.pos.Emil);
+        ok(/Torwart fehlt/.test(await text(page, '.court-drop-zone.pos-TW')), 'torwart', 'Torwart-Platz nicht markiert');
+        const gkListe = await page.evaluate(function () {
+            window.UI.openGoalkeeperPicker();
+            const t = document.getElementById('gk-picker-list').textContent;
+            window.UI.closeGoalkeeperPicker();
+            return t;
+        });
+        ok(gkListe.indexOf('Maximilian') === -1, 'torwart', 'gesperrter Torwart in der Torwart-Auswahl');
+        await foto(page, vp, 'strafen-torwart');
+
+        // 7. Rueckgaengig (Toast): Sperre weg, Torwart bleibt auf der Bank und ist wieder waehlbar
+        await page.locator('.toast-action', { hasText: 'Rückgängig' }).first().tap({ timeout: 5000 });
+        await sleep(500);
+        i = await info();
+        ok(i.blockiert.length === 0 && i.pos.Maximilian === 'Bank', 'rueckgaengig', 'nach Rueckgaengig: ' + JSON.stringify(i));
+        ok(!(await page.evaluate(function () { return window.Store.istGesperrt(window.Store.getSPIELER().find(function (p) { return p.name.indexOf('Maximilian') === 0; })); })), 'rueckgaengig', 'Maximilian noch gesperrt');
+        await kaderWiederherstellen(page);
+
+        // 8. Zwei Strafen gleichzeitig, danach Neuladen mitten in der Sperre
+        await strafe(page, 'Noah');
+        await strafe(page, 'Jonas');
+        i = await info();
+        ok(JSON.stringify(i.blockiert) === '["RA","RM"]' && (await sperrZahl(page)) === 2, 'zwei', 'gesperrt: ' + i.blockiert);
+        await neuLadenAmSpiel(page);
+        i = await info();
+        ok(JSON.stringify(i.blockiert) === '["RA","RM"]', 'reload', 'nach Neuladen gesperrt: ' + i.blockiert);
+        const rest = await page.evaluate(function () {
+            const t = window.Timer.getTimerState().spielzeitSekunden;
+            return window.Store.getSPIELER().filter(function (p) { return p.sperrePlatz; }).map(function (p) { return window.Store.sperreRest(p, t); });
+        });
+        ok(rest.length === 2 && rest.every(function (r) { return r > 60 && r <= 120; }), 'reload', 'Restzeiten nach Neuladen: ' + rest);
+        ok((await sperrZahl(page)) === 2 && /[01]:\d\d/.test(await text(page, '.court-drop-zone.is-blocked')), 'reload', 'Platz zeigt Restzeit nicht');
+    } catch (err) {
+        melde(e, 9, 'strafen', 'Ablauf abgebrochen: ' + String(err.stack || err.message).split('\n').slice(0, 4).join(' | '));
+        try { await page.screenshot({ path: path.join(OUT, 'strafen-abbruch.png') }); } catch (err2) { /* egal */ }
+    } finally {
+        t.fehler.forEach(function (x) { melde(e, 8, 'strafen', x); });
+        await testAufraeumen(page, e, archive0);
+        await t.ctx.close();
+    }
+}
+
+// Neu laden und im Spiel bleiben (mit laufendem Spiel oeffnet die App direkt das Feld)
+async function neuLadenAmSpiel(page) {
+    // Erst sichern: mit ungesicherten Aenderungen fragt der Browser beim Verlassen nach
+    await page.evaluate(function () { return window.Sync.flush(); });
+    await page.reload();
+    await page.waitForFunction(function () {
+        return document.body.classList.contains('ansicht-spiel') && document.querySelector('.court-active-area') && window.Timer && window.Sync;
+    }, null, { timeout: 30000 });
+    await sleep(800);
+}
+
+async function ablaufTest(browser, base) {
+    const vp = { w: 390, h: 844, handy: true };
+    const e = neu({ w: 'Ablauf 390', h: '844' });
+    const t = await neuesTestSpiel(browser, base, vp);
+    const page = t.page;
+    const ok = function (bedingung, zustand, meldung) { if (!bedingung) melde(e, 9, zustand, meldung); };
+    const archive0 = [];
+    let neueArchive = [];
+    try {
+        archive0.push.apply(archive0, await archivListe(page));
+        await spielBereitstellen(page);
+        // frische Uhr: ein vorheriger Lauf kann sie verstellt haben
+        let z = await zustandUhr(page);
+        ok(z.phase === 'vor', 'vor', 'Phase ' + z.phase + ' statt vor');
+        ok(await text(page, '#timer-btn') === 'Anpfiff', 'vor', 'Taste "' + await text(page, '#timer-btn') + '"');
+        ok((await text(page, '#half-indicator')).indexOf('Vor dem Spiel') !== -1, 'vor', 'Status fehlt');
+
+        // Anpfiff
+        await tippe(page, '#timer-btn');
+        z = await zustandUhr(page);
+        ok(z.phase === 'hz1' && z.laeuft, 'anpfiff', 'nach Anpfiff: ' + JSON.stringify(z));
+        ok(await text(page, '#timer-btn') === 'Unterbrechen', 'anpfiff', 'Taste "' + await text(page, '#timer-btn') + '"');
+        ok(await text(page, '#half-indicator') === '1. Halbzeit', 'anpfiff', 'Status "' + await text(page, '#half-indicator') + '"');
+
+        // Tor
+        await tor(page, e, vp, 'Lukas', {});
+        const nTore = await page.evaluate(function () { return window.Sync.getState().aktionen.length; });
+        ok(nTore === 1, 'tor', 'Aktionen ' + nTore);
+
+        // Auszeit eigenes Team: Uhr steht, Marke im Stand, keine Aktion
+        await tippe(page, '#az-btn');
+        ok(!(await zustandUhr(page)).laeuft, 'auszeit', 'Uhr laeuft nach Auszeit-Tipp');
+        await page.waitForSelector('#auszeit-wahl', { state: 'visible', timeout: 5000 });
+        await tippe(page, '#auszeit-heim');
+        const st1 = await page.evaluate(function () {
+            const s = window.Sync.getState();
+            return { aktionen: s.aktionen.length, marken: s.tickerMarken.filter(function (m) { return m.art === 'auszeit'; }), spielId: s.spielId };
+        });
+        ok(st1.aktionen === 1, 'auszeit', 'Auszeit steht in den Aktionen (' + st1.aktionen + ')');
+        ok(st1.marken.length === 1 && st1.marken[0].team === 'heim' && st1.marken[0].id.indexOf(st1.spielId) !== -1
+            && st1.marken[0].halbzeit === 1 && typeof st1.marken[0].timestamp === 'number', 'auszeit', 'Marke: ' + JSON.stringify(st1.marken));
+        ok((await text(page, '#az-heim')) === 'AZ 1', 'auszeit', 'Zaehler "' + await text(page, '#az-heim') + '"');
+        await sleep(1300);
+        const bz = await balkenText(page);
+        ok(bz && /· 0:5\d$/.test(bz), 'auszeit', 'Countdown "' + bz + '"');
+        ok(await text(page, '#timer-btn') === 'Weiter', 'auszeit', 'Taste "' + await text(page, '#timer-btn') + '"');
+        ok((await page.evaluate(function () { return !window.Timer.getTimerState().isTimerRunning; })), 'auszeit', 'Uhr laeuft waehrend der Auszeit');
+        await tippe(page, '#timer-btn');
+        ok((await zustandUhr(page)).laeuft && (await balkenText(page)) === null, 'auszeit', 'nach Weiter: laeuft/Balken weg');
+
+        // Halbzeit: Uhr rastet auf die Halbzeitlaenge ein
+        const hz = z.hz;
+        await page.evaluate(function (s) { window.Timer.setGameTime(s + 7); }, hz);
+        await sleep(900);
+        ok(await text(page, '#timer-btn') === 'Halbzeit', 'halbzeit', 'Taste "' + await text(page, '#timer-btn') + '"');
+        ok(((await balkenText(page)) || '').indexOf('30:00 erreicht') === 0, 'halbzeit', 'Balken "' + await balkenText(page) + '"');
+        await tippe(page, '#timer-btn');
+        z = await zustandUhr(page);
+        ok(z.phase === 'pause' && !z.laeuft && z.sek === hz, 'halbzeit', 'Pause: ' + JSON.stringify(z));
+        ok(await text(page, '#game-timer') === '30:00', 'halbzeit', 'Uhr "' + await text(page, '#game-timer') + '"');
+        ok(await text(page, '#timer-btn') === 'Anpfiff 2. Halbzeit', 'halbzeit', 'Taste "' + await text(page, '#timer-btn') + '"');
+        ok(await text(page, '#half-indicator') === 'Halbzeitpause', 'halbzeit', 'Status "' + await text(page, '#half-indicator') + '"');
+        ok(!(await page.isVisible('#az-btn')), 'halbzeit', 'Auszeit-Taste in der Pause sichtbar');
+
+        // Zurueck in die 1. Halbzeit: Wert von vor dem Tipp, gestoppt
+        await tippe(page, '#spiel-balken .balken-knopf');
+        z = await zustandUhr(page);
+        ok(z.phase === 'hz1' && !z.laeuft && z.sek >= hz + 7 && z.sek <= hz + 10, 'zurueck', 'nach Zurueck: ' + JSON.stringify(z));
+        ok(await text(page, '#timer-btn') === 'Halbzeit', 'zurueck', 'Taste "' + await text(page, '#timer-btn') + '"');
+
+        // Halbzeit noch einmal, dann Anpfiff 2. Halbzeit: Uhr laeuft ab der Halbzeitlaenge
+        await tippe(page, '#timer-btn');
+        ok((await zustandUhr(page)).phase === 'pause', 'halbzeit2', 'keine Pause');
+        await tippe(page, '#timer-btn');
+        await sleep(1300);
+        z = await zustandUhr(page);
+        ok(z.phase === 'hz2' && z.half === 2 && z.laeuft && z.sek >= hz + 1 && z.sek <= hz + 4, 'anpfiff2', '2. Halbzeit: ' + JSON.stringify(z));
+
+        // Spielzeit erreicht -> Abpfiff -> Ende
+        await page.evaluate(function (s) { window.Timer.setGameTime(2 * s); }, hz);
+        await sleep(900);
+        ok(await text(page, '#timer-btn') === 'Abpfiff', 'abpfiff', 'Taste "' + await text(page, '#timer-btn') + '"');
+        ok(((await balkenText(page)) || '').indexOf('Spielzeit erreicht') === 0, 'abpfiff', 'Balken "' + await balkenText(page) + '"');
+        await tippe(page, '#timer-btn');
+        z = await zustandUhr(page);
+        ok(z.phase === 'ende' && !z.laeuft && z.sek === 2 * hz, 'abpfiff', 'Ende: ' + JSON.stringify(z));
+        ok(await text(page, '#timer-btn') === 'Spiel archivieren', 'abpfiff', 'Taste "' + await text(page, '#timer-btn') + '"');
+        ok((await text(page, '#half-indicator')).indexOf('Spiel beendet · 1:0') === 0, 'abpfiff', 'Status "' + await text(page, '#half-indicator') + '"');
+
+        // Weiterspielen -> Abpfiff
+        await tippe(page, '#spiel-balken .balken-knopf');
+        z = await zustandUhr(page);
+        ok(z.phase === 'hz2' && !z.laeuft && z.sek >= 2 * hz, 'weiterspielen', 'nach Weiterspielen: ' + JSON.stringify(z));
+        ok(await text(page, '#timer-btn') === 'Abpfiff', 'weiterspielen', 'Taste "' + await text(page, '#timer-btn') + '"');
+        await tippe(page, '#timer-btn');
+        ok((await zustandUhr(page)).phase === 'ende', 'abpfiff2', 'kein Ende');
+
+        // Reload im Ende: Phase bleibt
+        await neuLaden(page);
+        ok((await zustandUhr(page)).phase === 'ende', 'reload-ende', 'Phase nach Reload ' + (await zustandUhr(page)).phase);
+        ok(await text(page, '#start-weiter') === 'Spiel archivieren', 'reload-ende', 'Startseite: "' + await text(page, '#start-weiter') + '"');
+        ok((await text(page, '#laufend-meta')).indexOf('Spiel beendet') !== -1, 'reload-ende', 'Startseite-Meta "' + await text(page, '#laufend-meta') + '"');
+        await page.evaluate(function () { window.Start.zumSpiel(); });
+        await page.waitForSelector('.court-active-area', { state: 'visible', timeout: 10000 });
+        await sleep(400);
+
+        // Archivieren: Abbrechen laesst alles stehen
+        await tippe(page, '#timer-btn');
+        await page.waitForSelector('#archiv-frage', { state: 'visible', timeout: 5000 });
+        ok((await text(page, '#archiv-frage-titel')) === 'Spiel archivieren?', 'archiv', 'Titel "' + await text(page, '#archiv-frage-titel') + '"');
+        await tippe(page, '#archiv-frage .btn:not(.btn-primary)');
+        const st2 = await page.evaluate(function () {
+            const s = window.Sync.getState();
+            return { a: s.aktionen.length, m: s.tickerMarken.filter(function (x) { return x.art === 'auszeit'; }).length, phase: window.Timer.getTimerState().phase };
+        });
+        ok(st2.a === 1 && st2.m === 1 && st2.phase === 'ende', 'archiv-abbruch', 'nach Abbrechen: ' + JSON.stringify(st2));
+        ok((await archivListe(page)).length === archive0.length, 'archiv-abbruch', 'Archiv hat sich veraendert');
+
+        // Archivieren: Startseite, Archiv vorhanden, Stand leer, Uhr vor dem Spiel
+        await tippe(page, '#timer-btn');
+        await page.waitForSelector('#archiv-frage', { state: 'visible', timeout: 5000 });
+        await tippe(page, '#archiv-frage .btn-primary');
+        await page.waitForFunction(function () {
+            const f = document.getElementById('start-formular');
+            return document.body.classList.contains('ansicht-start') && f && !f.hidden;
+        }, null, { timeout: 20000 });
+        const nach = await archivListe(page);
+        neueArchive = nach.filter(function (f) { return archive0.indexOf(f) === -1; });
+        ok(neueArchive.length === 1, 'archiv', 'neue Archive: ' + neueArchive.length);
+        const st3 = await page.evaluate(function () {
+            const s = window.Sync.getState();
+            return { a: s.aktionen.length, m: s.tickerMarken.length, phase: window.Timer.getTimerState().phase, sek: window.Timer.getTimerState().spielzeitSekunden };
+        });
+        ok(st3.a === 0 && st3.m === 0 && st3.phase === 'vor' && st3.sek === 0, 'archiv', 'nach Archivieren: ' + JSON.stringify(st3));
+
+        // Reload in der Pause: Phase bleibt
+        await page.fill('#start-spielname', 'Layouttest');
+        await page.tap('#start-los');
+        await page.waitForSelector('.court-active-area', { state: 'visible', timeout: 10000 });
+        await sleep(300);
+        await tippe(page, '#timer-btn');
+        await page.evaluate(function (s) { window.Timer.setGameTime(s); }, hz);
+        await sleep(700);
+        await tippe(page, '#timer-btn');
+        ok((await zustandUhr(page)).phase === 'pause', 'reload-pause', 'keine Pause');
+        await neuLaden(page);
+        z = await zustandUhr(page);
+        ok(z.phase === 'pause' && z.sek === hz && !z.laeuft, 'reload-pause', 'nach Reload: ' + JSON.stringify(z));
+        ok((await text(page, '#laufend-meta')).indexOf('Halbzeitpause') !== -1, 'reload-pause', 'Startseite-Meta "' + await text(page, '#laufend-meta') + '"');
+    } catch (err) {
+        melde(e, 9, 'ablauf', 'Ablauf abgebrochen: ' + String(err.stack || err.message).split('\n').slice(0, 4).join(' | '));
+        try {
+            e.notiz.push('Stand beim Abbruch: ' + await page.evaluate(function () { return document.body.className + ' / ' + location.href; }));
+            await page.screenshot({ path: path.join(OUT, 'ablauf-abbruch.png') });
+        } catch (err2) { /* egal */ }
+    } finally {
+        t.fehler.forEach(function (x) { melde(e, 8, 'ablauf', x); });
+        await testAufraeumen(page, e, archive0);
+        await t.ctx.close();
+    }
+}
+
 function ausgabe() {
     const col = 11;
     let kopf = 'Groesse'.padEnd(10);
@@ -705,6 +1236,14 @@ function ausgabe() {
             if (nur.length && nur.indexOf(vp.w + 'x' + vp.h) === -1) continue;
             process.stdout.write('lauf ' + vp.w + 'x' + vp.h + ' ... ');
             await laufViewport(browser, base, vp);
+            console.log('fertig');
+        }
+        if (!nur.length || nur.indexOf('390x844') !== -1) {
+            process.stdout.write('lauf Ablauf 390x844 ... ');
+            await ablaufTest(browser, base);
+            console.log('fertig');
+            process.stdout.write('lauf Strafen 390x844 ... ');
+            await strafenTest(browser, base);
             console.log('fertig');
         }
     } finally {

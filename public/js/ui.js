@@ -43,6 +43,7 @@ function updateUI() {
     mitScrollposition(function () {
         renderDynamicView();
         renderTeamNames();
+        zeichneAuszeitZaehler();
     });
     if (window.Timer) window.Timer.updateTimerDisplay();
 }
@@ -143,6 +144,14 @@ function escapeHtml(str) {
 function refreshSuspensions() {
     const st = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0 };
     const jetzt = st.spielzeitSekunden;
+
+    // Abgelaufene Strafen: Platz wird frei, Spieler waehlbar. Das aendert das Feld
+    // (gesperrter Platz verschwindet), also einmal komplett neu zeichnen.
+    if (window.Store.beendeAbgelaufeneSperren(jetzt).length) {
+        updateUI();
+        return false;
+    }
+
     const spieler = window.Store.getSPIELER();
     let nochAktiv = false;
 
@@ -150,16 +159,14 @@ function refreshSuspensions() {
         const p = spieler.find(x => String(x.id) === badge.dataset.pid);
         if (!p) return;
 
-        const bis = p.suspendedUntilGameTime;
-        const laeuft = bis !== null && bis !== undefined && jetzt < bis;
+        const rot = window.Store.istDisqualifiziert(p);
+        const rest = window.Store.sperreRest(p, jetzt);
+        const laeuft = rest > 0;
         let overlay = badge.querySelector('.badge-suspension');
 
-        if (laeuft) {
-            nochAktiv = true;
-            const rest = bis - jetzt;
-            const m = Math.floor(rest / 60);
-            const sek = rest % 60;
-            const text = m + ':' + (sek < 10 ? '0' : '') + sek;
+        if (laeuft || rot) {
+            nochAktiv = nochAktiv || laeuft;
+            const text = rot && !laeuft ? 'Rot' : formatRestZeit(rest);
 
             if (!overlay) {
                 overlay = document.createElement('span');
@@ -174,7 +181,25 @@ function refreshSuspensions() {
         }
     });
 
+    // Restzeit in den gesperrten Plaetzen
+    document.querySelectorAll('.dz-rest[data-pid]').forEach(function (el) {
+        const p = spieler.find(x => String(x.id) === el.dataset.pid);
+        const text = p ? formatRestZeit(window.Store.sperreRest(p, jetzt)) : '';
+        if (el.textContent !== text) el.textContent = text;
+    });
+
     return nochAktiv;
+}
+
+function formatRestZeit(sekunden) {
+    const m = Math.floor(sekunden / 60);
+    const sek = sekunden % 60;
+    return m + ':' + (sek < 10 ? '0' : '') + sek;
+}
+
+/** Eine Zeitstrafe ist abgelaufen: kurzer Hinweis, der Spieler bleibt auf der Bank. */
+function sperreBeendet(p) {
+    if (window.Toast) window.Toast(p.name + ' darf wieder spielen', { type: 'info', duration: 4000 });
 }
 
 // ---------------------------------------------------------------
@@ -338,6 +363,10 @@ function renderDynamicView() {
     const container = document.getElementById('dynamic-view-container');
     if (!container) return;
 
+    // Strafen, die inzwischen abgelaufen sind (Uhr vorgestellt, App neu geoeffnet),
+    // vor dem Zeichnen aufheben - sonst stuende der Platz noch gesperrt da.
+    window.Store.beendeAbgelaufeneSperren(window.Timer ? window.Timer.getTimerState().spielzeitSekunden : 0);
+
     // Bei jedem Neuzeichnen zuerst weg - sonst bleibt nach dem Abwaehlen
     // ein verwaistes Sheet am <body> haengen.
     closeActionSheet();
@@ -347,20 +376,100 @@ function renderDynamicView() {
 
     // Nach dem Neuaufbau stimmen die Masse wieder - Sheet nachziehen.
     positionActionSheet();
+    refreshBalken();
+}
+
+// ---------------------------------------------------------------
+// Hinweisbalken auf dem Feld
+// ---------------------------------------------------------------
+// Der Balken sitzt am oberen Rand des Feldes (in .court-active-area), nicht im
+// Seitenfluss: wuerde er zwischen Kopfzeile und Feld Platz beanspruchen, rutschte
+// beim Erscheinen alles ein Stueck nach unten - mitten im Spiel unter dem Finger
+// weg - und auf 320x568 bliebe vom Feld zu wenig. Der obere Feldrand ist leer
+// (der oberste Spieler steht deutlich tiefer). Der Inhalt kommt aus
+// Timer.getBalken(); jede Sekunde wird nur der Zaehler getauscht.
+
+function refreshBalken() {
+    const feld = document.querySelector('.court-active-area');
+    if (!feld || !window.Timer) return;
+    const info = window.Timer.getBalken();
+    let el = feld.querySelector('#spiel-balken');
+    if (!info) { if (el) el.remove(); return; }
+
+    const schluessel = [info.art, info.text || info.name || '', info.vorbei ? 'v' : ''].join('|');
+    if (el && el.dataset.s === schluessel) {
+        const z = el.querySelector('.balken-zeit');
+        if (z && z.textContent !== ' · ' + info.zeit) z.textContent = ' · ' + info.zeit;
+        return;
+    }
+    if (el) el.remove();
+
+    el = document.createElement('div');
+    el.id = 'spiel-balken';
+    el.dataset.s = schluessel;
+    el.className = 'spiel-balken balken-' + info.art;
+    el.setAttribute('role', 'status');
+
+    if (info.art === 'auszeit' && !info.vorbei) {
+        const name = document.createElement('span');
+        name.className = 'balken-name';
+        name.textContent = info.name;
+        name.title = info.name;
+        const zeit = document.createElement('span');
+        zeit.className = 'balken-zeit';
+        zeit.textContent = ' · ' + info.zeit;
+        el.appendChild(name);
+        el.appendChild(zeit);
+    } else if (info.art === 'auszeit') {
+        const t = document.createElement('span');
+        t.className = 'balken-text';
+        t.textContent = 'Auszeit vorbei';
+        el.appendChild(t);
+    } else if (info.art === 'hinweis') {
+        const t = document.createElement('span');
+        t.className = 'balken-text';
+        t.textContent = info.text;
+        el.appendChild(t);
+    } else {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'balken-knopf';
+        b.textContent = info.text;
+        b.onclick = function (e) {
+            e.stopPropagation();
+            window.Timer.linkAktion(info.aktion);
+        };
+        el.appendChild(b);
+    }
+    feld.insertBefore(el, feld.firstChild);
+}
+
+/** Auszeiten je Team neben den Namen im Spielstand ("AZ 1"). */
+function zeichneAuszeitZaehler() {
+    if (!window.Store || !window.Store.zaehleAuszeiten) return;
+    const n = window.Store.zaehleAuszeiten();
+    ['heim', 'gast'].forEach(function (team) {
+        const el = document.getElementById('az-' + team);
+        if (!el) return;
+        const text = n[team] > 0 ? 'AZ ' + n[team] : '';
+        if (el.textContent !== text) el.textContent = text;
+        el.title = n[team] > 0 ? n[team] + (n[team] === 1 ? ' Auszeit' : ' Auszeiten') : '';
+    });
 }
 
 function getPlayerDisplayHtml(player, size = '40px') {
     const timerState = window.Timer ? window.Timer.getTimerState() : { spielzeitSekunden: 0 };
 
+    // Zeitstrafe (mit Restzeit) oder Rote Karte ("Rot"): grau, mit Kennzeichen im Kreis
     let isSuspended = false;
     let suspensionOverlay = '';
-    if (player.suspendedUntilGameTime !== null && player.suspendedUntilGameTime !== undefined
-        && timerState.spielzeitSekunden < player.suspendedUntilGameTime) {
+    const rest = window.Store.sperreRest(player, timerState.spielzeitSekunden);
+    if (rest > 0) {
         isSuspended = true;
-        const remaining = player.suspendedUntilGameTime - timerState.spielzeitSekunden;
-        const m = Math.floor(remaining / 60);
-        const sec = remaining % 60;
-        suspensionOverlay = `<span class="badge-suspension">${m}:${sec < 10 ? '0' : ''}${sec}</span>`;
+        suspensionOverlay = `<span class="badge-suspension">${formatRestZeit(rest)}</span>`;
+    } else if (window.Store.istDisqualifiziert(player)) {
+        isSuspended = true;
+        suspensionOverlay = '<span class="badge-suspension">Rot</span>';
     }
 
     // Die Trikotnummer steht IM Kreis, der Name nur darunter. Vorher standen
@@ -408,13 +517,26 @@ function buildHistoryInto(container, limit) {
 
     const aktionen = window.Store.loadActions();
     const spieler = window.Store.getSPIELER();
+    // Auszeiten sind keine Spieleraktionen, gehoeren aber an ihre Stelle im
+    // Verlauf - sonst sucht man sie dort vergeblich.
+    const auszeiten = window.Store.getMarken().filter(function (m) { return m && m.art === 'auszeit'; });
 
-    if (aktionen.length === 0) {
+    if (aktionen.length === 0 && auszeiten.length === 0) {
         container.innerHTML = '<p class="history-empty">Noch keine Aktionen erfasst.</p>';
         return;
     }
 
-    [...aktionen].reverse().slice(0, limit || 25).forEach(entry => {
+    const eintraege = aktionen.map(function (a) { return { t: a.timestamp || 0, aktion: a }; })
+        .concat(auszeiten.map(function (m) { return { t: m.timestamp || 0, marke: m }; }));
+    // Array.sort ist stabil: gleichzeitige Eintraege behalten ihre Reihenfolge
+    eintraege.sort(function (a, b) { return a.t - b.t; });
+
+    eintraege.reverse().slice(0, limit || 25).forEach(item => {
+        if (item.marke) {
+            container.appendChild(baueAuszeitZeile(item.marke));
+            return;
+        }
+        const entry = item.aktion;
         const player = spieler.find(s => s.id === entry.spielerId);
         const playerNumber = player ? player.nummer : '?';
         const playerName = player ? player.name : 'Unbekannt';
@@ -437,6 +559,51 @@ function buildHistoryInto(container, limit) {
         `;
         container.appendChild(el);
     });
+}
+
+function auszeitTeamName(team) {
+    const n = window.Store.getTeamNames();
+    return team === 'heim' ? n.heim : n.gast;
+}
+
+function baueAuszeitZeile(marke) {
+    const el = document.createElement('div');
+    el.className = 'history-entry history-marke';
+
+    const text = document.createElement('div');
+    text.className = 'history-marke-text';
+    const zeit = document.createElement('span');
+    zeit.className = 'history-time';
+    zeit.textContent = window.Timer.formatTime(marke.spielzeit);
+    const was = document.createElement('span');
+    was.className = 'history-action';
+    was.textContent = 'Auszeit ' + auszeitTeamName(marke.team);
+    text.appendChild(zeit);
+    text.appendChild(was);
+
+    const weg = document.createElement('button');
+    weg.type = 'button';
+    weg.className = 'history-weg';
+    weg.setAttribute('aria-label', 'Auszeit löschen');
+    weg.title = 'Auszeit löschen';
+    weg.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        + '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12h10l1-12M9 7V4h6v3"/></svg>';
+    weg.onclick = function (e) {
+        e.stopPropagation();
+        const entfernt = window.Timer.auszeitEntfernen(marke.id);
+        renderHistory();
+        if (entfernt && window.Toast) {
+            window.Toast('Auszeit gelöscht.', {
+                type: 'info', duration: 6000, actionLabel: 'Rückgängig',
+                onAction: function () { window.Timer.auszeitWiederherstellen(entfernt); renderHistory(); updateScoreboard(); }
+            });
+        }
+    };
+
+    el.appendChild(text);
+    el.appendChild(weg);
+    return el;
 }
 
 function renderHistory() {
@@ -537,6 +704,7 @@ function updateScoreboard() {
         homeEl.innerText = homeGoals;
         guestEl.innerText = guestGoals;
     }
+    zeichneAuszeitZaehler();
 }
 
 function getAvailableActionsForPlayer(playerId, posClassFallback) {
@@ -555,7 +723,34 @@ function getAvailableActionsForPlayer(playerId, posClassFallback) {
     return all.filter(a => !a.nurTorwart);
 }
 
+// In der Halbzeitpause und nach dem Abpfiff bleiben Eintraege moeglich
+// (Korrekturen nach dem Pfiff), aber der Tipp auf einen Spieler fragt einmal
+// nach. Wer bestaetigt hat, wird in DERSELBEN Phase nicht noch einmal gefragt:
+// fuenf Nachtraege hintereinander wollen keine fuenf Rueckfragen.
+let phaseOkFuer = null;
+let wartenderSpieler = null;
+
 function selectPlayer(playerId) {
+    // Gesperrte Spieler (Zeitstrafe, Rot) koennen nichts tun: kurzer Hinweis, kein Sheet
+    const gewaehlt = window.Store.getSPIELER().find(p => p.id === playerId);
+    if (gewaehlt && window.Store.istGesperrt(gewaehlt)) {
+        if (window.Toast) window.Toast(window.Store.sperreText(gewaehlt), { type: 'warn', duration: 3000 });
+        return;
+    }
+    if (selectedPlayerId !== playerId && window.Timer) {
+        const phase = window.Timer.getTimerState().phase;
+        if (phase === 'pause' || phase === 'ende') {
+            if (phaseOkFuer !== phase) {
+                wartenderSpieler = playerId;
+                const t = document.getElementById('phase-hinweis-titel');
+                if (t) t.textContent = phase === 'pause' ? 'Halbzeitpause – jetzt eintragen?' : 'Spiel ist beendet – trotzdem eintragen?';
+                zeigeSheet('phase-hinweis');
+                return;
+            }
+        } else {
+            phaseOkFuer = null;
+        }
+    }
     if (selectedPlayerId === playerId) {
         selectedPlayerId = null;
     } else {
@@ -564,6 +759,15 @@ function selectPlayer(playerId) {
     selectedPrimaryAction = null;
     selectedPrimaryActionCategory = null;
     updateUI();
+}
+
+function phaseHinweisWahl(ja) {
+    const id = wartenderSpieler;
+    wartenderSpieler = null;
+    schliesseSheet('phase-hinweis');
+    if (!ja || !id) return;
+    phaseOkFuer = window.Timer.getTimerState().phase;
+    selectPlayer(id);
 }
 
 function selectAction(actionType, category = null) {
@@ -619,8 +823,7 @@ function handleActionFlow(player, finalActionType, finalActionLabel, category) {
     // das merkt man erst im Bericht. Der ERSTE Versuch fragt deshalb nach.
     // "Ohne Uhr" gilt dann fuer den Rest dieses Spiels (wer ohne Uhr trackt,
     // will nicht bei jeder Aktion gefragt werden).
-    const uhrNochNie = !timerState.isTimerRunning && timerState.spielzeitSekunden === 0
-        && (timerState.currentHalf || 1) === 1;
+    const uhrNochNie = timerState.phase === 'vor';
     if (uhrNochNie && !ohneUhrGewaehlt) {
         wartendeAktion = { player: player, typ: finalActionType, label: finalActionLabel, category: category };
         zeigeSheet('uhr-hinweis');
@@ -673,7 +876,7 @@ function uhrHinweisWahl(starten) {
     schliesseSheet('uhr-hinweis');
     if (!a) return;
     if (starten) {
-        if (window.Timer && !window.Timer.getTimerState().isTimerRunning) window.Timer.toggleGameTimer();
+        if (window.Timer) window.Timer.anpfiff();
     } else {
         ohneUhrGewaehlt = true;
     }
@@ -684,6 +887,7 @@ function uhrHinweisWahl(starten) {
 function vergissUhrWahl() {
     ohneUhrGewaehlt = false;
     wartendeAktion = null;
+    phaseOkFuer = null;
 }
 
 // ===================================================================
@@ -693,7 +897,7 @@ function vergissUhrWahl() {
 // quer als Dialog in der Mitte (CSS). Antippen des dunklen Bereichs und
 // Escape schliessen. Sie liegen als <div hidden> fest im HTML.
 
-const SHEET_IDS = ['menue', 'spiel-info', 'uhr-hinweis', 'time-edit'];
+const SHEET_IDS = ['menue', 'spiel-info', 'uhr-hinweis', 'time-edit', 'phase-hinweis', 'auszeit-wahl', 'archiv-frage'];
 
 function zeigeSheet(id) {
     const box = document.getElementById(id);
@@ -710,6 +914,68 @@ function zeigeSheet(id) {
 function schliesseSheet(id) {
     const box = document.getElementById(id);
     if (box) box.hidden = true;
+    // Wer das Sheet wegtippt, beantwortet damit die Frage mit "nein"
+    if (id === 'archiv-frage' && archivFrageAntwort) {
+        const r = archivFrageAntwort;
+        archivFrageAntwort = null;
+        r(false);
+    }
+    if (id === 'phase-hinweis') wartenderSpieler = null;
+}
+
+// ---------------------------------------------------------------
+// Archivieren (Rueckfrage) und Auszeit (Wahl)
+// ---------------------------------------------------------------
+
+let archivFrageAntwort = null;
+
+/** Zeigt die Rueckfrage. @returns {Promise<boolean>} true = archivieren */
+function frageArchivieren() {
+    return new Promise(function (fertig) {
+        if (archivFrageAntwort) archivFrageAntwort(false);
+        archivFrageAntwort = fertig;
+        zeigeSheet('archiv-frage');
+    });
+}
+
+function archivFrageWahl(ja) {
+    const r = archivFrageAntwort;
+    archivFrageAntwort = null;
+    schliesseSheet('archiv-frage');
+    if (r) r(!!ja);
+}
+
+/** "Spiel archivieren": Rueckfrage, archivieren, zurueck zur Startseite. */
+async function archivierenStarten() {
+    const geschafft = window.Timer ? await window.Timer.endGame() : false;
+    if (geschafft && window.Start) window.Start.zeige();
+    return geschafft;
+}
+
+function zeigeAuszeitWahl() {
+    const heim = document.getElementById('auszeit-heim');
+    const gast = document.getElementById('auszeit-gast');
+    if (heim) heim.textContent = auszeitTeamName('heim');
+    if (gast) gast.textContent = auszeitTeamName('gast');
+    zeigeSheet('auszeit-wahl');
+}
+
+function auszeitWahl(team) {
+    schliesseSheet('auszeit-wahl');
+    const marke = window.Timer.auszeitEintragen(team);
+    if (!marke) return;
+    renderHistory();
+    if (window.Toast) {
+        window.Toast('Auszeit ' + auszeitTeamName(team) + ' eingetragen', {
+            type: 'info', duration: 6000, actionLabel: 'Rückgängig',
+            onAction: function () { window.Timer.auszeitEntfernen(marke.id); renderHistory(); }
+        });
+    }
+}
+
+/** Abbrechen: die Uhr bleibt stehen, mit "Weiter" geht es weiter. */
+function auszeitAbbrechen() {
+    schliesseSheet('auszeit-wahl');
 }
 
 function schliesseAlleSheets() {
@@ -724,6 +990,10 @@ SHEET_IDS.forEach(function (id) {
         // Nur ein Tipp AUF den dunklen Bereich schliesst, nicht ein Tipp in der Tafel
         box.addEventListener('click', function (e) {
             if (e.target !== box) return;
+            // Geisterklick: das Sheet kann UNTER dem Finger erscheinen (Tipp auf
+            // einen Spieler), und der nachgereichte Klick traefe sonst den
+            // dunklen Bereich und schlosse es sofort wieder.
+            if (Date.now() - letzterTapAm < 450) return;
             if (id === 'uhr-hinweis') wartendeAktion = null;
             schliesseSheet(id);
         });
@@ -748,14 +1018,18 @@ function verlasseSpiel() {
 }
 
 function openMenue() {
-    const st = window.Timer ? window.Timer.getTimerState() : { currentHalf: 1 };
-    const text = document.getElementById('menue-halbzeit-text');
-    const knopf = document.querySelector('[data-menue="halbzeit"]');
-    if (text && knopf) {
-        const zweite = st.currentHalf >= 2;
-        text.textContent = zweite ? '2. Halbzeit läuft' : 'Halbzeit beenden';
-        knopf.disabled = zweite;
-    }
+    const st = window.Timer ? window.Timer.getTimerState() : { phase: 'vor', spielzeitSekunden: 0, halbzeitSekunden: 1800 };
+    // Nur die Schritte, die in der jetzigen Phase ausser der Reihe Sinn ergeben.
+    // Den regulaeren naechsten Schritt zeigt die Haupttaste.
+    const hz = st.halbzeitSekunden;
+    const frueheHalbzeit = st.phase === 'hz1' && st.spielzeitSekunden < hz;
+    const fruehesEnde = st.phase === 'hz2' && st.spielzeitSekunden < 2 * hz;
+    const setze = function (id, an) { const el = document.getElementById(id); if (el) el.hidden = !an; };
+    setze('menue-halbzeit', frueheHalbzeit);
+    setze('menue-abpfiff', fruehesEnde);
+    setze('menue-ablauf', frueheHalbzeit || fruehesEnde);
+    const beenden = document.getElementById('menue-beenden');
+    if (beenden) beenden.textContent = st.phase === 'ende' ? 'Spiel archivieren' : 'Spiel beenden und archivieren';
     zeigeSheet('menue');
 }
 
@@ -767,9 +1041,8 @@ function closeMenue() {
 async function menueWahl(name) {
     closeMenue();
     switch (name) {
-        case 'halbzeit':
-            if (window.Timer) window.Timer.halbzeitBeenden();
-            break;
+        case 'halbzeit': window.Timer.vorzeitig('halbzeit'); break;
+        case 'abpfiff': window.Timer.vorzeitig('abpfiff'); break;
         case 'statistik': window.Stats.showStats(); break;
         case 'bericht': window.Report.showCurrentReport(); break;
         case 'verlauf': openHistoryView(); break;
@@ -777,9 +1050,9 @@ async function menueWahl(name) {
         case 'ticker': window.TickerUI.oeffne(); break;
         case 'archiv': window.openArchiveModal(); break;
         case 'beenden': {
-            // Bestaetigung und "erst archivieren, dann loeschen" stecken in endGame.
-            // Danach gibt es hier nichts mehr zu tracken: zurueck zur Startseite.
-            const geschafft = window.Timer ? await window.Timer.endGame() : false;
+            // Erst Abpfiff, dann die Rueckfrage; "erst archivieren, dann loeschen"
+            // steckt in endGame. Danach gibt es nichts mehr zu tracken: Startseite.
+            const geschafft = window.Timer ? await window.Timer.spielBeendenUndArchivieren() : false;
             if (geschafft && window.Start) window.Start.zeige();
             break;
         }
@@ -834,7 +1107,10 @@ function executeSaveAction(player, actionType, actionLabel, category, assistId) 
     window.Store.saveActions(aktionen);
     
     if (actionType === 'Zeitstrafe') {
-        window.Store.applySuspension(player.id, timerState.spielzeitSekunden);
+        // Spieler auf die Bank, Platz sperren (Gegner: nur die Zeit)
+        window.Store.sperreSetzen(player.id, timerState.spielzeitSekunden);
+    } else if (actionType.indexOf('Karte_Rot') !== -1) {
+        window.Store.disqualifiziere(player.id);
     }
 
     updateActionCount();
@@ -1564,13 +1840,24 @@ function handleDrop(e, newPosition) {
     const draggedPlayerId = e.dataTransfer.getData('text/plain');
     if (!draggedPlayerId) return;
 
-    if (newPosition !== 'Bank' && newPosition !== 'Gast' && newPosition !== 'N/A') {
-        const currentOccupant = window.Store.getSPIELER().find(p => p.position === newPosition || (newPosition === 'RM' && p.position === 'M') || (newPosition === 'KM' && p.position === 'K'));
-        if (currentOccupant && currentOccupant.id !== draggedPlayerId) {
-            window.Store.updatePlayerPosition(currentOccupant.id, 'Bank');
-        }
+    const gezogen = window.Store.getSPIELER().find(p => String(p.id) === String(draggedPlayerId));
+    if (!gezogen) return;
+
+    // Gesperrte Spieler lassen sich nirgends hinziehen
+    if (window.Store.istGesperrt(gezogen)) {
+        if (window.Toast) window.Toast(window.Store.sperreText(gezogen), { type: 'warn', duration: 3000 });
+        updateUI();
+        return;
     }
-    
+
+    if (newPosition !== 'Bank' && newPosition !== 'Gast' && newPosition !== 'N/A') {
+        // Gesperrte Plaetze nehmen niemanden auf; ein Spieler vom Feld tauscht (Store)
+        const r = window.Store.platziereSpieler(gezogen.id, newPosition, window.Timer.getTimerState().spielzeitSekunden);
+        if (!r.ok && window.Toast) window.Toast(r.grund, { type: 'warn', duration: 4000 });
+        updateUI();
+        return;
+    }
+
     window.Store.updatePlayerPosition(draggedPlayerId, newPosition);
     updateUI();
 }
@@ -1625,6 +1912,10 @@ function onTap(el, handler) {
 function renderCourtView(container) {
     container.innerHTML = '';
     const spieler = window.Store.getSPIELER();
+    // Wer steht wo, welche Plaetze sind wegen einer Zeitstrafe gesperrt
+    const jetzt = window.Timer ? window.Timer.getTimerState().spielzeitSekunden : 0;
+    const phase = window.Timer ? window.Timer.getTimerState().phase : 'vor';
+    const feld = window.Store.berechneFeld(jetzt);
 
     // 1. Gegner: eigener Streifen ueber dem Feld (quer: oben in der Seitenleiste)
     const opponentArea = document.createElement('div');
@@ -1669,9 +1960,27 @@ function renderCourtView(container) {
         const dropZone = document.createElement('div');
         dropZone.className = `court-drop-zone pos-${pos}`;
         dropZone.dataset.pos = pos;
-        // Beschriftung macht aus dem raetselhaften gestrichelten Kreis
-        // einen erkennbar leeren Platz
-        dropZone.innerHTML = `<span class="dz-label">${escapeHtml(pos)}</span>`;
+        const gesperrtVon = feld.blockiert[pos];
+        // Das Tor ist leer, obwohl es Torhueter im Kader gibt (der Torwart sitzt auf
+        // der Strafbank): auffaellig kennzeichnen, bis jemand dort steht.
+        const torFehlt = pos === 'TW' && !feld.belegt.TW && phase !== 'vor'
+            && window.Store.getSPIELER().some(function (q) { return !window.Store.istGast(q) && (window.Store.isGoalkeeper(q) || q.warTorwart); });
+        if (gesperrtVon) {
+            // Gesperrter Platz: grau, ohne Spieler, mit der Restzeit der Strafe
+            dropZone.classList.add('is-blocked');
+            const rest = window.Store.sperreRest(gesperrtVon, jetzt);
+            dropZone.title = 'Platz ' + pos + ' gesperrt (Zeitstrafe ' + gesperrtVon.name + ')';
+            dropZone.setAttribute('aria-label', dropZone.title);
+            dropZone.innerHTML = '<span class="dz-sperre">2 Min</span>'
+                + `<span class="dz-rest" data-pid="${escapeHtml(gesperrtVon.id)}">${formatRestZeit(rest)}</span>`;
+        } else if (torFehlt) {
+            dropZone.classList.add('is-fehlt');
+            dropZone.innerHTML = '<span class="dz-label">Torwart fehlt</span>';
+        } else {
+            // Beschriftung macht aus dem raetselhaften gestrichelten Kreis
+            // einen erkennbar leeren Platz
+            dropZone.innerHTML = `<span class="dz-label">${escapeHtml(pos)}</span>`;
+        }
         dropZone.addEventListener('dragover', handleDragOver);
         dropZone.addEventListener('dragleave', handleDragLeave);
         dropZone.addEventListener('drop', (e) => handleDrop(e, pos));
@@ -1688,23 +1997,11 @@ function renderCourtView(container) {
     benchArea.addEventListener('dragleave', handleDragLeave);
     benchArea.addEventListener('drop', (e) => handleDrop(e, 'Bank'));
 
-    const occupied = new Set();
-    const courtPlayers = [];
-    const benchPlayers = [];
-
-    spieler.forEach(p => {
-        if (window.Store.istGast(p)) return;
-
-        let posClass = p.position;
-        if (posClass === 'M') posClass = 'RM';
-        if (posClass === 'K') posClass = 'KM';
-
-        if (posClass !== 'Bank' && posClass !== 'N/A' && !occupied.has(posClass)) {
-            occupied.add(posClass);
-            courtPlayers.push({ player: p, posClass: posClass });
-        } else {
-            benchPlayers.push({ player: p, posClass: posClass });
-        }
+    const courtPlayers = Object.keys(feld.belegt).map(function (pos) {
+        return { player: feld.belegt[pos], posClass: pos };
+    });
+    const benchPlayers = feld.bank.map(function (p) {
+        return { player: p, posClass: window.Store.normalisiertePosition(p) };
     });
 
     // Wo jemand steht, braucht es keinen leeren Platzhalter mehr
@@ -1719,9 +2016,11 @@ function renderCourtView(container) {
         const node = document.createElement('div');
         node.className = `court-player-node ${area === courtArea ? 'pos-' + posClass : ''}`;
         if (selectedPlayerId === player.id) node.classList.add('selected');
+        const gesperrt = window.Store.istGesperrt(player, jetzt);
+        if (gesperrt) node.classList.add('is-gesperrt');
         node.setAttribute('role', 'button');
         node.tabIndex = 0;
-        node.setAttribute('aria-label', '#' + player.nummer + ' ' + player.name);
+        node.setAttribute('aria-label', '#' + player.nummer + ' ' + player.name + (gesperrt ? ' (gesperrt)' : ''));
         node.setAttribute('aria-pressed', selectedPlayerId === player.id ? 'true' : 'false');
 
         // Nur der Vorname: der Platz unter dem Kreis ist knapp. Der volle Name
@@ -1729,8 +2028,12 @@ function renderCourtView(container) {
         const vorname = String(player.name).split(' ')[0];
         node.innerHTML = getPlayerDisplayHtml(player, 'var(--feld-badge, 44px)')
             + `<span class="name" title="${escapeHtml(player.name)}">${escapeHtml(vorname)}</span>`;
-        node.draggable = true;
-        node.addEventListener('dragstart', (e) => handleDragStart(e, player.id));
+        // Gesperrte lassen sich nicht ziehen (auch nicht auf die Bank - dort sind sie schon)
+        node.draggable = !gesperrt;
+        node.addEventListener('dragstart', (e) => {
+            if (gesperrt) { e.preventDefault(); return; }
+            handleDragStart(e, player.id);
+        });
         node.addEventListener('dragend', handleDragEnd);
         node.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectPlayer(player.id); }
@@ -1765,6 +2068,15 @@ window.UI = {
     closeSpielInfo,
     spielInfoNamenAendern,
     uhrHinweisWahl,
+    phaseHinweisWahl,
+    frageArchivieren,
+    archivFrageWahl,
+    archivierenStarten,
+    zeigeAuszeitWahl,
+    auszeitWahl,
+    auszeitAbbrechen,
+    refreshBalken,
+    sperreBeendet,
     vergissUhrWahl,
     verlasseSpiel,
     closeActionSheet,
