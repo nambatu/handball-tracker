@@ -20,7 +20,7 @@
 // offline passiert; ein zwischengespeicherter Spielstand waere genau die
 // Art von stillem Datenverlust, gegen die der Sync gebaut wurde.
 
-const CACHE = 'handball-tracker-v20261118';
+const CACHE = 'handball-tracker-v20261119';
 
 // Wie lange auf den Server gewartet wird, bevor der Cache uebernimmt.
 //
@@ -216,14 +216,28 @@ self.addEventListener('fetch', function (event) {
 
     event.respondWith((async function () {
         const cache = await caches.open(CACHE);
-        const treffer = await cache.match(req, TREFFER);
+
+        // Dateien mit Versionsangabe (?v=...) nur GENAU aus dem Cache nehmen.
+        // Frueher wurde der Suchteil ignoriert: nach einem Update holte die
+        // neue Seite dann das alte app.js/style.css aus dem Cache - alte
+        // Programmdateien zu neuer Seite, auf dem Handy ein weisser
+        // Bildschirm (13.11.2026). Ohne genauen Treffer gilt: erst Netz,
+        // und nur wenn das nicht antwortet, die zuletzt gespeicherte Fassung.
+        const mitVersion = url.searchParams.has('v');
+        const genau = await cache.match(req);
+        const ungefaehr = genau || await cache.match(req, TREFFER);
 
         const ausDemNetz = fetch(req).then(function (res) {
             if (res && res.ok) cache.put(req, res.clone());
             return res;
         }).catch(function () { return null; });
 
-        if (treffer) return treffer;
+        if (genau) return genau;
+        if (ungefaehr && !mitVersion) return ungefaehr;
+        if (ungefaehr && mitVersion) {
+            const frisch = await mitZeitgrenze(ausDemNetz, NETZ_GEDULD_MS * 3).catch(function () { return null; });
+            return (frisch && frisch.ok) ? frisch : ungefaehr;
+        }
         // Nichts gespeichert: aufs Netz warten, aber nicht endlos - eine
         // haengende Datei wuerde den Start der App genauso blockieren.
         const netz = await mitZeitgrenze(ausDemNetz, NETZ_GEDULD_MS * 3).catch(function () { return null; });

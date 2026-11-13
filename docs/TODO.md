@@ -59,6 +59,9 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       Vertragstests). (M) (Julian: Testkonto-Zugang als Secrets)
 - [ ] 3.4 Supabase-Hinweise (Advisors) pruefen und abarbeiten, Ergebnis als
       Migration. (S)
+- [ ] 3.6 Update-Test fuer den Service Worker in die Tests aufnehmen: alte
+      Fassung laden, neue ausliefern, EIN Neuladen muss nur neue Dateien
+      zeigen (Fehler vom 13.11.: weisser Bildschirm am Handy). (S)
 - [ ] 3.5 Avatar-Bilder, die in keinem Spielstand, Team oder Archiv mehr
       vorkommen, regelmaessig loeschen (Speicherplatz Free-Plan). (S)
 
