@@ -602,10 +602,7 @@
     }
 
     async function showArchiveReport(filename) {
-        // Die Archivliste liegt im HTML NACH dem Bericht und hat denselben
-        // z-index - sie bleibt also darueber liegen und verdeckt ihn. Genau
-        // deshalb ging "Bericht" aus dem Archiv nur manchmal auf: naemlich
-        // dann, wenn die Liste vorher schon zu war.
+        // Das Archiv (Vollbild) wuerde den Bericht verdecken - deshalb zuerst zu.
         const archiv = document.getElementById('archive-view');
         if (archiv) archiv.style.display = 'none';
         try {

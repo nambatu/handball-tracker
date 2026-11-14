@@ -524,17 +524,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .stats-matrix { font-size: 0.8rem; }
 .stats-empty { color: var(--text-muted); font-size: 0.9rem; }
 
-.archive-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    background: rgba(0, 0, 0, 0.2);
-    margin-bottom: 5px;
-    border-radius: 8px;
-}
 
 @media (max-width: 600px) {
     .stats-table { font-size: 0.78rem; }
@@ -646,7 +635,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     margin-bottom: 5px;
 }
 
-.archive-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* =========================================
    16. SPIELBERICHT
@@ -1034,27 +1022,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 @media (max-width: 768px) {
     .roster-edit #edit-name { flex: 1 1 100%; }
     .roster-edit button { flex: 1 1 calc(50% - 4px); }
-}
-
-/* Archivliste: Name, Zusatzzeile und vier Aktionen */
-.archive-item { flex-wrap: wrap; }
-.archive-info { min-width: 0; flex: 1 1 220px; }
-.archive-info strong { font-size: 1.05rem; display: block; }
-.archive-meta {
-    font-size: 0.83em;
-    color: var(--text-muted);
-    margin-top: 2px;
-}
-.archive-btns {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    flex: 0 0 auto;
-}
-.archive-btns button { min-height: 40px; }
-@media (max-width: 600px) {
-    .archive-btns { flex: 1 1 100%; }
-    .archive-btns button { flex: 1 1 auto; min-height: 44px; }
 }
 
 .settings-box .setting-row + .setting-row { margin-top: 12px; }
@@ -2159,3 +2126,11 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .sheet-panel .roster-ticker { margin-top: 8px; }
 .sheet-panel .roster-ticker:empty { display: none; }
 .sheet-panel .btn-primary.kader-ok { margin-top: 16px; }
+
+/* ---------- Archiv (Vollbild): Karten mit Ergebnis ---------- */
+.archiv-karte { justify-content: space-between; }
+.archiv-karte .kader-text { flex: 1 1 auto; }
+.archiv-ergebnis {
+    flex: 0 0 auto; font-weight: 700; font-size: 1.125rem;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+}

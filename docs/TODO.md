@@ -31,8 +31,12 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       `confirm`, keine Inline-Stile, keine Emojis. Layouttest Zustand g
       (alle zehn Groessen). Nicht automatisch getestet: "Kader ersetzen"
       (geht nur ohne erfasste Aktionen) und Foto-Upload. (M)
-- [ ] 1.3 Archiv: Liste als Karten (Name, Datum, Ergebnis), Umbenennen und
-      Loeschen ueber Blaetter statt `prompt/confirm`. (S)
+- [x] 14.11.2026 (Branch claude/dazzling-heisenberg-gmre5y) 1.3 Archiv als
+      Vollbild: Karten (Name, Paarung, Datum, Aktionen, Ergebnis), Antippen
+      oeffnet ein Blatt mit Bericht / CSV / Umbenennen / Loeschen; kein
+      `prompt/confirm`, keine Inline-Stile. Layouttest Zustand h. Das Ergebnis
+      auf der Karte braucht die Migration `0004_archiv_ergebnis.sql`
+      (Julian muss sie freigeben; ohne sie fehlt nur die Ergebniszahl). (S)
 - [ ] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
       Spieler oder Tabelle mit fester erster Spalte). (M)
 - [ ] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
@@ -105,6 +109,8 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
 - (aus 1.1) Emojis stecken auch in den gespeicherten Aktions-Bezeichnungen
   (`store.js`, Feld `label`) und damit in Statistik/Bericht/Auswahl; bei
   1.4/1.5 mit `UI.ohneEmoji`-Logik oder `anzeige` bereinigen.
+- (aus 1.3) Bericht aus dem Archiv schliesst zurueck auf die Startseite, nicht
+  ins Archiv; bei 1.5 pruefen, ob "Zurueck" ins Archiv fuehren soll.
 - Spielbericht als Bild/PDF direkt per Teilen-Knopf (`navigator.share`) in
   WhatsApp schicken.
 - Heller Modus mit hohem Kontrast fuer helle Hallen.

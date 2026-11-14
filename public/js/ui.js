@@ -2299,6 +2299,9 @@ function renderCourtView(container) {
 window.UI = {
     Vollbild,
     bestaetigen,
+    blatt,
+    bauEl,
+    bauKnopf,
     updateUI,
     renderHistory,
     openHistoryView,

@@ -917,6 +917,113 @@ async function laufViewport(browser, base, vp) {
             });
         }
 
+        // (h) Archiv (Vollbild): Karten, Blatt, Umbenennen, Loeschen
+        // je Groesse ein eigener Name: die Laeufe teilen sich das Testkonto
+        const archivName = 'Tagesbau-Archiv ' + vp.w + 'x' + vp.h;
+        try {
+            await page.evaluate(async function (n) {
+                // Reste frueherer Laeufe weg, dann ein Probespiel mit 2 : 1 anlegen
+                const liste = await (await fetch('/api/archives')).json();
+                for (const a of liste) {
+                    if (String(a.label || '').indexOf('Tagesbau-Archiv ' + n.groesse) === 0) {
+                        await fetch('/api/archive/' + encodeURIComponent(a.filename), { method: 'DELETE' });
+                    }
+                }
+                const spieler = [
+                    { id: 'ta1', name: 'Probe Eins', nummer: 7, position: 'RL', team: 'heim' },
+                    { id: 'tag', name: 'Gegner', nummer: 0, position: 'N/A', team: 'gast' }
+                ];
+                const aktionen = [
+                    { id: 'x1', typ: 'WurfTor', spielerId: 'ta1', spielzeit: 60, halbzeit: 1 },
+                    { id: 'x2', typ: 'WurfTor', spielerId: 'ta1', spielzeit: 120, halbzeit: 1 },
+                    { id: 'x3', typ: 'WurfTor', spielerId: 'tag', spielzeit: 180, halbzeit: 1 }
+                ];
+                const r = await fetch('/api/archive', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ spieler: spieler, aktionen: aktionen, teamHeim: 'Probe Heim', teamGast: 'Probe Gast' })
+                });
+                const fn = (await r.json()).filename;
+                await fetch('/api/archive/' + encodeURIComponent(fn), {
+                    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ label: n.name })
+                });
+            }, { name: archivName, groesse: vp.w + 'x' + vp.h });
+            await overlayOeffnen(page, 'archiv');
+            await page.waitForSelector('#archive-view .archiv-karte', { state: 'visible', timeout: 8000 });
+            await sleep(500);
+            await messe(page, e, vp, 'h-archiv', { schrift: false });
+            await foto(page, vp, 'archiv');
+            const ak = await page.evaluate(function () {
+                const v = document.getElementById('archive-view');
+                return {
+                    titel: v.querySelector('.vollbild-titel').textContent.trim(),
+                    aktion: v.querySelectorAll('.vollbild-aktion button').length,
+                    emoji: /\p{Extended_Pictographic}/u.test(v.textContent),
+                    inlineStil: Array.from(v.querySelectorAll('[style]')).filter(function (x) { return x.getAttribute('style'); }).length,
+                    scrollt: getComputedStyle(v.querySelector('.vollbild-inhalt')).overflowY === 'auto',
+                    karten: v.querySelectorAll('.archiv-karte').length
+                };
+            });
+            const ok2 = function (bed, t) { if (!bed) melde(e, 9, 'h-archiv', t); };
+            ok2(ak.titel === 'Archiv', 'Titel "' + ak.titel + '" statt "Archiv"');
+            ok2(ak.aktion <= 1, ak.aktion + ' Aktionen in der Kopfzeile (hoechstens 1)');
+            ok2(!ak.emoji, 'Emoji im Text');
+            ok2(ak.inlineStil === 0, 'Inline-Stile an ' + ak.inlineStil + ' Elementen');
+            ok2(ak.scrollt, 'Inhalt scrollt nicht');
+            ok2(ak.karten >= 1, 'Keine Archivkarten (' + ak.karten + ')');
+            // Eigene Karte antippen -> Blatt mit vier Aktionen
+            const karte = page.locator('#archive-view .archiv-karte', { hasText: archivName });
+            await karte.tap({ timeout: 3000 });
+            await page.waitForSelector('.sheet:not([hidden]) > .sheet-panel', { state: 'visible', timeout: 3000 });
+            await sleep(300);
+            await messe(page, e, vp, 'h-archiv-blatt', { schrift: false });
+            await foto(page, vp, 'archiv-blatt');
+            const knoepfe = await page.evaluate(function () {
+                return Array.from(document.querySelectorAll('.sheet:not([hidden]) > .sheet-panel button.btn')).map(function (b) { return b.textContent.trim(); });
+            });
+            ok2(['Bericht ansehen', 'Als CSV laden', 'Umbenennen', 'Löschen'].every(function (t) { return knoepfe.indexOf(t) >= 0; }),
+                'Blatt hat nicht alle vier Aktionen: ' + knoepfe.join(' / '));
+            // Umbenennen
+            await page.locator('.sheet:not([hidden]) > .sheet-panel button', { hasText: 'Umbenennen' }).tap({ timeout: 3000 });
+            await page.fill('#archiv-name', archivName + ' neu');
+            await page.locator('.sheet:not([hidden]) > .sheet-panel .kader-ok').tap({ timeout: 3000 });
+            await page.locator('#archive-view .archiv-karte', { hasText: archivName + ' neu' }).waitFor({ state: 'visible', timeout: 8000 });
+            // Ergebnis steht auf der Karte, sobald die Migration 0004 eingespielt ist
+            const erg = await page.locator('#archive-view .archiv-karte', { hasText: archivName + ' neu' }).locator('.archiv-ergebnis').allTextContents();
+            if (erg.length) ok2(erg[0].trim() === '2 : 1', 'Ergebnis "' + erg[0] + '" statt "2 : 1"');
+            else e.notiz.push('Archiv zeigt kein Ergebnis (Migration 0004 noch nicht eingespielt?)');
+            // Bericht oeffnet und verdeckt das Archiv nicht
+            await page.locator('#archive-view .archiv-karte', { hasText: archivName + ' neu' }).tap({ timeout: 3000 });
+            await page.locator('.sheet:not([hidden]) > .sheet-panel button', { hasText: 'Bericht ansehen' }).tap({ timeout: 3000 });
+            await page.waitForSelector('#report-view', { state: 'visible', timeout: 8000 });
+            await sleep(500);
+            ok2(!(await page.isVisible('#archive-view')), 'Archiv bleibt ueber dem Bericht stehen');
+            await page.evaluate(function () { window.Report.closeReport(); });
+            // Loeschen mit Rueckfrage: erst Abbrechen (bleibt), dann Loeschen (weg)
+            await overlayOeffnen(page, 'archiv');
+            const k2 = page.locator('#archive-view .archiv-karte', { hasText: archivName + ' neu' });
+            await k2.waitFor({ state: 'visible', timeout: 8000 });
+            await k2.tap({ timeout: 3000 });
+            await page.locator('.sheet:not([hidden]) > .sheet-panel .btn-danger', { hasText: 'Löschen' }).tap({ timeout: 3000 });
+            await page.locator('[role="alertdialog"] button', { hasText: 'Abbrechen' }).tap({ timeout: 3000 });
+            await sleep(300);
+            ok2(await k2.count() === 1, 'Karte nach Abbrechen weg');
+            await page.locator('.sheet:not([hidden]) > .sheet-panel .btn-danger', { hasText: 'Löschen' }).tap({ timeout: 3000 });
+            await page.locator('[role="alertdialog"] button', { hasText: 'Löschen' }).tap({ timeout: 3000 });
+            try {
+                await page.waitForSelector('#archive-view .archiv-karte:has-text("' + archivName + ' neu")', { state: 'detached', timeout: 10000 });
+            } catch (err) { melde(e, 9, 'h-archiv', 'Spiel nicht geloescht'); }
+            ok2(!(await page.isVisible('.sheet:not([hidden]) > .sheet-panel')), 'Blatt nach Loeschen noch offen');
+            await schliesseOverlay(page, e, 'archiv', 'h-archiv');
+        } catch (err) {
+            melde(e, 9, 'h-archiv', 'Archiv: ' + String(err.message).split('\n').slice(0, 4).join(' | '));
+            await page.evaluate(function () {
+                document.querySelectorAll('.sheet:not([hidden])').forEach(function (o) { if (!o.id) o.remove(); });
+                if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('archive-view');
+                const r = document.getElementById('report-view'); if (r) r.style.display = 'none';
+            });
+        }
+
         // Phasen, Auszeit (Zustaende, die nur nach dem Anpfiff vorkommen)
         await phasenZustaende(page, e, vp, hochHandy);
     } catch (err) {
