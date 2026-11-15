@@ -524,18 +524,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .stats-matrix { font-size: 0.8rem; }
 .stats-empty { color: var(--text-muted); font-size: 0.9rem; }
 
-.archive-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 15px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    background: rgba(0, 0, 0, 0.2);
-    margin-bottom: 5px;
-    border-radius: 8px;
-}
-
 @media (max-width: 600px) {
     .stats-table { font-size: 0.78rem; }
     .stats-table th, .stats-table td { padding: 6px 7px; }
@@ -645,8 +633,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     color: var(--text-muted);
     margin-bottom: 5px;
 }
-
-.archive-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* =========================================
    16. SPIELBERICHT
@@ -1034,27 +1020,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 @media (max-width: 768px) {
     .roster-edit #edit-name { flex: 1 1 100%; }
     .roster-edit button { flex: 1 1 calc(50% - 4px); }
-}
-
-/* Archivliste: Name, Zusatzzeile und vier Aktionen */
-.archive-item { flex-wrap: wrap; }
-.archive-info { min-width: 0; flex: 1 1 220px; }
-.archive-info strong { font-size: 1.05rem; display: block; }
-.archive-meta {
-    font-size: 0.83em;
-    color: var(--text-muted);
-    margin-top: 2px;
-}
-.archive-btns {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    flex: 0 0 auto;
-}
-.archive-btns button { min-height: 40px; }
-@media (max-width: 600px) {
-    .archive-btns { flex: 1 1 100%; }
-    .archive-btns button { flex: 1 1 auto; min-height: 44px; }
 }
 
 .settings-box .setting-row + .setting-row { margin-top: 12px; }

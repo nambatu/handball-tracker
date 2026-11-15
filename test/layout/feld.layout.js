@@ -24,7 +24,7 @@
 //   5 kein abgeschnittener Text       10 Overlays: Schliessen erreichbar
 // Die Zustaende, in denen 1-8 gemessen werden: a Feld ruhig, b Spieler
 // gewaehlt, c Unterauswahl offen, d nach 3:2, e Menue offen, f Verlauf offen
-// (dazu das "Assist"-Sheet, wenn es kommt).
+// (dazu das "Assist"-Sheet, wenn es kommt), g Kader, h Archiv (Karten, Blaetter).
 // Dazu kommen die Spielphasen und die Auszeit (vor, Planzeit erreicht, Auszeit-
 // Wahl, Auszeit laeuft, Verlauf mit Auszeit, Pause, Abpfiff,
 // Archiv-Frage) - jeweils mit denselben Pruefungen 1-8 - und auf 390x844 ein
@@ -915,6 +915,95 @@ async function laufViewport(browser, base, vp) {
                 document.querySelectorAll('.sheet').forEach(function (o) { o.remove(); });
                 if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('player-management-view');
             });
+        }
+
+        // (h) Archiv (Vollbild): Karten, Blatt, Umbenennen, Loeschen - ohne prompt/confirm
+        const archivName = 'Tagesbau-Archiv ' + vp.w + 'x' + vp.h;
+        let archivDatei = null;
+        try {
+            archivDatei = await page.evaluate(async function () {
+                const r = await fetch('/api/archive', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ spieler: [], aktionen: [], teamHeim: 'Heim Probe', teamGast: 'Gast Probe' })
+                });
+                return (await r.json()).filename;
+            });
+            let dialoge = 0;
+            const zaehle = function () { dialoge++; };
+            page.on('dialog', zaehle);
+            await overlayOeffnen(page, 'archiv');
+            await page.waitForSelector('#archive-view .archiv-karte', { state: 'visible', timeout: 8000 });
+            await sleep(500);
+            await messe(page, e, vp, 'h-archiv', { schrift: false });
+            await foto(page, vp, 'archiv');
+            const ak = await page.evaluate(function () {
+                const v = document.getElementById('archive-view');
+                return {
+                    titel: (v.querySelector('.vollbild-titel') || {}).textContent,
+                    karten: v.querySelectorAll('.archiv-karte').length,
+                    knoepfeInKarte: v.querySelectorAll('.archiv-karte button').length,
+                    emoji: /\p{Extended_Pictographic}/u.test(v.textContent),
+                    inlineStil: Array.from(v.querySelectorAll('[style]')).filter(function (x) { return x.getAttribute('style'); }).length,
+                    scrollt: getComputedStyle(v.querySelector('.vollbild-inhalt')).overflowY === 'auto'
+                };
+            });
+            if (ak.titel !== 'Spiele-Archiv') melde(e, 9, 'h-archiv', 'Titel "' + ak.titel + '"');
+            if (ak.karten < 1) melde(e, 9, 'h-archiv', 'Keine Karte');
+            if (ak.knoepfeInKarte) melde(e, 9, 'h-archiv', 'Knoepfe in der Karte');
+            if (ak.emoji) melde(e, 9, 'h-archiv', 'Emoji im Text');
+            if (ak.inlineStil) melde(e, 9, 'h-archiv', ak.inlineStil + ' Inline-Stile');
+            if (!ak.scrollt) melde(e, 9, 'h-archiv', 'Inhalt scrollt nicht');
+
+            const karte = page.locator('#archive-view .archiv-karte', { hasText: 'Heim Probe' }).first();
+            await karte.tap({ timeout: 3000 });
+            await page.waitForSelector('.sheet:not([hidden]) .sheet-panel', { state: 'visible', timeout: 3000 });
+            await sleep(200);
+            await messe(page, e, vp, 'h-archivblatt', { schrift: false });
+            await foto(page, vp, 'archiv-blatt');
+            const aktionenNamen = await page.evaluate(function () {
+                return Array.from(document.querySelectorAll('.sheet:not([hidden]) .sheet-panel button')).map(function (b) { return b.textContent.trim(); });
+            });
+            ['Bericht ansehen', 'CSV herunterladen', 'Umbenennen', 'Spiel löschen'].forEach(function (n) {
+                if (aktionenNamen.indexOf(n) < 0) melde(e, 9, 'h-archivblatt', 'Knopf "' + n + '" fehlt');
+            });
+
+            // Umbenennen ueber das Namensblatt
+            await page.locator('.sheet:not([hidden]) .sheet-panel button', { hasText: 'Umbenennen' }).tap({ timeout: 3000 });
+            await page.waitForSelector('.sheet:not([hidden]) .sheet-panel #archiv-name', { state: 'visible', timeout: 3000 });
+            await sleep(200);
+            await messe(page, e, vp, 'h-umbenennen', { schrift: false });
+            await page.fill('#archiv-name', archivName);
+            await page.locator('.sheet-panel .kader-ok').tap({ timeout: 3000 });
+            await page.locator('#archive-view .archiv-karte', { hasText: archivName }).waitFor({ state: 'visible', timeout: 8000 });
+
+            // Loeschen ueber das Bestaetigungsblatt: erst Abbrechen, dann Loeschen
+            await page.locator('#archive-view .archiv-karte', { hasText: archivName }).tap({ timeout: 3000 });
+            await page.locator('.sheet:not([hidden]) .sheet-panel button', { hasText: 'Spiel löschen' }).tap({ timeout: 3000 });
+            await page.waitForSelector('[role="alertdialog"]', { state: 'visible', timeout: 3000 });
+            await messe(page, e, vp, 'h-archivloeschen', { schrift: false });
+            await page.locator('[role="alertdialog"] button', { hasText: 'Abbrechen' }).tap({ timeout: 3000 });
+            await sleep(300);
+            if (!(await page.locator('#archive-view .archiv-karte', { hasText: archivName }).count())) melde(e, 9, 'h-archiv', 'Abbrechen hat das Spiel geloescht');
+            await page.locator('#archive-view .archiv-karte', { hasText: archivName }).tap({ timeout: 3000 });
+            await page.locator('.sheet:not([hidden]) .sheet-panel button', { hasText: 'Spiel löschen' }).tap({ timeout: 3000 });
+            await page.locator('[role="alertdialog"] button', { hasText: 'Löschen' }).tap({ timeout: 3000 });
+            try {
+                await page.waitForSelector('#archive-view .archiv-karte:has-text("' + archivName + '")', { state: 'detached', timeout: 10000 });
+                archivDatei = null;
+            } catch (err) { melde(e, 9, 'h-archiv', 'Spiel nach Loeschen noch in der Liste'); }
+            page.off('dialog', zaehle);
+            if (dialoge) melde(e, 9, 'h-archiv', dialoge + ' Browser-Dialog(e) (prompt/confirm/alert)');
+            await schliesseOverlay(page, e, 'archiv', 'h-archiv');
+        } catch (err) {
+            melde(e, 9, 'h-archiv', 'Archiv: ' + String(err.message).split('\n').slice(0, 4).join(' | '));
+            await page.evaluate(function () {
+                document.querySelectorAll('.sheet:not([hidden])').forEach(function (o) { o.remove(); });
+                if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('archive-view');
+            });
+        } finally {
+            if (archivDatei) {
+                try { await page.evaluate(function (f) { return fetch('/api/archive/' + encodeURIComponent(f), { method: 'DELETE' }); }, archivDatei); } catch (err) { /* egal */ }
+            }
         }
 
         // Phasen, Auszeit (Zustaende, die nur nach dem Anpfiff vorkommen)

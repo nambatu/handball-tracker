@@ -31,8 +31,18 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       `confirm`, keine Inline-Stile, keine Emojis. Layouttest Zustand g
       (alle zehn Groessen). Nicht automatisch getestet: "Kader ersetzen"
       (geht nur ohne erfasste Aktionen) und Foto-Upload. (M)
-- [ ] 1.3 Archiv: Liste als Karten (Name, Datum, Ergebnis), Umbenennen und
-      Loeschen ueber Blaetter statt `prompt/confirm`. (S)
+- [x] 15.11.2026 (Branch claude/dazzling-heisenberg-eomgdx) 1.3 Archiv als
+      Vollbild: je Spiel eine Karte (Name, Paarung, Datum, Aktionen); Antippen
+      oeffnet ein Blatt mit Bericht, CSV, Umbenennen, Loeschen. Umbenennen ueber
+      Namensblatt, Loeschen ueber Bestaetigungsblatt, kein `prompt/confirm`.
+      Layouttest Zustand h (alle zehn Groessen). Nicht umgesetzt: das Ergebnis
+      (Tore) auf der Karte, siehe 1.3b. (S)
+- [ ] 1.3b Archiv-Karte mit Endergebnis (z. B. 24:21): braucht eine neue
+      Migration `0004` (Sicht `archives_list` um Tore je Mannschaft erweitern;
+      Tore zaehlen aus `data->aktionen` mit `typ` WurfTor, Seite wie in
+      `stats.js`). (S) (Julian: Migration freigeben)
+- [ ] 1.3c Nach "Bericht ansehen" aus dem Archiv fuehrt Zurueck nicht in die
+      Archivliste zurueck (Bericht schliesst sich nur). Bei 1.5 mit loesen. (S)
 - [ ] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
       Spieler oder Tabelle mit fester erster Spalte). (M)
 - [ ] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht

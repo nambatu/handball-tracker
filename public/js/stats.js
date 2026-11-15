@@ -524,68 +524,106 @@ function exportAsCSV() {
 // ARCHIV
 // ===================================================================
 
+const ARCHIV_ID = 'archive-view';
+
+function archivPaarung(a) {
+    return (a.teamHeim || a.teamGast) ? `${a.teamHeim || 'Heim'} – ${a.teamGast || 'Gast'}` : null;
+}
+
 /**
- * Eine Zeile der Archivliste.
+ * Eine Karte der Archivliste.
  *
  * Ueberschrift ist der selbst vergebene Name, sonst die Paarung, sonst das
  * Datum - nach einer Saison sagt "game-2026-09-06T12-16-19-150Z.json"
- * naemlich niemandem mehr, welches Spiel das war.
+ * naemlich niemandem mehr, welches Spiel das war. Antippen oeffnet ein
+ * Blatt mit Bericht, CSV, Umbenennen und Loeschen.
  */
-function archivZeile(a) {
-    const li = document.createElement('li');
-    li.className = 'archive-item';
-
+function archivKarte(a) {
+    const U = window.UI;
     const d = new Date(a.date);
     const datum = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const paarung = (a.teamHeim || a.teamGast) ? `${a.teamHeim || 'Heim'} – ${a.teamGast || 'Gast'}` : null;
-
-    const titel = a.label || paarung || datum;
-    const zeile2 = [a.label ? paarung : null, datum,
+    const paarung = archivPaarung(a);
+    const karte = U.bauEl('button', 'kader-zeile archiv-karte');
+    karte.type = 'button';
+    const text = U.bauEl('span', 'kader-text');
+    text.appendChild(U.bauEl('span', 'kader-name', a.label || paarung || datum));
+    const zusatz = [a.label ? paarung : null, datum,
                     a.aktionen !== null && a.aktionen !== undefined ? a.aktionen + ' Aktionen' : null]
                    .filter(Boolean).join(' · ');
-
-    li.innerHTML = `
-        <div class="archive-info">
-            <strong>${esc(titel)}</strong>
-            <div class="archive-meta">${esc(zeile2)}</div>
-        </div>
-        <div class="archive-btns">
-            <button class="add-btn js-report">Bericht</button>
-            <button class="control-btn js-csv">CSV</button>
-            <button class="control-btn js-rename" title="Spiel benennen">Umbenennen</button>
-            <button class="cancel-btn js-del" title="Spiel löschen">Löschen</button>
-        </div>
-    `;
-    li.querySelector('.js-report').onclick = () => window.Report.showArchiveReport(a.filename);
-    li.querySelector('.js-csv').onclick = () => downloadArchive(a.filename);
-    li.querySelector('.js-rename').onclick = () => renameArchive(a);
-    li.querySelector('.js-del').onclick = () => deleteArchive(a);
-    return li;
+    text.appendChild(U.bauEl('span', 'kader-zusatz', zusatz));
+    karte.appendChild(text);
+    karte.addEventListener('click', function () { archivBlatt(a); });
+    return karte;
 }
 
-async function renameArchive(a) {
-    const vorschlag = a.label || ((a.teamHeim || a.teamGast) ? `${a.teamHeim || 'Heim'} – ${a.teamGast || 'Gast'}` : '');
-    const name = prompt('Name für dieses Spiel (leer lassen zum Entfernen):', vorschlag);
-    if (name === null) return;   // abgebrochen
-    try {
-        const res = await fetch('/api/archive/' + encodeURIComponent(a.filename), {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ label: name })
+/** Blatt zu einem Archivspiel: Bericht, CSV, Umbenennen, Loeschen. */
+function archivBlatt(a) {
+    const U = window.UI;
+    U.blatt(a.label || archivPaarung(a) || 'Spiel', function (panel, zu) {
+        panel.appendChild(U.bauKnopf('Bericht ansehen', 'btn-primary btn-block', function () {
+            zu();
+            window.Report.showArchiveReport(a.filename);
+        }));
+        panel.appendChild(U.bauKnopf('CSV herunterladen', 'btn-block', function () {
+            zu();
+            downloadArchive(a.filename);
+        }));
+        panel.appendChild(U.bauKnopf('Umbenennen', 'btn-block', function () {
+            zu();
+            renameArchive(a);
+        }));
+        panel.appendChild(U.bauKnopf('Spiel löschen', 'btn-block btn-danger', function () {
+            zu();
+            deleteArchive(a);
+        }));
+    });
+}
+
+/** Namensblatt statt prompt(). Leer lassen entfernt den Namen. */
+function renameArchive(a) {
+    const U = window.UI;
+    U.blatt('Spiel benennen', function (panel, zu) {
+        const l = U.bauEl('label', 'feld-label', 'Name des Spiels'); l.htmlFor = 'archiv-name';
+        const f = document.createElement('input');
+        f.type = 'text'; f.id = 'archiv-name'; f.className = 'feld'; f.autocomplete = 'off';
+        f.enterKeyHint = 'done'; f.maxLength = 80;
+        f.value = a.label || archivPaarung(a) || '';
+        panel.appendChild(l);
+        panel.appendChild(f);
+        const ok = U.bauKnopf('Speichern', 'btn-primary btn-block kader-ok', async function () {
+            const name = f.value;
+            ok.disabled = true;
+            try {
+                const res = await fetch('/api/archive/' + encodeURIComponent(a.filename), {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ label: name })
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                zu();
+                if (window.Toast) window.Toast(name.trim() ? 'Spiel benannt.' : 'Name entfernt.', { type: 'success' });
+                openArchiveModal();
+            } catch (e) {
+                ok.disabled = false;
+                if (window.Toast) window.Toast('Umbenennen fehlgeschlagen.', { type: 'error' });
+            }
         });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        if (window.Toast) window.Toast(name.trim() ? 'Spiel benannt.' : 'Name entfernt.', { type: 'success' });
-        openArchiveModal();
-    } catch (e) {
-        if (window.Toast) window.Toast('Umbenennen fehlgeschlagen.', { type: 'error' });
-    }
+        f.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); ok.click(); } });
+        panel.appendChild(ok);
+        try { f.focus({ preventScroll: true }); } catch (e) { /* egal */ }
+    });
 }
 
 async function deleteArchive(a) {
-    const name = a.label || ((a.teamHeim || a.teamGast) ? `${a.teamHeim || 'Heim'} – ${a.teamGast || 'Gast'}` : a.filename);
+    const name = a.label || archivPaarung(a) || a.filename;
     // Bewusst mit Rueckfrage: ein archiviertes Spiel laesst sich nicht
     // wiederherstellen, es liegt nur einmal auf dem Server.
-    if (!confirm(`„${name}" endgültig löschen?\n\nDas Spiel ist danach weg - auch der Bericht und der CSV-Export.`)) return;
+    const ja = await window.UI.bestaetigen({
+        titel: `„${name}“ löschen?`,
+        text: 'Das Spiel ist danach weg - auch der Bericht und der CSV-Export.',
+        okText: 'Löschen', gefahr: true
+    });
+    if (!ja) return;
     try {
         const res = await fetch('/api/archive/' + encodeURIComponent(a.filename), { method: 'DELETE' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -597,20 +635,28 @@ async function deleteArchive(a) {
 }
 
 async function openArchiveModal() {
-    document.getElementById('archive-view').style.display = 'flex';
-    const list = document.getElementById('archive-list');
-    list.innerHTML = '<li><div style="padding: 15px; text-align: center;">Lade Archive...</div></li>';
+    const inhalt = window.UI.Vollbild.oeffne({ id: ARCHIV_ID, titel: 'Spiele-Archiv' });
+    let liste = document.getElementById('archive-list');
+    if (!liste) {
+        liste = document.createElement('div');
+        liste.id = 'archive-list';
+        liste.className = 'karten-liste';
+        inhalt.appendChild(liste);
+    }
+    const hinweis = function (t) {
+        liste.innerHTML = '';
+        liste.appendChild(window.UI.bauEl('p', 'history-empty', t));
+    };
+    hinweis('Lade Archive...');
     try {
         const res = await fetch('/api/archives');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
         const archives = await res.json();
-        if (archives.length === 0) {
-            list.innerHTML = '<li><div style="padding: 15px; text-align: center;">Keine archivierten Spiele gefunden.</div></li>';
-            return;
-        }
-        list.innerHTML = '';
-        archives.forEach(a => list.appendChild(archivZeile(a)));
+        if (archives.length === 0) { hinweis('Keine archivierten Spiele gefunden.'); return; }
+        liste.innerHTML = '';
+        archives.forEach(a => liste.appendChild(archivKarte(a)));
     } catch (e) {
-        list.innerHTML = '<li>Fehler beim Laden (offline?).</li>';
+        hinweis('Fehler beim Laden (offline?).');
     }
 }
 
