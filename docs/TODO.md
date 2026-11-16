@@ -41,11 +41,12 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       Migration `0004` (Sicht `archives_list` um Tore je Mannschaft erweitern;
       Tore zaehlen aus `data->aktionen` mit `typ` WurfTor, Seite wie in
       `stats.js`). (S) (Julian: Migration freigeben)
-- [ ] 1.3c Nach "Bericht ansehen" aus dem Archiv fuehrt Zurueck nicht in die
-      Archivliste zurueck (Bericht schliesst sich nur). Bei 1.5 mit loesen. (S)
+- [x] 16.11.2026 (Branch claude/dazzling-heisenberg-aonmzp) 1.3c Nach "Bericht ansehen" aus dem Archiv fuehrt Zurueck nicht in die
+      Archivliste zurueck (Bericht schliesst sich nur). Geloest: Schliessen oeffnet
+      wieder die Liste; Layouttest Zustand h prueft das. (S)
 - [ ] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
       Spieler oder Tabelle mit fester erster Spalte). (M)
-- [ ] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
+- [ ] 1.5 (hier auch: Layoutmessung des Berichts im Archiv-Test einschalten, heute Befunde: Drucken-Knopf 39 hoch, Kachel-Beschriftungen "Ballverluste" zu breit) Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
       unveraendert lassen. (M)
 - [ ] 1.6 Ticker-Einstellungen: nur "an/aus, Gruppe, welche Ereignisse";
       Vorlagen und Regeln je Spieler hinter "Erweitert". (M)

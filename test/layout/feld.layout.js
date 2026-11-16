@@ -967,6 +967,19 @@ async function laufViewport(browser, base, vp) {
                 if (aktionenNamen.indexOf(n) < 0) melde(e, 9, 'h-archivblatt', 'Knopf "' + n + '" fehlt');
             });
 
+            // Bericht ansehen und Schliessen fuehrt zurueck in die Archivliste (1.3c)
+            await page.locator('.sheet:not([hidden]) .sheet-panel button', { hasText: 'Bericht ansehen' }).tap({ timeout: 3000 });
+            await page.waitForSelector('#report-view', { state: 'visible', timeout: 8000 });
+            await sleep(300);
+            await foto(page, vp, 'archiv-bericht');
+            await page.locator('#report-view button', { hasText: 'Schließen' }).tap({ timeout: 3000 });
+            try {
+                await page.waitForSelector('#archive-view .archiv-karte', { state: 'visible', timeout: 8000 });
+            } catch (err) { melde(e, 9, 'h-archivbericht', 'Zurueck fuehrt nicht in die Archivliste'); }
+            await karte.tap({ timeout: 3000 });
+            await page.waitForSelector('.sheet:not([hidden]) .sheet-panel', { state: 'visible', timeout: 3000 });
+            await sleep(200);
+
             // Umbenennen ueber das Namensblatt
             await page.locator('.sheet:not([hidden]) .sheet-panel button', { hasText: 'Umbenennen' }).tap({ timeout: 3000 });
             await page.waitForSelector('.sheet:not([hidden]) .sheet-panel #archiv-name', { state: 'visible', timeout: 3000 });

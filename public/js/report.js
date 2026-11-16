@@ -581,6 +581,9 @@
     // ANZEIGE & DRUCK
     // ===============================================================
 
+    // Kam der Bericht aus der Archivliste? Dann fuehrt "Schliessen" dorthin zurueck.
+    let ausArchiv = false;
+
     function showReport(spieler, aktionen, meta) {
         const view = document.getElementById('report-view');
         const body = document.getElementById('report-content');
@@ -598,6 +601,7 @@
             if (window.Toast) window.Toast('Noch keine Aktionen erfasst — der Bericht wäre leer.', { type: 'warn' });
             return;
         }
+        ausArchiv = false;
         showReport(window.Store.getSPIELER(), aktionen, { names: window.Store.getTeamNames() });
     }
 
@@ -608,6 +612,7 @@
         // dann, wenn die Liste vorher schon zu war.
         const archiv = document.getElementById('archive-view');
         if (archiv) archiv.style.display = 'none';
+        ausArchiv = true;
         try {
             const res = await fetch('/api/archive/' + encodeURIComponent(filename));
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -622,12 +627,19 @@
             });
         } catch (e) {
             if (window.Toast) window.Toast('Archivspiel konnte nicht geladen werden.', { type: 'error' });
+            // Die Liste war schon zu - wieder aufmachen, sonst steht man vor dem Nichts.
+            ausArchiv = false;
+            if (window.openArchiveModal) window.openArchiveModal();
         }
     }
 
     function closeReport() {
         const view = document.getElementById('report-view');
         if (view) view.style.display = 'none';
+        if (ausArchiv) {
+            ausArchiv = false;
+            if (window.openArchiveModal) window.openArchiveModal();
+        }
     }
 
     function printReport() {
