@@ -598,8 +598,11 @@
             if (window.Toast) window.Toast('Noch keine Aktionen erfasst — der Bericht wäre leer.', { type: 'warn' });
             return;
         }
+        zurueckZumArchiv = false;
         showReport(window.Store.getSPIELER(), aktionen, { names: window.Store.getTeamNames() });
     }
+
+    let zurueckZumArchiv = false;
 
     async function showArchiveReport(filename) {
         // Die Archivliste liegt im HTML NACH dem Bericht und hat denselben
@@ -608,6 +611,8 @@
         // dann, wenn die Liste vorher schon zu war.
         const archiv = document.getElementById('archive-view');
         if (archiv) archiv.style.display = 'none';
+        // Schliessen des Berichts fuehrt dann zurueck in die Archivliste.
+        zurueckZumArchiv = true;
         try {
             const res = await fetch('/api/archive/' + encodeURIComponent(filename));
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -621,6 +626,8 @@
                 datum: m ? m[1] : null
             });
         } catch (e) {
+            zurueckZumArchiv = false;
+            if (typeof window.openArchiveModal === 'function') window.openArchiveModal();
             if (window.Toast) window.Toast('Archivspiel konnte nicht geladen werden.', { type: 'error' });
         }
     }
@@ -628,6 +635,10 @@
     function closeReport() {
         const view = document.getElementById('report-view');
         if (view) view.style.display = 'none';
+        if (zurueckZumArchiv) {
+            zurueckZumArchiv = false;
+            if (typeof window.openArchiveModal === 'function') window.openArchiveModal();
+        }
     }
 
     function printReport() {

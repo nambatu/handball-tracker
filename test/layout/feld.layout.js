@@ -976,6 +976,15 @@ async function laufViewport(browser, base, vp) {
             await page.locator('.sheet-panel .kader-ok').tap({ timeout: 3000 });
             await page.locator('#archive-view .archiv-karte', { hasText: archivName }).waitFor({ state: 'visible', timeout: 8000 });
 
+            // Bericht aus dem Archiv: Schliessen fuehrt zurueck in die Archivliste
+            await page.locator('#archive-view .archiv-karte', { hasText: archivName }).tap({ timeout: 3000 });
+            await page.locator('.sheet:not([hidden]) .sheet-panel button', { hasText: 'Bericht ansehen' }).tap({ timeout: 3000 });
+            await page.waitForSelector('#report-view', { state: 'visible', timeout: 8000 });
+            await page.locator('#report-view button', { hasText: 'Schließen' }).first().tap({ timeout: 3000 });
+            await page.waitForSelector('#archive-view .archiv-karte', { state: 'visible', timeout: 5000 })
+                .catch(function () { melde(e, 9, 'h-archiv', 'Nach dem Bericht kam nicht die Archivliste'); });
+            if (await page.locator('#report-view').isVisible()) melde(e, 9, 'h-archiv', 'Bericht blieb offen');
+
             // Loeschen ueber das Bestaetigungsblatt: erst Abbrechen, dann Loeschen
             await page.locator('#archive-view .archiv-karte', { hasText: archivName }).tap({ timeout: 3000 });
             await page.locator('.sheet:not([hidden]) .sheet-panel button', { hasText: 'Spiel löschen' }).tap({ timeout: 3000 });

@@ -41,7 +41,7 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       Migration `0004` (Sicht `archives_list` um Tore je Mannschaft erweitern;
       Tore zaehlen aus `data->aktionen` mit `typ` WurfTor, Seite wie in
       `stats.js`). (S) (Julian: Migration freigeben)
-- [ ] 1.3c Nach "Bericht ansehen" aus dem Archiv fuehrt Zurueck nicht in die
+- [~] 1.3c Nach "Bericht ansehen" aus dem Archiv fuehrt Zurueck nicht in die
       Archivliste zurueck (Bericht schliesst sich nur). Bei 1.5 mit loesen. (S)
 - [ ] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
       Spieler oder Tabelle mit fester erster Spalte). (M)
