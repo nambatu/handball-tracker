@@ -429,107 +429,28 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .gk-hint { color: var(--text-muted); font-style: normal; font-size: 0.85em; }
 .gk-empty { color: var(--text-muted); font-size: 0.9rem; padding: 12px 0; }
 
-/* --- Statistik-Overlay --- */
-.stats-panel { max-width: 1200px; width: 96vw; }
-
-.stats-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 4px;
-}
-
-.stats-header h2 { margin: 0; }
-
-#stats-content { max-height: 68vh; overflow-y: auto; margin: 16px 0; }
-
-#stats-content h3 {
-    margin: 22px 0 10px;
-    font-size: 1.05rem;
-    color: var(--accent-color);
-}
-
-#stats-content h3:first-child { margin-top: 0; }
-
-#stats-content h4 {
-    margin: 18px 0 8px;
-    font-size: 0.92rem;
-    color: var(--text-muted);
-    font-weight: 600;
-}
-
-.stats-scroll {
-    overflow-x: auto;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.22);
-}
-
-.stats-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.86rem;
-    font-variant-numeric: tabular-nums;
-}
-
-.stats-table th,
-.stats-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    text-align: center;
-    white-space: nowrap;
-}
-
-.stats-table thead th {
-    position: sticky;
-    top: 0;
-    background: rgba(15, 18, 22, 0.97);
-    color: var(--text-muted);
-    font-size: 0.76rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    z-index: 2;
-}
-
-.stats-table .col-name {
-    text-align: left;
-    position: sticky;
-    left: 0;
-    background: rgba(15, 18, 22, 0.97);
-    z-index: 1;
-    min-width: 140px;
-}
-
-.stats-table thead .col-name { z-index: 3; }
-.stats-table tbody tr:hover td { background: rgba(255, 255, 255, 0.04); }
-.stats-table tbody tr:hover .col-name { background: rgba(31, 36, 44, 0.99); }
-
-.stats-table .num { font-weight: 500; }
-.stats-table .strong { font-weight: 800; }
-.stats-table .muted { color: rgba(152, 162, 176, 0.45); }
-
-.stats-table .q-good { color: #5cc79a; font-weight: 700; }
-.stats-table .q-mid  { color: #e8b04f; font-weight: 700; }
-.stats-table .q-low  { color: #ee7a7e; font-weight: 700; }
-
-.stats-total td {
-    border-top: 2px solid var(--border-color);
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.stats-matrix { font-size: 0.8rem; }
+/* --- Statistik (Vollbild, Karten je Spieler) --- */
 .stats-empty { color: var(--text-muted); font-size: 0.9rem; }
-
-@media (max-width: 600px) {
-    .stats-table { font-size: 0.78rem; }
-    .stats-table th, .stats-table td { padding: 6px 7px; }
-    .stats-table .col-name { min-width: 110px; }
-    #stats-content { max-height: 62vh; }
-}
+.stat-abschnitt { margin: 20px 0 8px; font-size: 15px; color: var(--accent-color); }
+.stat-karte { margin-bottom: 8px; }
+.stat-karte .karte-titel { margin-bottom: 10px; }
+.stat-kopf { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.stat-name { font-size: 1.0625rem; overflow-wrap: anywhere; min-width: 0; }
+.stat-einsatz { color: var(--text-muted); font-size: 13px; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.stat-zahlen { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 10px 8px; }
+.stat-zahl { display: flex; flex-direction: column; align-items: center; min-width: 0; text-align: center; }
+.stat-wert { font-size: 1.125rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat-wert.stark { font-size: 1.5rem; font-weight: 800; }
+.stat-label { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.stat-wert.q-good { color: #5cc79a; }
+.stat-wert.q-mid  { color: #e8b04f; }
+.stat-wert.q-low  { color: #ee7a7e; }
+.stat-wert.muted  { color: var(--text-muted); font-weight: 400; }
+.stat-zeile { margin: 10px 0 0; color: var(--text-muted); font-size: 13px; }
+.stat-details { margin-top: 10px; }
+.stat-details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--text-muted); font-size: 14px; }
+.stat-details ul { list-style: none; margin: 0; padding: 0; }
+.stat-details li { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-top: 1px solid var(--border-color); font-size: 14px; }
 
 /* =========================================
    14. SPIELER-BADGE (runder Kreis mit Nummer)

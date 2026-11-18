@@ -1015,6 +1015,44 @@ async function laufViewport(browser, base, vp) {
             }
         }
 
+        // (i) Statistik (Vollbild): Karten je Spieler statt breiter Tabelle
+        try {
+            await overlayOeffnen(page, 'statistik');
+            await page.waitForSelector('#stats-view .stat-karte', { state: 'visible', timeout: 5000 });
+            await sleep(400);
+            await messe(page, e, vp, 'i-statistik', { schrift: false });
+            await foto(page, vp, 'statistik');
+            const st = await page.evaluate(function () {
+                const v = document.getElementById('stats-view');
+                const t = v.querySelector('.vollbild-titel');
+                const inh = v.querySelector('.vollbild-inhalt');
+                return {
+                    titel: t && t.textContent.trim(),
+                    aktion: v.querySelectorAll('.vollbild-aktion button').length,
+                    tabellen: v.querySelectorAll('table').length,
+                    karten: v.querySelectorAll('.stat-karte').length,
+                    emoji: /\p{Extended_Pictographic}/u.test(v.textContent),
+                    inlineStil: Array.from(v.querySelectorAll('[style]')).filter(function (x) { return x.getAttribute('style'); }).length,
+                    scrollt: getComputedStyle(inh).overflowY === 'auto',
+                    seitlich: inh.scrollWidth > inh.clientWidth + 1,
+                    text: v.textContent
+                };
+            });
+            if (st.titel !== 'Statistik') melde(e, 9, 'i-statistik', 'Titel "' + st.titel + '"');
+            if (st.aktion !== 1) melde(e, 9, 'i-statistik', st.aktion + ' Aktionsknoepfe statt 1');
+            if (st.tabellen) melde(e, 9, 'i-statistik', 'Noch ' + st.tabellen + ' Tabelle(n)');
+            if (st.karten < 3) melde(e, 9, 'i-statistik', 'Zu wenige Karten: ' + st.karten);
+            if (st.emoji) melde(e, 9, 'i-statistik', 'Emoji im Text');
+            if (st.inlineStil) melde(e, 9, 'i-statistik', st.inlineStil + ' Inline-Stile');
+            if (!st.scrollt) melde(e, 9, 'i-statistik', 'Inhalt scrollt nicht');
+            if (st.seitlich) melde(e, 9, 'i-statistik', 'Inhalt scrollt seitlich');
+            if (!/Felix/.test(st.text) || !/Mannschaft/.test(st.text)) melde(e, 9, 'i-statistik', 'Spieler oder Mannschaftskarte fehlt');
+            await schliesseOverlay(page, e, 'statistik', 'i-statistik');
+        } catch (err) {
+            melde(e, 9, 'i-statistik', 'Statistik: ' + String(err.message).split('\n').slice(0, 3).join(' | '));
+            await page.evaluate(function () { if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('stats-view'); });
+        }
+
         // Phasen, Auszeit (Zustaende, die nur nach dem Anpfiff vorkommen)
         await phasenZustaende(page, e, vp, hochHandy);
     } catch (err) {

@@ -213,113 +213,109 @@ function getHighLevelStats() {
 // CSV-Button im Popup rief window.Stats auf - im Popup-Fenster gibt es
 // das Objekt aber gar nicht, der Button hat also nie funktioniert.
 
+const STATS_ID = 'stats-view';
+
 function showStats() {
     const data = currentStats();
-    const view = document.getElementById('stats-view');
-    const body = document.getElementById('stats-content');
-    if (!view || !body) return;
-
-    body.innerHTML = renderFieldTable(data) + renderKeeperTable(data) + renderMatrix(data);
-    view.style.display = 'flex';
+    const inhalt = window.UI.Vollbild.oeffne({
+        id: STATS_ID,
+        titel: 'Statistik',
+        aktion: { text: 'CSV', onClick: exportAsCSV }
+    });
+    let body = document.getElementById('stats-content');
+    if (!body) {
+        body = document.createElement('div');
+        body.id = 'stats-content';
+        inhalt.appendChild(body);
+    }
+    body.innerHTML = renderTeamKarte(data) + renderFeldKarten(data) + renderTorhueterKarten(data);
 }
 
 function closeStats() {
-    const view = document.getElementById('stats-view');
-    if (view) view.style.display = 'none';
+    window.UI.Vollbild.schliesse(STATS_ID);
 }
 
-function renderFieldTable(data) {
+/** Kleine Kennzahl: Wert gross, Beschriftung klein darunter. */
+function kennzahl(wert, label, klasse) {
+    return '<div class="stat-zahl"><span class="stat-wert ' + (klasse || '') + '">' + wert
+        + '</span><span class="stat-label">' + esc(label) + '</span></div>';
+}
+
+function spielerKopf(p) {
+    return '<div class="stat-kopf"><span class="stat-name"><strong>#' + esc(p.nummer) + '</strong> '
+        + esc(p.name) + '</span><span class="stat-einsatz">' + fmtTime(p.playtimeSeconds) + '</span></div>';
+}
+
+/** Alle erfassten Aktionen eines Spielers, nur die mit Anzahl > 0. */
+function aktionenListe(p, data) {
+    const teile = data.allActionTypes
+        .filter(t => (p.aktionen[t] || 0) > 0)
+        .map(t => '<li><span>' + esc(t.replace(/_/g, ' ')) + '</span><strong>' + p.aktionen[t] + '</strong></li>');
+    if (!teile.length) return '';
+    return '<details class="stat-details"><summary>Alle Aktionen</summary><ul>' + teile.join('') + '</ul></details>';
+}
+
+function renderTeamKarte(data) {
+    const t = data.team;
+    return '<section class="karte stat-karte"><h3 class="karte-titel">Mannschaft</h3><div class="stat-zahlen">'
+        + kennzahl(t.tore, 'Tore', 'stark')
+        + kennzahl(t.gegentore, 'Gegentore')
+        + kennzahl(t.wuerfe, 'Würfe')
+        + kennzahl(fmtQuote(t.wurfquote), 'Wurfquote')
+        + kennzahl(t.ballverluste, 'Ballverluste')
+        + kennzahl(t.ballgewinne, 'Ballgewinne')
+        + '</div></section>';
+}
+
+function renderFeldKarten(data) {
     const rows = Object.values(data.spieler)
         .filter(p => !p.istGast)
         .sort((a, b) => b.tore - a.tore || a.nummer - b.nummer);
-
-    let html = '<h3>Feldspieler</h3>';
-    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
-        + '<th class="col-name">Spieler</th><th>Einsatz</th><th>Tore</th><th>Würfe</th>'
-        + '<th>Quote</th><th>7m</th><th>Assists</th><th>Ballverl.</th><th>Ballgew.</th>'
-        + '<th>7m raus</th><th>2min</th><th>🟨</th><th>🟥</th><th>🟦</th></tr></thead><tbody>';
-
+    let html = '<h3 class="stat-abschnitt">Feldspieler</h3>';
+    if (!rows.length) return html + '<p class="stats-empty">Keine Spieler im Kader.</p>';
     rows.forEach(p => {
-        html += '<tr>'
-            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
-            + `<td class="num strong">${p.tore}</td>`
-            + `<td class="num">${p.wuerfe}</td>`
-            + `<td class="num ${quoteClass(p.wurfquote)}">${fmtQuote(p.wurfquote)}</td>`
-            + `<td class="num">${p.siebenMeterWuerfe ? p.siebenMeterTore + '/' + p.siebenMeterWuerfe : '–'}</td>`
-            + `<td class="num">${p.assists}</td>`
-            + `<td class="num">${p.fehler}</td>`
-            + `<td class="num">${p.ballgewinne}</td>`
-            + `<td class="num">${p.siebenMeterRaus}</td>`
-            + `<td class="num">${p.zeitstrafen}</td>`
-            + `<td class="num">${p.gelb || ''}</td>`
-            + `<td class="num">${p.rot || ''}</td>`
-            + `<td class="num">${p.blau || ''}</td>`
-            + '</tr>';
+        const karten = (p.gelb ? p.gelb + ' gelb ' : '') + (p.rot ? p.rot + ' rot ' : '') + (p.blau ? p.blau + ' blau' : '');
+        html += '<section class="karte stat-karte">' + spielerKopf(p) + '<div class="stat-zahlen">'
+            + kennzahl(p.tore, 'Tore', 'stark')
+            + kennzahl(p.wuerfe, 'Würfe')
+            + kennzahl(fmtQuote(p.wurfquote), 'Quote', quoteClass(p.wurfquote))
+            + kennzahl(p.siebenMeterWuerfe ? p.siebenMeterTore + '/' + p.siebenMeterWuerfe : '–', '7m')
+            + kennzahl(p.assists, 'Assists')
+            + kennzahl(p.fehler, 'Ballverl.')
+            + kennzahl(p.ballgewinne, 'Ballgew.')
+            + kennzahl(p.zeitstrafen, '2 min')
+            + '</div>'
+            + ((p.siebenMeterRaus || karten) ? '<p class="stat-zeile">'
+                + (p.siebenMeterRaus ? '7m herausgeholt: ' + p.siebenMeterRaus + '. ' : '')
+                + (karten ? 'Karten: ' + karten.trim() : '') + '</p>' : '')
+            + aktionenListe(p, data) + '</section>';
     });
-
-    const t = data.team;
-    html += `<tr class="stats-total"><td class="col-name">Team gesamt</td><td></td>`
-        + `<td class="num strong">${t.tore}</td><td class="num">${t.wuerfe}</td>`
-        + `<td class="num">${fmtQuote(t.wurfquote)}</td><td colspan="9"></td></tr>`;
-
-    html += '</tbody></table></div>';
     return html;
 }
 
-function renderKeeperTable(data) {
+function renderTorhueterKarten(data) {
     const keepers = Object.values(data.torhueter).sort((a, b) => b.paraden - a.paraden);
-
-    let html = '<h3>Torhüter</h3>';
-
-    if (keepers.length === 0) {
-        return html + '<p class="stats-empty">Noch keine Torwart-Aktionen erfasst.</p>';
-    }
-
-    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
-        + '<th class="col-name">Torhüter</th><th>Einsatz</th><th>Paraden</th>'
-        + '<th>Gegentore</th><th>Würfe aufs Tor</th><th>Fangquote</th></tr></thead><tbody>';
-
+    let html = '<h3 class="stat-abschnitt">Torhüter</h3>';
+    if (!keepers.length) return html + '<p class="stats-empty">Noch keine Torwart-Aktionen erfasst.</p>';
     keepers.forEach(p => {
-        html += '<tr>'
-            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
-            + `<td class="num strong">${p.paraden}</td>`
-            + `<td class="num">${p.gegentore}</td>`
-            + `<td class="num">${p.wuerfeAufsTor}</td>`
-            + `<td class="num ${quoteClass(p.fangquote, 30)}">${fmtQuote(p.fangquote)}</td>`
-            + '</tr>';
-    });
-    html += '</tbody></table></div>';
-
-    // Aufschluesselung nach Wurfzone
-    const zones = new Set();
-    keepers.forEach(p => {
-        Object.keys(p.paradenNachZone).forEach(z => zones.add(z));
-        Object.keys(p.gegentoreNachZone).forEach(z => zones.add(z));
-    });
-
-    if (zones.size > 0) {
-        const zoneList = [...zones].sort();
-        html += '<h4>Fangquote nach Wurfposition</h4>';
-        html += '<div class="stats-scroll"><table class="stats-table"><thead><tr><th class="col-name">Torhüter</th>';
-        zoneList.forEach(z => { html += `<th>${esc(zoneLabel(z))}</th>`; });
-        html += '</tr></thead><tbody>';
-        keepers.forEach(p => {
-            html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`;
-            zoneList.forEach(z => {
-                const hits = p.paradenNachZone[z] || 0;
-                const goals = p.gegentoreNachZone[z] || 0;
-                const total = hits + goals;
-                html += total
-                    ? `<td class="num" title="${hits} gehalten / ${total} Würfe">${hits}/${total}</td>`
-                    : '<td class="num muted">–</td>';
+        html += '<section class="karte stat-karte">' + spielerKopf(p) + '<div class="stat-zahlen">'
+            + kennzahl(p.paraden, 'Paraden', 'stark')
+            + kennzahl(p.gegentore, 'Gegentore')
+            + kennzahl(p.wuerfeAufsTor, 'Würfe aufs Tor')
+            + kennzahl(fmtQuote(p.fangquote), 'Fangquote', quoteClass(p.fangquote, 30))
+            + '</div>';
+        const zonen = new Set([...Object.keys(p.paradenNachZone), ...Object.keys(p.gegentoreNachZone)]);
+        if (zonen.size) {
+            html += '<details class="stat-details"><summary>Nach Wurfposition</summary><ul>';
+            [...zonen].sort().forEach(z => {
+                const h = p.paradenNachZone[z] || 0;
+                const g = p.gegentoreNachZone[z] || 0;
+                html += '<li><span>' + esc(zoneLabel(z)) + '</span><strong>' + h + ' von ' + (h + g) + ' gehalten</strong></li>';
             });
-            html += '</tr>';
-        });
-        html += '</tbody></table></div>';
-    }
-
+            html += '</ul></details>';
+        }
+        html += aktionenListe(p, data) + '</section>';
+    });
     return html;
 }
 
@@ -329,28 +325,6 @@ function zoneLabel(typ) {
         if (found) return found.label;
     }
     return typ;
-}
-
-function renderMatrix(data) {
-    let html = '<h3>Alle Aktionen im Detail</h3>';
-    html += '<div class="stats-scroll"><table class="stats-table stats-matrix"><thead><tr>'
-        + '<th class="col-name">Spieler</th><th>Einsatz</th>';
-    data.allActionTypes.forEach(t => {
-        html += `<th title="${esc(t)}">${esc(t.replace(/_/g, ' '))}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-
-    Object.values(data.spieler).forEach(p => {
-        html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`;
-        data.allActionTypes.forEach(t => {
-            const c = p.aktionen[t] || 0;
-            html += c > 0 ? `<td class="num strong">${c}</td>` : '<td class="num muted">0</td>';
-        });
-        html += '</tr>';
-    });
-    html += '</tbody></table></div>';
-    return html;
 }
 
 function quoteClass(q, goodAt) {
