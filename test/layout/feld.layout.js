@@ -917,6 +917,41 @@ async function laufViewport(browser, base, vp) {
             });
         }
 
+        // (i) Statistik (Vollbild): Karten statt Tabellen, nichts ragt seitlich heraus
+        try {
+            await overlayOeffnen(page, 'statistik');
+            await page.waitForSelector('#stats-view .stat-karte', { state: 'visible', timeout: 5000 });
+            await sleep(400);
+            await messe(page, e, vp, 'i-statistik', { schrift: false });
+            await foto(page, vp, 'statistik');
+            const st = await page.evaluate(function () {
+                const v = document.getElementById('stats-view');
+                const inh = v.querySelector('.vollbild-inhalt');
+                return {
+                    titel: (v.querySelector('.vollbild-titel') || {}).textContent,
+                    aktion: v.querySelectorAll('.vollbild-aktion button').length,
+                    karten: v.querySelectorAll('.stat-karte').length,
+                    tabellen: v.querySelectorAll('table').length,
+                    emoji: /\p{Extended_Pictographic}/u.test(v.textContent),
+                    inlineStil: Array.from(v.querySelectorAll('[style]')).filter(function (x) { return x.getAttribute('style'); }).length,
+                    scrollt: getComputedStyle(inh).overflowY === 'auto',
+                    seitwaerts: inh.scrollWidth > inh.clientWidth + 1
+                };
+            });
+            if (st.titel !== 'Statistik') melde(e, 9, 'i-statistik', 'Titel "' + st.titel + '"');
+            if (st.aktion !== 1) melde(e, 9, 'i-statistik', st.aktion + ' Aktionsknoepfe statt 1');
+            if (st.karten < 1) melde(e, 9, 'i-statistik', 'Keine Karte');
+            if (st.tabellen) melde(e, 9, 'i-statistik', 'Tabelle statt Karten');
+            if (st.emoji) melde(e, 9, 'i-statistik', 'Emoji im Text');
+            if (st.inlineStil) melde(e, 9, 'i-statistik', st.inlineStil + ' Inline-Stile');
+            if (!st.scrollt) melde(e, 9, 'i-statistik', 'Inhalt scrollt nicht');
+            if (st.seitwaerts) melde(e, 9, 'i-statistik', 'Inhalt ragt seitlich heraus');
+            await schliesseOverlay(page, e, 'statistik', 'i-statistik');
+        } catch (err) {
+            melde(e, 9, 'i-statistik', 'Statistik: ' + String(err.message).split('\n')[0]);
+            await page.evaluate(function () { if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('stats-view'); });
+        }
+
         // (h) Archiv (Vollbild): Karten, Blatt, Umbenennen, Loeschen - ohne prompt/confirm
         const archivName = 'Tagesbau-Archiv ' + vp.w + 'x' + vp.h;
         let archivDatei = null;

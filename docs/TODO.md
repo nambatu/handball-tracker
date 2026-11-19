@@ -45,8 +45,13 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       "Bericht ansehen" aus dem Archiv fuehrt Schliessen des Berichts zurueck
       in die Archivliste (auch wenn das Laden fehlschlaegt). Layouttest
       Zustand h prueft das. (S)
-- [ ] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
-      Spieler oder Tabelle mit fester erster Spalte). (M)
+- [x] 19.11.2026 (Branch claude/dazzling-heisenberg-inzcfp) 1.4 Statistik
+      als Vollbild mit Karten: Team gesamt, je Feldspieler und je Torhueter
+      eine Karte (grosse Zahlen oben, Rest als Zeilen), "Alle Aktionen im
+      Detail" je Spieler eingeklappt und nur mit vorkommenden Aktionen. Keine
+      Tabelle mehr, kein seitliches Wischen; CSV als einzige Aktion oben.
+      Layouttest Zustand i (alle zehn Groessen). Nicht automatisch getestet:
+      Inhalt mit sehr vielen Spielern (Scrollen). (M)
 - [ ] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
       unveraendert lassen. (M)
 - [ ] 1.6 Ticker-Einstellungen: nur "an/aus, Gruppe, welche Ereignisse";
@@ -117,6 +122,9 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
 - (aus 1.1) Emojis stecken auch in den gespeicherten Aktions-Bezeichnungen
   (`store.js`, Feld `label`) und damit in Statistik/Bericht/Auswahl; bei
   1.4/1.5 mit `UI.ohneEmoji`-Logik oder `anzeige` bereinigen.
+- (aus 1.4) Der Layouttest-Lauf Ablauf brach einmal beim Neuladen ab (Dialog
+  ungesicherte Daten, Zeitlimit); beim Wiederholen gruen. Vermutlich
+  langsames Netz; bei 3.3 (CI) beobachten.
 - (aus 1.3c) Layouttest und Vertragstests nicht gleichzeitig starten: parallel schlugen Vertragstests fehl, einzeln alle gruen.
 - Spielbericht als Bild/PDF direkt per Teilen-Knopf (`navigator.share`) in
   WhatsApp schicken.

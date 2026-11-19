@@ -429,107 +429,30 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .gk-hint { color: var(--text-muted); font-style: normal; font-size: 0.85em; }
 .gk-empty { color: var(--text-muted); font-size: 0.9rem; padding: 12px 0; }
 
-/* --- Statistik-Overlay --- */
-.stats-panel { max-width: 1200px; width: 96vw; }
-
-.stats-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 4px;
-}
-
-.stats-header h2 { margin: 0; }
-
-#stats-content { max-height: 68vh; overflow-y: auto; margin: 16px 0; }
-
-#stats-content h3 {
-    margin: 22px 0 10px;
-    font-size: 1.05rem;
-    color: var(--accent-color);
-}
-
-#stats-content h3:first-child { margin-top: 0; }
-
-#stats-content h4 {
-    margin: 18px 0 8px;
-    font-size: 0.92rem;
-    color: var(--text-muted);
-    font-weight: 600;
-}
-
-.stats-scroll {
-    overflow-x: auto;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.22);
-}
-
-.stats-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.86rem;
-    font-variant-numeric: tabular-nums;
-}
-
-.stats-table th,
-.stats-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    text-align: center;
-    white-space: nowrap;
-}
-
-.stats-table thead th {
-    position: sticky;
-    top: 0;
-    background: rgba(15, 18, 22, 0.97);
-    color: var(--text-muted);
-    font-size: 0.76rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    z-index: 2;
-}
-
-.stats-table .col-name {
-    text-align: left;
-    position: sticky;
-    left: 0;
-    background: rgba(15, 18, 22, 0.97);
-    z-index: 1;
-    min-width: 140px;
-}
-
-.stats-table thead .col-name { z-index: 3; }
-.stats-table tbody tr:hover td { background: rgba(255, 255, 255, 0.04); }
-.stats-table tbody tr:hover .col-name { background: rgba(31, 36, 44, 0.99); }
-
-.stats-table .num { font-weight: 500; }
-.stats-table .strong { font-weight: 800; }
-.stats-table .muted { color: rgba(152, 162, 176, 0.45); }
-
-.stats-table .q-good { color: #5cc79a; font-weight: 700; }
-.stats-table .q-mid  { color: #e8b04f; font-weight: 700; }
-.stats-table .q-low  { color: #ee7a7e; font-weight: 700; }
-
-.stats-total td {
-    border-top: 2px solid var(--border-color);
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.stats-matrix { font-size: 0.8rem; }
-.stats-empty { color: var(--text-muted); font-size: 0.9rem; }
-
-@media (max-width: 600px) {
-    .stats-table { font-size: 0.78rem; }
-    .stats-table th, .stats-table td { padding: 6px 7px; }
-    .stats-table .col-name { min-width: 110px; }
-    #stats-content { max-height: 62vh; }
-}
+/* --- Statistik (Vollbild): Karten statt breiter Tabellen --- */
+#stats-content { display: grid; gap: 8px; }
+.stat-abschnitt { margin: 12px 0 0; font-size: 1rem; color: var(--text-muted); font-weight: 700; }
+.stat-karte { padding: 12px 14px; }
+.stat-kopf { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.stat-nr { font-weight: 800; color: var(--text-muted); min-width: 1.6em; }
+.stat-name { flex: 1 1 auto; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+.stat-zeit { color: var(--text-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.stat-zahlen { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; margin-bottom: 6px; }
+.stat-zahl { display: flex; flex-direction: column; align-items: center; padding: 8px 4px;
+    background: var(--raised-bg); border-radius: var(--radius); }
+.stat-wert { font-size: 1.2rem; white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-wert.strong { font-weight: 800; }
+.stat-label { color: var(--text-muted); font-size: 12px; }
+.stat-zeile { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0;
+    border-top: 1px solid var(--border-color); font-size: 15px; }
+.stat-wert-klein { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-details summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; gap: 6px; }
+.stat-details[open] summary { margin-bottom: 4px; }
+.q-good { color: #5cc79a; }
+.q-mid  { color: #e8b04f; }
+.q-low  { color: #ee7a7e; }
+.muted  { color: rgba(152, 162, 176, 0.6); }
+.stats-empty { color: var(--text-muted); font-size: 0.9rem; margin: 0; }
 
 /* =========================================
    14. SPIELER-BADGE (runder Kreis mit Nummer)

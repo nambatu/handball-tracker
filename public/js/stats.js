@@ -213,113 +213,109 @@ function getHighLevelStats() {
 // CSV-Button im Popup rief window.Stats auf - im Popup-Fenster gibt es
 // das Objekt aber gar nicht, der Button hat also nie funktioniert.
 
+const STATS_ID = 'stats-view';
+
 function showStats() {
     const data = currentStats();
-    const view = document.getElementById('stats-view');
-    const body = document.getElementById('stats-content');
-    if (!view || !body) return;
-
-    body.innerHTML = renderFieldTable(data) + renderKeeperTable(data) + renderMatrix(data);
-    view.style.display = 'flex';
+    const inhalt = window.UI.Vollbild.oeffne({
+        id: STATS_ID,
+        titel: 'Statistik',
+        aktion: { text: 'CSV', onClick: exportAsCSV }
+    });
+    let body = document.getElementById('stats-content');
+    if (!body) {
+        body = document.createElement('div');
+        body.id = 'stats-content';
+        inhalt.appendChild(body);
+    }
+    body.innerHTML = renderTeamKarte(data) + renderFeldKarten(data)
+        + renderKeeperKarten(data) + renderDetails(data);
 }
 
 function closeStats() {
-    const view = document.getElementById('stats-view');
-    if (view) view.style.display = 'none';
+    window.UI.Vollbild.schliesse(STATS_ID);
 }
 
-function renderFieldTable(data) {
+/** Eine Kennzahl: Beschriftung klein, Wert gross (Handy-tauglich, kein Tabellenkopf). */
+function zahl(label, wert, klasse) {
+    return `<div class="stat-zahl"><span class="stat-wert ${klasse || ''}">${wert}</span>`
+        + `<span class="stat-label">${esc(label)}</span></div>`;
+}
+
+/** Zeile "Beschriftung ... Wert" fuer die weniger wichtigen Angaben. */
+function zeile(label, wert) {
+    return `<div class="stat-zeile"><span>${esc(label)}</span><span class="stat-wert-klein">${wert}</span></div>`;
+}
+
+function spielerKopf(p) {
+    return `<div class="stat-kopf"><span class="stat-nr">${esc(p.nummer)}</span>`
+        + `<span class="stat-name">${esc(p.name)}</span>`
+        + `<span class="stat-zeit">${fmtTime(p.playtimeSeconds)}</span></div>`;
+}
+
+function renderTeamKarte(data) {
+    const t = data.team;
+    return '<section class="karte stat-karte"><h3 class="karte-titel">Team gesamt</h3>'
+        + '<div class="stat-zahlen">'
+        + zahl('Tore', t.tore, 'strong')
+        + zahl('Würfe', t.wuerfe)
+        + zahl('Quote', fmtQuote(t.wurfquote))
+        + zahl('Gegentore', t.gegentore)
+        + '</div>'
+        + zeile('Ballverluste', t.ballverluste)
+        + zeile('Ballgewinne', t.ballgewinne)
+        + '</section>';
+}
+
+function renderFeldKarten(data) {
     const rows = Object.values(data.spieler)
         .filter(p => !p.istGast)
         .sort((a, b) => b.tore - a.tore || a.nummer - b.nummer);
 
-    let html = '<h3>Feldspieler</h3>';
-    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
-        + '<th class="col-name">Spieler</th><th>Einsatz</th><th>Tore</th><th>Würfe</th>'
-        + '<th>Quote</th><th>7m</th><th>Assists</th><th>Ballverl.</th><th>Ballgew.</th>'
-        + '<th>7m raus</th><th>2min</th><th>🟨</th><th>🟥</th><th>🟦</th></tr></thead><tbody>';
-
+    let html = '<h3 class="stat-abschnitt">Feldspieler</h3>';
+    if (rows.length === 0) return html + '<p class="stats-empty">Keine Spieler im Kader.</p>';
     rows.forEach(p => {
-        html += '<tr>'
-            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
-            + `<td class="num strong">${p.tore}</td>`
-            + `<td class="num">${p.wuerfe}</td>`
-            + `<td class="num ${quoteClass(p.wurfquote)}">${fmtQuote(p.wurfquote)}</td>`
-            + `<td class="num">${p.siebenMeterWuerfe ? p.siebenMeterTore + '/' + p.siebenMeterWuerfe : '–'}</td>`
-            + `<td class="num">${p.assists}</td>`
-            + `<td class="num">${p.fehler}</td>`
-            + `<td class="num">${p.ballgewinne}</td>`
-            + `<td class="num">${p.siebenMeterRaus}</td>`
-            + `<td class="num">${p.zeitstrafen}</td>`
-            + `<td class="num">${p.gelb || ''}</td>`
-            + `<td class="num">${p.rot || ''}</td>`
-            + `<td class="num">${p.blau || ''}</td>`
-            + '</tr>';
+        html += '<section class="karte stat-karte">' + spielerKopf(p)
+            + '<div class="stat-zahlen">'
+            + zahl('Tore', p.tore, 'strong')
+            + zahl('Würfe', p.wuerfe)
+            + zahl('Quote', fmtQuote(p.wurfquote), quoteClass(p.wurfquote))
+            + '</div>'
+            + zeile('7-Meter', p.siebenMeterWuerfe ? p.siebenMeterTore + ' / ' + p.siebenMeterWuerfe : '–')
+            + zeile('Assists', p.assists)
+            + zeile('Ballverluste', p.fehler)
+            + zeile('Ballgewinne', p.ballgewinne)
+            + zeile('7m herausgeholt', p.siebenMeterRaus)
+            + zeile('2-Minuten-Strafen', p.zeitstrafen)
+            + zeile('Karten (Gelb / Rot / Blau)', `${p.gelb} / ${p.rot} / ${p.blau}`)
+            + '</section>';
     });
-
-    const t = data.team;
-    html += `<tr class="stats-total"><td class="col-name">Team gesamt</td><td></td>`
-        + `<td class="num strong">${t.tore}</td><td class="num">${t.wuerfe}</td>`
-        + `<td class="num">${fmtQuote(t.wurfquote)}</td><td colspan="9"></td></tr>`;
-
-    html += '</tbody></table></div>';
     return html;
 }
 
-function renderKeeperTable(data) {
+function renderKeeperKarten(data) {
     const keepers = Object.values(data.torhueter).sort((a, b) => b.paraden - a.paraden);
-
-    let html = '<h3>Torhüter</h3>';
-
+    let html = '<h3 class="stat-abschnitt">Torhüter</h3>';
     if (keepers.length === 0) {
         return html + '<p class="stats-empty">Noch keine Torwart-Aktionen erfasst.</p>';
     }
-
-    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
-        + '<th class="col-name">Torhüter</th><th>Einsatz</th><th>Paraden</th>'
-        + '<th>Gegentore</th><th>Würfe aufs Tor</th><th>Fangquote</th></tr></thead><tbody>';
-
     keepers.forEach(p => {
-        html += '<tr>'
-            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
-            + `<td class="num strong">${p.paraden}</td>`
-            + `<td class="num">${p.gegentore}</td>`
-            + `<td class="num">${p.wuerfeAufsTor}</td>`
-            + `<td class="num ${quoteClass(p.fangquote, 30)}">${fmtQuote(p.fangquote)}</td>`
-            + '</tr>';
-    });
-    html += '</tbody></table></div>';
-
-    // Aufschluesselung nach Wurfzone
-    const zones = new Set();
-    keepers.forEach(p => {
-        Object.keys(p.paradenNachZone).forEach(z => zones.add(z));
-        Object.keys(p.gegentoreNachZone).forEach(z => zones.add(z));
-    });
-
-    if (zones.size > 0) {
-        const zoneList = [...zones].sort();
-        html += '<h4>Fangquote nach Wurfposition</h4>';
-        html += '<div class="stats-scroll"><table class="stats-table"><thead><tr><th class="col-name">Torhüter</th>';
-        zoneList.forEach(z => { html += `<th>${esc(zoneLabel(z))}</th>`; });
-        html += '</tr></thead><tbody>';
-        keepers.forEach(p => {
-            html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`;
-            zoneList.forEach(z => {
-                const hits = p.paradenNachZone[z] || 0;
-                const goals = p.gegentoreNachZone[z] || 0;
-                const total = hits + goals;
-                html += total
-                    ? `<td class="num" title="${hits} gehalten / ${total} Würfe">${hits}/${total}</td>`
-                    : '<td class="num muted">–</td>';
-            });
-            html += '</tr>';
+        html += '<section class="karte stat-karte">' + spielerKopf(p)
+            + '<div class="stat-zahlen">'
+            + zahl('Paraden', p.paraden, 'strong')
+            + zahl('Gegentore', p.gegentore)
+            + zahl('Fangquote', fmtQuote(p.fangquote), quoteClass(p.fangquote, 30))
+            + '</div>'
+            + zeile('Würfe aufs Tor', p.wuerfeAufsTor);
+        // Aufschluesselung nach Wurfposition: nur Positionen mit Wuerfen
+        const zonen = new Set([...Object.keys(p.paradenNachZone), ...Object.keys(p.gegentoreNachZone)]);
+        [...zonen].sort().forEach(z => {
+            const hits = p.paradenNachZone[z] || 0;
+            const total = hits + (p.gegentoreNachZone[z] || 0);
+            if (total) html += zeile('Position ' + zoneLabel(z), `${hits} / ${total} gehalten`);
         });
-        html += '</tbody></table></div>';
-    }
-
+        html += '</section>';
+    });
     return html;
 }
 
@@ -331,25 +327,20 @@ function zoneLabel(typ) {
     return typ;
 }
 
-function renderMatrix(data) {
-    let html = '<h3>Alle Aktionen im Detail</h3>';
-    html += '<div class="stats-scroll"><table class="stats-table stats-matrix"><thead><tr>'
-        + '<th class="col-name">Spieler</th><th>Einsatz</th>';
-    data.allActionTypes.forEach(t => {
-        html += `<th title="${esc(t)}">${esc(t.replace(/_/g, ' '))}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-
+/** Alle Aktionen je Spieler, nur was vorkam. Eingeklappt, damit die Seite kurz bleibt. */
+function renderDetails(data) {
+    let html = '<h3 class="stat-abschnitt">Alle Aktionen im Detail</h3>';
+    let any = false;
     Object.values(data.spieler).forEach(p => {
-        html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`;
-        data.allActionTypes.forEach(t => {
-            const c = p.aktionen[t] || 0;
-            html += c > 0 ? `<td class="num strong">${c}</td>` : '<td class="num muted">0</td>';
-        });
-        html += '</tr>';
+        const zeilen = data.allActionTypes
+            .filter(t => (p.aktionen[t] || 0) > 0)
+            .map(t => zeile(t.replace(/_/g, ' '), p.aktionen[t]));
+        if (!zeilen.length) return;
+        any = true;
+        html += `<details class="karte stat-karte stat-details"><summary>`
+            + `<strong>${esc(p.nummer)}</strong> ${esc(p.name)}</summary>${zeilen.join('')}</details>`;
     });
-    html += '</tbody></table></div>';
+    if (!any) html += '<p class="stats-empty">Noch keine Aktionen erfasst.</p>';
     return html;
 }
 
