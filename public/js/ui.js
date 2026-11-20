@@ -2298,6 +2298,7 @@ function renderCourtView(container) {
 
 window.UI = {
     Vollbild,
+    ohneEmoji,
     bestaetigen,
     blatt,
     bauEl,

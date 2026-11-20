@@ -215,112 +215,152 @@ function getHighLevelStats() {
 
 function showStats() {
     const data = currentStats();
-    const view = document.getElementById('stats-view');
-    const body = document.getElementById('stats-content');
-    if (!view || !body) return;
-
-    body.innerHTML = renderFieldTable(data) + renderKeeperTable(data) + renderMatrix(data);
-    view.style.display = 'flex';
+    const inhalt = window.UI.Vollbild.oeffne({
+        id: STATS_ID, titel: 'Statistik',
+        aktion: { text: 'CSV', onClick: exportAsCSV }
+    });
+    let box = document.getElementById('stats-content');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'stats-content';
+        inhalt.appendChild(box);
+    }
+    box.innerHTML = '';
+    box.appendChild(teamKarte(data));
+    box.appendChild(feldBlock(data));
+    box.appendChild(torhueterBlock(data));
 }
 
 function closeStats() {
-    const view = document.getElementById('stats-view');
-    if (view) view.style.display = 'none';
+    window.UI.Vollbild.schliesse(STATS_ID);
 }
 
-function renderFieldTable(data) {
+const STATS_ID = 'stats-view';
+
+// Kleine Bausteine: Ueberschrift, Zahlenfeld, Karte je Spieler
+function statUeberschrift(text) {
+    return window.UI.bauEl('h3', 'stat-abschnitt', text);
+}
+
+/** Ein Zahlenfeld: Wert gross, darunter die Bezeichnung. */
+function statFeld(label, wert, klasse) {
+    const f = window.UI.bauEl('div', 'stat-feld');
+    f.appendChild(window.UI.bauEl('span', 'stat-wert' + (klasse ? ' ' + klasse : ''), String(wert)));
+    f.appendChild(window.UI.bauEl('span', 'stat-label', label));
+    return f;
+}
+
+function statKarte(p, felder, extra) {
+    const U = window.UI;
+    const k = U.bauEl('div', 'stat-karte');
+    const kopf = U.bauEl('div', 'stat-kopf');
+    kopf.appendChild(U.bauEl('span', 'stat-nummer', '#' + p.nummer));
+    kopf.appendChild(U.bauEl('span', 'stat-name', p.name));
+    kopf.appendChild(U.bauEl('span', 'stat-zeit', fmtTime(p.playtimeSeconds)));
+    k.appendChild(kopf);
+    const raster = U.bauEl('div', 'stat-raster');
+    felder.forEach(f => raster.appendChild(f));
+    k.appendChild(raster);
+    if (extra) k.appendChild(extra);
+    return k;
+}
+
+function teamKarte(data) {
+    const t = data.team;
+    const k = window.UI.bauEl('div', 'stat-karte stat-team');
+    k.appendChild(window.UI.bauEl('div', 'stat-kopf', 'Team gesamt'));
+    const raster = window.UI.bauEl('div', 'stat-raster');
+    raster.appendChild(statFeld('Tore', t.tore, 'stat-gross'));
+    raster.appendChild(statFeld('Würfe', t.wuerfe));
+    raster.appendChild(statFeld('Quote', fmtQuote(t.wurfquote)));
+    k.appendChild(raster);
+    return k;
+}
+
+/** Alle Aktionen eines Spielers, die mindestens einmal vorkamen. */
+function aktionenDetail(p, data) {
+    const U = window.UI;
+    const typen = data.allActionTypes.filter(t => (p.aktionen[t] || 0) > 0);
+    if (!typen.length) return null;
+    const d = U.bauEl('details', 'stat-detail');
+    d.appendChild(U.bauEl('summary', '', 'Alle Aktionen (' + typen.length + ')'));
+    const liste = U.bauEl('div', 'stat-detail-liste');
+    typen.forEach(t => {
+        const z = U.bauEl('div', 'stat-detail-zeile');
+        z.appendChild(U.bauEl('span', '', (U.ohneEmoji ? U.ohneEmoji(t) : t).replace(/_/g, ' ')));
+        z.appendChild(U.bauEl('strong', '', String(p.aktionen[t])));
+        liste.appendChild(z);
+    });
+    d.appendChild(liste);
+    return d;
+}
+
+function feldBlock(data) {
+    const U = window.UI;
+    const wrap = U.bauEl('section', 'stat-block');
+    wrap.appendChild(statUeberschrift('Feldspieler'));
     const rows = Object.values(data.spieler)
         .filter(p => !p.istGast)
         .sort((a, b) => b.tore - a.tore || a.nummer - b.nummer);
-
-    let html = '<h3>Feldspieler</h3>';
-    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
-        + '<th class="col-name">Spieler</th><th>Einsatz</th><th>Tore</th><th>Würfe</th>'
-        + '<th>Quote</th><th>7m</th><th>Assists</th><th>Ballverl.</th><th>Ballgew.</th>'
-        + '<th>7m raus</th><th>2min</th><th>🟨</th><th>🟥</th><th>🟦</th></tr></thead><tbody>';
-
+    if (!rows.length) {
+        wrap.appendChild(U.bauEl('p', 'stats-empty', 'Noch keine Spieler im Kader.'));
+        return wrap;
+    }
     rows.forEach(p => {
-        html += '<tr>'
-            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
-            + `<td class="num strong">${p.tore}</td>`
-            + `<td class="num">${p.wuerfe}</td>`
-            + `<td class="num ${quoteClass(p.wurfquote)}">${fmtQuote(p.wurfquote)}</td>`
-            + `<td class="num">${p.siebenMeterWuerfe ? p.siebenMeterTore + '/' + p.siebenMeterWuerfe : '–'}</td>`
-            + `<td class="num">${p.assists}</td>`
-            + `<td class="num">${p.fehler}</td>`
-            + `<td class="num">${p.ballgewinne}</td>`
-            + `<td class="num">${p.siebenMeterRaus}</td>`
-            + `<td class="num">${p.zeitstrafen}</td>`
-            + `<td class="num">${p.gelb || ''}</td>`
-            + `<td class="num">${p.rot || ''}</td>`
-            + `<td class="num">${p.blau || ''}</td>`
-            + '</tr>';
+        const felder = [
+            statFeld('Tore', p.tore, 'stat-gross'),
+            statFeld('Würfe', p.wuerfe),
+            statFeld('Quote', fmtQuote(p.wurfquote), quoteClass(p.wurfquote)),
+            statFeld('7m', p.siebenMeterWuerfe ? p.siebenMeterTore + '/' + p.siebenMeterWuerfe : '–'),
+            statFeld('Assists', p.assists),
+            statFeld('Ballverl.', p.fehler),
+            statFeld('Ballgew.', p.ballgewinne),
+            statFeld('7m raus', p.siebenMeterRaus),
+            statFeld('2 min', p.zeitstrafen)
+        ];
+        // Karten nur anzeigen, wenn es sie gibt - sonst bleibt die Karte kompakt
+        if (p.gelb) felder.push(statFeld('Gelb', p.gelb));
+        if (p.rot) felder.push(statFeld('Rot', p.rot));
+        if (p.blau) felder.push(statFeld('Blau', p.blau));
+        wrap.appendChild(statKarte(p, felder, aktionenDetail(p, data)));
     });
-
-    const t = data.team;
-    html += `<tr class="stats-total"><td class="col-name">Team gesamt</td><td></td>`
-        + `<td class="num strong">${t.tore}</td><td class="num">${t.wuerfe}</td>`
-        + `<td class="num">${fmtQuote(t.wurfquote)}</td><td colspan="9"></td></tr>`;
-
-    html += '</tbody></table></div>';
-    return html;
+    return wrap;
 }
 
-function renderKeeperTable(data) {
+function torhueterBlock(data) {
+    const U = window.UI;
+    const wrap = U.bauEl('section', 'stat-block');
+    wrap.appendChild(statUeberschrift('Torhüter'));
     const keepers = Object.values(data.torhueter).sort((a, b) => b.paraden - a.paraden);
-
-    let html = '<h3>Torhüter</h3>';
-
-    if (keepers.length === 0) {
-        return html + '<p class="stats-empty">Noch keine Torwart-Aktionen erfasst.</p>';
+    if (!keepers.length) {
+        wrap.appendChild(U.bauEl('p', 'stats-empty', 'Noch keine Torwart-Aktionen erfasst.'));
+        return wrap;
     }
-
-    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
-        + '<th class="col-name">Torhüter</th><th>Einsatz</th><th>Paraden</th>'
-        + '<th>Gegentore</th><th>Würfe aufs Tor</th><th>Fangquote</th></tr></thead><tbody>';
-
     keepers.forEach(p => {
-        html += '<tr>'
-            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
-            + `<td class="num strong">${p.paraden}</td>`
-            + `<td class="num">${p.gegentore}</td>`
-            + `<td class="num">${p.wuerfeAufsTor}</td>`
-            + `<td class="num ${quoteClass(p.fangquote, 30)}">${fmtQuote(p.fangquote)}</td>`
-            + '</tr>';
-    });
-    html += '</tbody></table></div>';
-
-    // Aufschluesselung nach Wurfzone
-    const zones = new Set();
-    keepers.forEach(p => {
-        Object.keys(p.paradenNachZone).forEach(z => zones.add(z));
-        Object.keys(p.gegentoreNachZone).forEach(z => zones.add(z));
-    });
-
-    if (zones.size > 0) {
-        const zoneList = [...zones].sort();
-        html += '<h4>Fangquote nach Wurfposition</h4>';
-        html += '<div class="stats-scroll"><table class="stats-table"><thead><tr><th class="col-name">Torhüter</th>';
-        zoneList.forEach(z => { html += `<th>${esc(zoneLabel(z))}</th>`; });
-        html += '</tr></thead><tbody>';
-        keepers.forEach(p => {
-            html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`;
-            zoneList.forEach(z => {
+        const felder = [
+            statFeld('Paraden', p.paraden, 'stat-gross'),
+            statFeld('Gegentore', p.gegentore),
+            statFeld('Würfe aufs Tor', p.wuerfeAufsTor),
+            statFeld('Fangquote', fmtQuote(p.fangquote), quoteClass(p.fangquote, 30))
+        ];
+        // Fangquote je Wurfposition als kurze Zeilen
+        const zonen = [...new Set([...Object.keys(p.paradenNachZone), ...Object.keys(p.gegentoreNachZone)])].sort();
+        let extra = null;
+        if (zonen.length) {
+            extra = U.bauEl('div', 'stat-detail-liste stat-zonen');
+            extra.appendChild(U.bauEl('div', 'stat-zonen-titel', 'Gehalten nach Wurfposition'));
+            zonen.forEach(z => {
                 const hits = p.paradenNachZone[z] || 0;
-                const goals = p.gegentoreNachZone[z] || 0;
-                const total = hits + goals;
-                html += total
-                    ? `<td class="num" title="${hits} gehalten / ${total} Würfe">${hits}/${total}</td>`
-                    : '<td class="num muted">–</td>';
+                const gesamt = hits + (p.gegentoreNachZone[z] || 0);
+                const zeile = U.bauEl('div', 'stat-detail-zeile');
+                zeile.appendChild(U.bauEl('span', '', zoneLabel(z)));
+                zeile.appendChild(U.bauEl('strong', '', hits + '/' + gesamt));
+                extra.appendChild(zeile);
             });
-            html += '</tr>';
-        });
-        html += '</tbody></table></div>';
-    }
-
-    return html;
+        }
+        wrap.appendChild(statKarte(p, felder, extra));
+    });
+    return wrap;
 }
 
 function zoneLabel(typ) {
@@ -329,28 +369,6 @@ function zoneLabel(typ) {
         if (found) return found.label;
     }
     return typ;
-}
-
-function renderMatrix(data) {
-    let html = '<h3>Alle Aktionen im Detail</h3>';
-    html += '<div class="stats-scroll"><table class="stats-table stats-matrix"><thead><tr>'
-        + '<th class="col-name">Spieler</th><th>Einsatz</th>';
-    data.allActionTypes.forEach(t => {
-        html += `<th title="${esc(t)}">${esc(t.replace(/_/g, ' '))}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-
-    Object.values(data.spieler).forEach(p => {
-        html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`;
-        data.allActionTypes.forEach(t => {
-            const c = p.aktionen[t] || 0;
-            html += c > 0 ? `<td class="num strong">${c}</td>` : '<td class="num muted">0</td>';
-        });
-        html += '</tr>';
-    });
-    html += '</tbody></table></div>';
-    return html;
 }
 
 function quoteClass(q, goodAt) {

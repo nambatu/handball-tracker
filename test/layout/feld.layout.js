@@ -802,6 +802,42 @@ async function laufViewport(browser, base, vp) {
             }
         }
 
+        // (i) Statistik (Vollbild): Karten je Spieler, keine breite Tabelle, nichts quer scrollbar
+        try {
+            await overlayOeffnen(page, 'statistik');
+            await page.waitForSelector('#stats-view', { state: 'visible', timeout: 5000 });
+            await sleep(500);
+            await messe(page, e, vp, 'i-statistik', { schrift: false });
+            await foto(page, vp, 'statistik');
+            const sk = await page.evaluate(function () {
+                const v = document.getElementById('stats-view');
+                const t = v.querySelector('.vollbild-titel');
+                const inh = v.querySelector('.vollbild-inhalt');
+                return {
+                    titel: t && t.textContent.trim(),
+                    aktion: v.querySelectorAll('.vollbild-aktion button').length,
+                    tabellen: v.querySelectorAll('table').length,
+                    karten: v.querySelectorAll('.stat-karte').length,
+                    quer: inh.scrollWidth > inh.clientWidth + 1,
+                    emoji: /\p{Extended_Pictographic}/u.test(v.textContent),
+                    inlineStil: Array.from(v.querySelectorAll('[style]')).filter(function (x) { return x.getAttribute('style'); }).length,
+                    scrollt: getComputedStyle(inh).overflowY === 'auto'
+                };
+            });
+            if (sk.titel !== 'Statistik') melde(e, 9, 'i-statistik', 'Titel "' + sk.titel + '"');
+            if (sk.aktion !== 1) melde(e, 9, 'i-statistik', sk.aktion + ' Aktionen in der Kopfzeile');
+            if (sk.tabellen) melde(e, 9, 'i-statistik', 'Tabelle statt Karten');
+            if (sk.karten < 1) melde(e, 9, 'i-statistik', 'Keine Karte');
+            if (sk.quer) melde(e, 9, 'i-statistik', 'Inhalt scrollt quer');
+            if (sk.emoji) melde(e, 9, 'i-statistik', 'Emoji im Text');
+            if (sk.inlineStil) melde(e, 9, 'i-statistik', sk.inlineStil + ' Inline-Stile');
+            if (!sk.scrollt) melde(e, 9, 'i-statistik', 'Inhalt scrollt nicht');
+            await schliesseOverlay(page, e, 'statistik', 'i-statistik');
+        } catch (err) {
+            melde(e, 9, 'i-statistik', 'Statistik: ' + String(err.message).split('\n')[0]);
+            await page.evaluate(function () { if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('stats-view'); });
+        }
+
         // (g) Kader (Vollbild): Spieler anlegen, bearbeiten, loeschen, Mannschaft speichern/loeschen
         // je Groesse ein eigener Name: die Laeufe teilen sich das Testkonto
         const teamName = 'Tagesbau-Probe ' + vp.w + 'x' + vp.h;

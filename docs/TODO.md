@@ -45,8 +45,12 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       "Bericht ansehen" aus dem Archiv fuehrt Schliessen des Berichts zurueck
       in die Archivliste (auch wenn das Laden fehlschlaegt). Layouttest
       Zustand h prueft das. (S)
-- [ ] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
-      Spieler oder Tabelle mit fester erster Spalte). (M)
+- [x] 20.11.2026 (Branch claude/dazzling-heisenberg-6a7twg) 1.4 Statistik als
+      Vollbild mit Karten: Team gesamt, je Feldspieler und je Torhueter eine
+      Karte mit Zahlenfeldern (keine breite Tabelle mehr), "Alle Aktionen"
+      aufklappbar, Fangquote je Wurfposition als Zeilen, CSV als einzige
+      Aktion. Layouttest Zustand i (alle zehn Groessen). Nicht umgesetzt:
+      Sortierung/Filter. (M)
 - [ ] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
       unveraendert lassen. (M)
 - [ ] 1.6 Ticker-Einstellungen: nur "an/aus, Gruppe, welche Ereignisse";

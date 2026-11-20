@@ -429,107 +429,38 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .gk-hint { color: var(--text-muted); font-style: normal; font-size: 0.85em; }
 .gk-empty { color: var(--text-muted); font-size: 0.9rem; padding: 12px 0; }
 
-/* --- Statistik-Overlay --- */
-.stats-panel { max-width: 1200px; width: 96vw; }
-
-.stats-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 4px;
+/* --- Statistik (Vollbild): Karten je Spieler statt breiter Tabelle --- */
+.stat-block { margin-bottom: var(--abstand-4); }
+.stat-abschnitt { margin: var(--abstand-4) 0 var(--abstand-2); font-size: 1.05rem; color: var(--accent-color); }
+.stat-block:first-child .stat-abschnitt { margin-top: 0; }
+.stat-karte {
+    background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--radius);
+    padding: var(--abstand-3); margin: 0 0 var(--abstand-2);
 }
-
-.stats-header h2 { margin: 0; }
-
-#stats-content { max-height: 68vh; overflow-y: auto; margin: 16px 0; }
-
-#stats-content h3 {
-    margin: 22px 0 10px;
-    font-size: 1.05rem;
-    color: var(--accent-color);
+.stat-team { border-color: var(--accent-strong); }
+.stat-kopf { display: flex; align-items: baseline; gap: var(--abstand-2); margin-bottom: var(--abstand-2); font-weight: 700; }
+.stat-nummer { color: var(--accent-color); }
+.stat-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.stat-zeit { color: var(--text-muted); font-size: 0.85rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stat-raster { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.stat-feld {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 6px 2px; background: var(--raised-bg); border-radius: 8px; min-width: 0;
 }
-
-#stats-content h3:first-child { margin-top: 0; }
-
-#stats-content h4 {
-    margin: 18px 0 8px;
-    font-size: 0.92rem;
-    color: var(--text-muted);
-    font-weight: 600;
-}
-
-.stats-scroll {
-    overflow-x: auto;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.22);
-}
-
-.stats-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.86rem;
-    font-variant-numeric: tabular-nums;
-}
-
-.stats-table th,
-.stats-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    text-align: center;
-    white-space: nowrap;
-}
-
-.stats-table thead th {
-    position: sticky;
-    top: 0;
-    background: rgba(15, 18, 22, 0.97);
-    color: var(--text-muted);
-    font-size: 0.76rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    z-index: 2;
-}
-
-.stats-table .col-name {
-    text-align: left;
-    position: sticky;
-    left: 0;
-    background: rgba(15, 18, 22, 0.97);
-    z-index: 1;
-    min-width: 140px;
-}
-
-.stats-table thead .col-name { z-index: 3; }
-.stats-table tbody tr:hover td { background: rgba(255, 255, 255, 0.04); }
-.stats-table tbody tr:hover .col-name { background: rgba(31, 36, 44, 0.99); }
-
-.stats-table .num { font-weight: 500; }
-.stats-table .strong { font-weight: 800; }
-.stats-table .muted { color: rgba(152, 162, 176, 0.45); }
-
-.stats-table .q-good { color: #5cc79a; font-weight: 700; }
-.stats-table .q-mid  { color: #e8b04f; font-weight: 700; }
-.stats-table .q-low  { color: #ee7a7e; font-weight: 700; }
-
-.stats-total td {
-    border-top: 2px solid var(--border-color);
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.stats-matrix { font-size: 0.8rem; }
+.stat-wert { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-gross { font-size: 1.5rem; font-weight: 800; }
+.stat-label { color: var(--text-muted); font-size: 0.72rem; text-align: center; overflow-wrap: anywhere; }
+.stat-wert.q-good { color: #5cc79a; }
+.stat-wert.q-mid { color: #e8b04f; }
+.stat-wert.q-low { color: #ee7a7e; }
+.stat-wert.muted { color: rgba(152, 162, 176, 0.6); }
+.stat-detail { margin-top: var(--abstand-2); }
+.stat-detail summary { min-height: var(--touch); display: flex; align-items: center; color: var(--text-muted); cursor: pointer; }
+.stat-detail-liste { display: grid; gap: 2px; margin-top: var(--abstand-2); }
+.stat-detail-zeile { display: flex; justify-content: space-between; gap: 12px; padding: 4px 2px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); font-size: 0.9rem; }
+.stat-zonen-titel { color: var(--text-muted); font-size: 0.85rem; }
 .stats-empty { color: var(--text-muted); font-size: 0.9rem; }
-
-@media (max-width: 600px) {
-    .stats-table { font-size: 0.78rem; }
-    .stats-table th, .stats-table td { padding: 6px 7px; }
-    .stats-table .col-name { min-width: 110px; }
-    #stats-content { max-height: 62vh; }
-}
+@media (min-width: 700px) { .stat-raster { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 
 /* =========================================
    14. SPIELER-BADGE (runder Kreis mit Nummer)
