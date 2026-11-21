@@ -45,8 +45,11 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       "Bericht ansehen" aus dem Archiv fuehrt Schliessen des Berichts zurueck
       in die Archivliste (auch wenn das Laden fehlschlaegt). Layouttest
       Zustand h prueft das. (S)
-- [~] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
-      Spieler oder Tabelle mit fester erster Spalte). (M)
+- [x] 21.11.2026 (Branch claude/dazzling-heisenberg-okdsbc) 1.4 Statistik
+      als Vollbild mit Karten: Team-Karte, je Spieler eine Karte (Tore gross,
+      Kennzahlen im Raster, "Alle Aktionen" aufklappbar), je Torwart eine Karte
+      mit Fangquote nach Wurfposition. Keine Tabellen mehr; CSV-Knopf in der
+      Kopfzeile. Layouttest Zustand i (alle zehn Groessen). (M)
 - [ ] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
       unveraendert lassen. (M)
 - [ ] 1.6 Ticker-Einstellungen: nur "an/aus, Gruppe, welche Ereignisse";
@@ -107,6 +110,11 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       Countdown bei gesperrtem Bildschirm, iPhone-Notch.
 
 ## Ideen (ungeprueft, erst nach Ruecksprache mit Julian nach oben)
+
+- (aus 1.4) Der Layouttest laeuft laenger als 10 Minuten; mit `timeout` im Vordergrund
+  bricht er mitten drin ab (Browser-Fehler). Im Hintergrund ohne Zeitlimit starten.
+- (aus 1.4) Die Gegner-Spieler erscheinen nicht mehr in der Statistik-Ansicht (vorher nur
+  in der Detailmatrix); stehen weiter im CSV.
 
 - (aus 1.2) Der Test legt Mannschaften "Tagesbau-Probe ..." an und loescht sie
   wieder; bleibt ein Lauf mittendrin haengen, bleiben sie im Testkonto stehen.
