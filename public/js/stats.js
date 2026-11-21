@@ -207,150 +207,153 @@ function getHighLevelStats() {
 }
 
 // ===================================================================
-// ANZEIGE (In-Page-Overlay statt Popup)
+// ANZEIGE (Vollbild)
 // ===================================================================
-// Das alte window.open() wurde auf dem Handy haeufig blockiert, und der
-// CSV-Button im Popup rief window.Stats auf - im Popup-Fenster gibt es
-// das Objekt aber gar nicht, der Button hat also nie funktioniert.
+// Auf dem Handy passt keine breite Tabelle auf den Schirm. Darum gibt es je
+// Spieler eine Karte: oben Name und Tore gross, darunter die uebrigen
+// Zahlen in einem Raster. Die Detailmatrix steckt je Spieler hinter
+// "Alle Aktionen" (vollstaendig steht sie weiter im CSV-Export).
+
+const STATS_ID = 'stats-view';
 
 function showStats() {
+    const U = window.UI;
     const data = currentStats();
-    const view = document.getElementById('stats-view');
-    const body = document.getElementById('stats-content');
-    if (!view || !body) return;
-
-    body.innerHTML = renderFieldTable(data) + renderKeeperTable(data) + renderMatrix(data);
-    view.style.display = 'flex';
+    const inhalt = U.Vollbild.oeffne({
+        id: STATS_ID, titel: 'Statistik',
+        aktion: { text: 'CSV', onClick: exportAsCSV }
+    });
+    inhalt.querySelectorAll('.stats-liste').forEach(function (n) { n.remove(); });
+    const liste = U.bauEl('div', 'stats-liste');
+    liste.appendChild(teamKarte(data));
+    liste.appendChild(U.bauEl('h3', 'stats-abschnitt', 'Feldspieler'));
+    const feld = Object.values(data.spieler)
+        .filter(p => !p.istGast)
+        .sort((a, b) => b.tore - a.tore || a.nummer - b.nummer);
+    if (feld.length === 0) liste.appendChild(U.bauEl('p', 'stats-empty', 'Noch keine Spieler im Kader.'));
+    feld.forEach(p => liste.appendChild(spielerKarte(p, data)));
+    liste.appendChild(U.bauEl('h3', 'stats-abschnitt', 'Torhüter'));
+    const keepers = Object.values(data.torhueter).sort((a, b) => b.paraden - a.paraden);
+    if (keepers.length === 0) liste.appendChild(U.bauEl('p', 'stats-empty', 'Noch keine Torwart-Aktionen erfasst.'));
+    keepers.forEach(p => liste.appendChild(torKarte(p)));
+    inhalt.appendChild(liste);
 }
 
 function closeStats() {
-    const view = document.getElementById('stats-view');
-    if (view) view.style.display = 'none';
+    window.UI.Vollbild.schliesse(STATS_ID);
 }
 
-function renderFieldTable(data) {
-    const rows = Object.values(data.spieler)
-        .filter(p => !p.istGast)
-        .sort((a, b) => b.tore - a.tore || a.nummer - b.nummer);
+/** Eine Kennzahl: kleine Beschriftung oben, Wert darunter. */
+function kennzahl(label, wert, klasse) {
+    const U = window.UI;
+    const z = U.bauEl('div', 'stats-zahl');
+    z.appendChild(U.bauEl('span', 'stats-zahl-label', label));
+    z.appendChild(U.bauEl('span', 'stats-zahl-wert' + (klasse ? ' ' + klasse : ''), String(wert)));
+    return z;
+}
 
-    let html = '<h3>Feldspieler</h3>';
-    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
-        + '<th class="col-name">Spieler</th><th>Einsatz</th><th>Tore</th><th>Würfe</th>'
-        + '<th>Quote</th><th>7m</th><th>Assists</th><th>Ballverl.</th><th>Ballgew.</th>'
-        + '<th>7m raus</th><th>2min</th><th>🟨</th><th>🟥</th><th>🟦</th></tr></thead><tbody>';
-
-    rows.forEach(p => {
-        html += '<tr>'
-            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
-            + `<td class="num strong">${p.tore}</td>`
-            + `<td class="num">${p.wuerfe}</td>`
-            + `<td class="num ${quoteClass(p.wurfquote)}">${fmtQuote(p.wurfquote)}</td>`
-            + `<td class="num">${p.siebenMeterWuerfe ? p.siebenMeterTore + '/' + p.siebenMeterWuerfe : '–'}</td>`
-            + `<td class="num">${p.assists}</td>`
-            + `<td class="num">${p.fehler}</td>`
-            + `<td class="num">${p.ballgewinne}</td>`
-            + `<td class="num">${p.siebenMeterRaus}</td>`
-            + `<td class="num">${p.zeitstrafen}</td>`
-            + `<td class="num">${p.gelb || ''}</td>`
-            + `<td class="num">${p.rot || ''}</td>`
-            + `<td class="num">${p.blau || ''}</td>`
-            + '</tr>';
-    });
-
+function teamKarte(data) {
+    const U = window.UI;
     const t = data.team;
-    html += `<tr class="stats-total"><td class="col-name">Team gesamt</td><td></td>`
-        + `<td class="num strong">${t.tore}</td><td class="num">${t.wuerfe}</td>`
-        + `<td class="num">${fmtQuote(t.wurfquote)}</td><td colspan="9"></td></tr>`;
-
-    html += '</tbody></table></div>';
-    return html;
+    const k = U.bauEl('section', 'karte stats-karte');
+    k.appendChild(U.bauEl('h3', 'karte-titel', 'Team gesamt'));
+    const raster = U.bauEl('div', 'stats-raster');
+    raster.appendChild(kennzahl('Tore', t.tore));
+    raster.appendChild(kennzahl('Würfe', t.wuerfe));
+    raster.appendChild(kennzahl('Quote', fmtQuote(t.wurfquote), quoteClass(t.wurfquote)));
+    raster.appendChild(kennzahl('Gegentore', t.gegentore));
+    raster.appendChild(kennzahl('Ballverluste', t.ballverluste));
+    raster.appendChild(kennzahl('Ballgewinne', t.ballgewinne));
+    k.appendChild(raster);
+    return k;
 }
 
-function renderKeeperTable(data) {
-    const keepers = Object.values(data.torhueter).sort((a, b) => b.paraden - a.paraden);
+function spielerKarte(p, data) {
+    const U = window.UI;
+    const k = U.bauEl('section', 'karte stats-karte');
+    const kopf = U.bauEl('div', 'stats-kopf');
+    kopf.appendChild(U.bauEl('h4', 'stats-name', '#' + p.nummer + ' ' + p.name));
+    const tore = U.bauEl('span', 'stats-tore', p.tore + (p.tore === 1 ? ' Tor' : ' Tore'));
+    kopf.appendChild(tore);
+    k.appendChild(kopf);
 
-    let html = '<h3>Torhüter</h3>';
+    const karten = [p.gelb ? p.gelb + ' gelb' : '', p.rot ? p.rot + ' rot' : '', p.blau ? p.blau + ' blau' : '']
+        .filter(Boolean).join(', ');
+    const raster = U.bauEl('div', 'stats-raster');
+    raster.appendChild(kennzahl('Würfe', p.wuerfe));
+    raster.appendChild(kennzahl('Quote', fmtQuote(p.wurfquote), quoteClass(p.wurfquote)));
+    raster.appendChild(kennzahl('7m', p.siebenMeterWuerfe ? p.siebenMeterTore + '/' + p.siebenMeterWuerfe : '–'));
+    raster.appendChild(kennzahl('Assists', p.assists));
+    raster.appendChild(kennzahl('Ballverluste', p.fehler));
+    raster.appendChild(kennzahl('Ballgewinne', p.ballgewinne));
+    raster.appendChild(kennzahl('7m geholt', p.siebenMeterRaus));
+    raster.appendChild(kennzahl('2 min', p.zeitstrafen));
+    raster.appendChild(kennzahl('Einsatz', fmtTime(p.playtimeSeconds)));
+    k.appendChild(raster);
+    if (karten) k.appendChild(U.bauEl('p', 'stats-karten', 'Karten: ' + karten));
 
-    if (keepers.length === 0) {
-        return html + '<p class="stats-empty">Noch keine Torwart-Aktionen erfasst.</p>';
-    }
-
-    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
-        + '<th class="col-name">Torhüter</th><th>Einsatz</th><th>Paraden</th>'
-        + '<th>Gegentore</th><th>Würfe aufs Tor</th><th>Fangquote</th></tr></thead><tbody>';
-
-    keepers.forEach(p => {
-        html += '<tr>'
-            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
-            + `<td class="num strong">${p.paraden}</td>`
-            + `<td class="num">${p.gegentore}</td>`
-            + `<td class="num">${p.wuerfeAufsTor}</td>`
-            + `<td class="num ${quoteClass(p.fangquote, 30)}">${fmtQuote(p.fangquote)}</td>`
-            + '</tr>';
-    });
-    html += '</tbody></table></div>';
-
-    // Aufschluesselung nach Wurfzone
-    const zones = new Set();
-    keepers.forEach(p => {
-        Object.keys(p.paradenNachZone).forEach(z => zones.add(z));
-        Object.keys(p.gegentoreNachZone).forEach(z => zones.add(z));
-    });
-
-    if (zones.size > 0) {
-        const zoneList = [...zones].sort();
-        html += '<h4>Fangquote nach Wurfposition</h4>';
-        html += '<div class="stats-scroll"><table class="stats-table"><thead><tr><th class="col-name">Torhüter</th>';
-        zoneList.forEach(z => { html += `<th>${esc(zoneLabel(z))}</th>`; });
-        html += '</tr></thead><tbody>';
-        keepers.forEach(p => {
-            html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`;
-            zoneList.forEach(z => {
-                const hits = p.paradenNachZone[z] || 0;
-                const goals = p.gegentoreNachZone[z] || 0;
-                const total = hits + goals;
-                html += total
-                    ? `<td class="num" title="${hits} gehalten / ${total} Würfe">${hits}/${total}</td>`
-                    : '<td class="num muted">–</td>';
-            });
-            html += '</tr>';
+    // Alle Aktionen mit Anzahl > 0, hinter einem Aufklapp-Knopf
+    const eintraege = data.allActionTypes
+        .filter(t => (p.aktionen[t] || 0) > 0)
+        .map(t => [t.replace(/_/g, ' '), p.aktionen[t]]);
+    if (eintraege.length) {
+        const d = U.bauEl('details', 'stats-details');
+        d.appendChild(U.bauEl('summary', 'stats-details-kopf', 'Alle Aktionen (' + eintraege.length + ')'));
+        const ul = U.bauEl('ul', 'stats-aktionen');
+        eintraege.forEach(function (e) {
+            const li = U.bauEl('li', '');
+            li.appendChild(U.bauEl('span', '', ohneEmojiText(e[0])));
+            li.appendChild(U.bauEl('strong', '', String(e[1])));
+            ul.appendChild(li);
         });
-        html += '</tbody></table></div>';
+        d.appendChild(ul);
+        k.appendChild(d);
     }
+    return k;
+}
 
-    return html;
+function torKarte(p) {
+    const U = window.UI;
+    const k = U.bauEl('section', 'karte stats-karte');
+    const kopf = U.bauEl('div', 'stats-kopf');
+    kopf.appendChild(U.bauEl('h4', 'stats-name', '#' + p.nummer + ' ' + p.name));
+    kopf.appendChild(U.bauEl('span', 'stats-tore', p.paraden + (p.paraden === 1 ? ' Parade' : ' Paraden')));
+    k.appendChild(kopf);
+    const raster = U.bauEl('div', 'stats-raster');
+    raster.appendChild(kennzahl('Gegentore', p.gegentore));
+    raster.appendChild(kennzahl('Würfe aufs Tor', p.wuerfeAufsTor));
+    raster.appendChild(kennzahl('Fangquote', fmtQuote(p.fangquote), quoteClass(p.fangquote, 30)));
+    raster.appendChild(kennzahl('Einsatz', fmtTime(p.playtimeSeconds)));
+    k.appendChild(raster);
+
+    const zonen = [...new Set([...Object.keys(p.paradenNachZone), ...Object.keys(p.gegentoreNachZone)])].sort();
+    if (zonen.length) {
+        const ul = U.bauEl('ul', 'stats-aktionen');
+        zonen.forEach(function (z) {
+            const h = p.paradenNachZone[z] || 0;
+            const g = p.gegentoreNachZone[z] || 0;
+            const li = U.bauEl('li', '');
+            li.appendChild(U.bauEl('span', '', zoneLabel(z)));
+            li.appendChild(U.bauEl('strong', '', h + ' von ' + (h + g) + ' gehalten'));
+            ul.appendChild(li);
+        });
+        k.appendChild(U.bauEl('h5', 'stats-unter', 'Nach Wurfposition'));
+        k.appendChild(ul);
+    }
+    return k;
+}
+
+/** Emojis aus gespeicherten Aktionsnamen entfernen (nur Anzeige). */
+function ohneEmojiText(t) {
+    return String(t).replace(/\p{Extended_Pictographic}️?/gu, '').replace(/\s+/g, ' ').trim();
 }
 
 function zoneLabel(typ) {
     for (const key in window.Store.UNTERAKTIONEN) {
         const found = window.Store.UNTERAKTIONEN[key].find(u => u.typ === typ);
-        if (found) return found.label;
+        if (found) return ohneEmojiText(found.label);
     }
     return typ;
-}
-
-function renderMatrix(data) {
-    let html = '<h3>Alle Aktionen im Detail</h3>';
-    html += '<div class="stats-scroll"><table class="stats-table stats-matrix"><thead><tr>'
-        + '<th class="col-name">Spieler</th><th>Einsatz</th>';
-    data.allActionTypes.forEach(t => {
-        html += `<th title="${esc(t)}">${esc(t.replace(/_/g, ' '))}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-
-    Object.values(data.spieler).forEach(p => {
-        html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`;
-        data.allActionTypes.forEach(t => {
-            const c = p.aktionen[t] || 0;
-            html += c > 0 ? `<td class="num strong">${c}</td>` : '<td class="num muted">0</td>';
-        });
-        html += '</tr>';
-    });
-    html += '</tbody></table></div>';
-    return html;
 }
 
 function quoteClass(q, goodAt) {

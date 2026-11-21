@@ -24,7 +24,7 @@
 //   5 kein abgeschnittener Text       10 Overlays: Schliessen erreichbar
 // Die Zustaende, in denen 1-8 gemessen werden: a Feld ruhig, b Spieler
 // gewaehlt, c Unterauswahl offen, d nach 3:2, e Menue offen, f Verlauf offen
-// (dazu das "Assist"-Sheet, wenn es kommt), g Kader, h Archiv (Karten, Blaetter).
+// (dazu das "Assist"-Sheet, wenn es kommt), g Kader, h Archiv (Karten, Blaetter), i Statistik (Karten, Aufklappen).
 // Dazu kommen die Spielphasen und die Auszeit (vor, Planzeit erreicht, Auszeit-
 // Wahl, Auszeit laeuft, Verlauf mit Auszeit, Pause, Abpfiff,
 // Archiv-Frage) - jeweils mit denselben Pruefungen 1-8 - und auf 390x844 ein
@@ -1013,6 +1013,55 @@ async function laufViewport(browser, base, vp) {
             if (archivDatei) {
                 try { await page.evaluate(function (f) { return fetch('/api/archive/' + encodeURIComponent(f), { method: 'DELETE' }); }, archivDatei); } catch (err) { /* egal */ }
             }
+        }
+
+        // (i) Statistik (Vollbild): Karten je Spieler statt breiter Tabelle
+        try {
+            await overlayOeffnen(page, 'statistik');
+            await page.waitForSelector('#stats-view .stats-karte', { state: 'visible', timeout: 5000 });
+            await sleep(400);
+            await messe(page, e, vp, 'i-statistik', { schrift: false });
+            await foto(page, vp, 'statistik');
+            const st = await page.evaluate(function () {
+                const v = document.getElementById('stats-view');
+                const t = v.querySelector('.vollbild-titel');
+                const inh = v.querySelector('.vollbild-inhalt');
+                return {
+                    titel: t && t.textContent.trim(),
+                    aktion: Array.from(v.querySelectorAll('.vollbild-aktion button')).map(function (b) { return b.textContent.trim(); }),
+                    karten: v.querySelectorAll('.stats-karte').length,
+                    tabellen: v.querySelectorAll('table').length,
+                    emoji: /\p{Extended_Pictographic}/u.test(v.textContent),
+                    inlineStil: Array.from(v.querySelectorAll('[style]')).filter(function (x) { return x.getAttribute('style'); }).length,
+                    scrollt: getComputedStyle(inh).overflowY === 'auto',
+                    breiter: inh.scrollWidth > inh.clientWidth + 1,
+                    ausserhalb: Array.from(v.querySelectorAll('.stats-karte, .stats-zahl')).filter(function (x) {
+                        const r = x.getBoundingClientRect();
+                        return r.right > window.innerWidth + 0.5 || r.left < -0.5;
+                    }).length,
+                    details: v.querySelectorAll('.stats-details').length
+                };
+            });
+            if (st.titel !== 'Statistik') melde(e, 9, 'i-statistik', 'Titel "' + st.titel + '"');
+            if (st.aktion.join('|') !== 'CSV') melde(e, 9, 'i-statistik', 'Aktion statt "CSV": ' + st.aktion.join('|'));
+            if (st.karten < 3) melde(e, 9, 'i-statistik', 'Nur ' + st.karten + ' Karten (Team + Spieler erwartet)');
+            if (st.tabellen) melde(e, 9, 'i-statistik', st.tabellen + ' Tabelle(n) - auf dem Handy nicht lesbar');
+            if (st.emoji) melde(e, 9, 'i-statistik', 'Emoji im Text');
+            if (st.inlineStil) melde(e, 9, 'i-statistik', st.inlineStil + ' Inline-Stile');
+            if (!st.scrollt) melde(e, 9, 'i-statistik', 'Inhalt scrollt nicht');
+            if (st.breiter) melde(e, 9, 'i-statistik', 'Inhalt ist breiter als der Schirm');
+            if (st.ausserhalb) melde(e, 9, 'i-statistik', st.ausserhalb + ' Karte(n)/Zahl(en) ausserhalb des Schirms');
+            if (st.details) {
+                await page.locator('#stats-view .stats-details-kopf').first().tap({ timeout: 3000 });
+                await sleep(200);
+                const offen = await page.evaluate(function () { return document.querySelector('#stats-view .stats-details').open; });
+                if (!offen) melde(e, 9, 'i-statistik', '"Alle Aktionen" klappt nicht auf');
+                await messe(page, e, vp, 'i-statistik-offen', { schrift: false });
+            }
+            await schliesseOverlay(page, e, 'statistik', 'i-statistik');
+        } catch (err) {
+            melde(e, 9, 'i-statistik', 'Statistik: ' + String(err.message).split('\n').slice(0, 4).join(' | '));
+            await page.evaluate(function () { if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('stats-view'); });
         }
 
         // Phasen, Auszeit (Zustaende, die nur nach dem Anpfiff vorkommen)

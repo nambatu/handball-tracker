@@ -45,7 +45,7 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       "Bericht ansehen" aus dem Archiv fuehrt Schliessen des Berichts zurueck
       in die Archivliste (auch wenn das Laden fehlschlaegt). Layouttest
       Zustand h prueft das. (S)
-- [ ] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
+- [~] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
       Spieler oder Tabelle mit fester erster Spalte). (M)
 - [ ] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
       unveraendert lassen. (M)
