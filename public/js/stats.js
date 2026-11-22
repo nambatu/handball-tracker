@@ -213,113 +213,107 @@ function getHighLevelStats() {
 // CSV-Button im Popup rief window.Stats auf - im Popup-Fenster gibt es
 // das Objekt aber gar nicht, der Button hat also nie funktioniert.
 
-function showStats() {
-    const data = currentStats();
-    const view = document.getElementById('stats-view');
-    const body = document.getElementById('stats-content');
-    if (!view || !body) return;
+const STATS_ID = 'stats-view';
 
-    body.innerHTML = renderFieldTable(data) + renderKeeperTable(data) + renderMatrix(data);
-    view.style.display = 'flex';
+function showStats() {
+    const UI = window.UI;
+    if (!UI || !UI.Vollbild) return;
+    const data = currentStats();
+    const inhalt = UI.Vollbild.oeffne({
+        id: STATS_ID,
+        titel: 'Statistik',
+        aktion: { text: 'CSV', onClick: function () { exportAsCSV(); } }
+    });
+    // Alte Karten wegraeumen (der Hinweis-Absatz bleibt stehen)
+    inhalt.querySelectorAll('.stats-liste').forEach(function (n) { n.remove(); });
+    const liste = document.createElement('div');
+    liste.className = 'stats-liste';
+    liste.innerHTML = renderTeamKarte(data) + renderFeldKarten(data)
+        + renderKeeperKarten(data) + renderDetailKarten(data);
+    inhalt.appendChild(liste);
 }
 
 function closeStats() {
-    const view = document.getElementById('stats-view');
-    if (view) view.style.display = 'none';
+    if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse(STATS_ID);
 }
 
-function renderFieldTable(data) {
+/** Ein Zahlenfeld: kleine Beschriftung, darunter der Wert. */
+function zahl(label, wert, klasse) {
+    return '<div class="stats-zahl"><dt>' + esc(label) + '</dt>'
+        + '<dd' + (klasse ? ' class="' + klasse + '"' : '') + '>' + wert + '</dd></div>';
+}
+
+function spielerKopf(p, grossLabel, grossWert) {
+    return '<div class="stats-kopf"><h4 class="stats-name"><span class="stats-nr">#' + esc(p.nummer) + '</span> '
+        + esc(p.name) + '</h4>'
+        + '<div class="stats-gross"><strong>' + grossWert + '</strong><span>' + esc(grossLabel) + '</span></div></div>';
+}
+
+function renderTeamKarte(data) {
+    const t = data.team;
+    return '<section class="karte stats-karte"><h3 class="karte-titel">Team gesamt</h3><dl class="stats-zahlen">'
+        + zahl('Tore', t.tore, 'strong') + zahl('Würfe', t.wuerfe)
+        + zahl('Wurfquote', fmtQuote(t.wurfquote)) + '</dl></section>';
+}
+
+function renderFeldKarten(data) {
     const rows = Object.values(data.spieler)
         .filter(p => !p.istGast)
         .sort((a, b) => b.tore - a.tore || a.nummer - b.nummer);
 
-    let html = '<h3>Feldspieler</h3>';
-    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
-        + '<th class="col-name">Spieler</th><th>Einsatz</th><th>Tore</th><th>Würfe</th>'
-        + '<th>Quote</th><th>7m</th><th>Assists</th><th>Ballverl.</th><th>Ballgew.</th>'
-        + '<th>7m raus</th><th>2min</th><th>🟨</th><th>🟥</th><th>🟦</th></tr></thead><tbody>';
-
+    let html = '<h3 class="stats-abschnitt">Feldspieler</h3>';
+    if (rows.length === 0) return html + '<p class="stats-empty">Noch keine Spieler.</p>';
     rows.forEach(p => {
-        html += '<tr>'
-            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
-            + `<td class="num strong">${p.tore}</td>`
-            + `<td class="num">${p.wuerfe}</td>`
-            + `<td class="num ${quoteClass(p.wurfquote)}">${fmtQuote(p.wurfquote)}</td>`
-            + `<td class="num">${p.siebenMeterWuerfe ? p.siebenMeterTore + '/' + p.siebenMeterWuerfe : '–'}</td>`
-            + `<td class="num">${p.assists}</td>`
-            + `<td class="num">${p.fehler}</td>`
-            + `<td class="num">${p.ballgewinne}</td>`
-            + `<td class="num">${p.siebenMeterRaus}</td>`
-            + `<td class="num">${p.zeitstrafen}</td>`
-            + `<td class="num">${p.gelb || ''}</td>`
-            + `<td class="num">${p.rot || ''}</td>`
-            + `<td class="num">${p.blau || ''}</td>`
-            + '</tr>';
+        const karten = [];
+        if (p.gelb) karten.push(p.gelb + ' gelb');
+        if (p.rot) karten.push(p.rot + ' rot');
+        if (p.blau) karten.push(p.blau + ' blau');
+        html += '<section class="karte stats-karte">' + spielerKopf(p, 'Tore', p.tore)
+            + '<dl class="stats-zahlen">'
+            + zahl('Einsatz', fmtTime(p.playtimeSeconds))
+            + zahl('Würfe', p.wuerfe)
+            + zahl('Quote', fmtQuote(p.wurfquote), quoteClass(p.wurfquote))
+            + zahl('7m', p.siebenMeterWuerfe ? p.siebenMeterTore + '/' + p.siebenMeterWuerfe : '–')
+            + zahl('Assists', p.assists)
+            + zahl('Ballverluste', p.fehler)
+            + zahl('Ballgewinne', p.ballgewinne)
+            + zahl('7m rausgeholt', p.siebenMeterRaus)
+            + zahl('2 Minuten', p.zeitstrafen)
+            + zahl('Karten', karten.length ? esc(karten.join(', ')) : '–')
+            + '</dl></section>';
     });
-
-    const t = data.team;
-    html += `<tr class="stats-total"><td class="col-name">Team gesamt</td><td></td>`
-        + `<td class="num strong">${t.tore}</td><td class="num">${t.wuerfe}</td>`
-        + `<td class="num">${fmtQuote(t.wurfquote)}</td><td colspan="9"></td></tr>`;
-
-    html += '</tbody></table></div>';
     return html;
 }
 
-function renderKeeperTable(data) {
+function renderKeeperKarten(data) {
     const keepers = Object.values(data.torhueter).sort((a, b) => b.paraden - a.paraden);
 
-    let html = '<h3>Torhüter</h3>';
-
+    let html = '<h3 class="stats-abschnitt">Torhüter</h3>';
     if (keepers.length === 0) {
         return html + '<p class="stats-empty">Noch keine Torwart-Aktionen erfasst.</p>';
     }
 
-    html += '<div class="stats-scroll"><table class="stats-table"><thead><tr>'
-        + '<th class="col-name">Torhüter</th><th>Einsatz</th><th>Paraden</th>'
-        + '<th>Gegentore</th><th>Würfe aufs Tor</th><th>Fangquote</th></tr></thead><tbody>';
-
     keepers.forEach(p => {
-        html += '<tr>'
-            + `<td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`
-            + `<td class="num strong">${p.paraden}</td>`
-            + `<td class="num">${p.gegentore}</td>`
-            + `<td class="num">${p.wuerfeAufsTor}</td>`
-            + `<td class="num ${quoteClass(p.fangquote, 30)}">${fmtQuote(p.fangquote)}</td>`
-            + '</tr>';
-    });
-    html += '</tbody></table></div>';
-
-    // Aufschluesselung nach Wurfzone
-    const zones = new Set();
-    keepers.forEach(p => {
-        Object.keys(p.paradenNachZone).forEach(z => zones.add(z));
-        Object.keys(p.gegentoreNachZone).forEach(z => zones.add(z));
-    });
-
-    if (zones.size > 0) {
-        const zoneList = [...zones].sort();
-        html += '<h4>Fangquote nach Wurfposition</h4>';
-        html += '<div class="stats-scroll"><table class="stats-table"><thead><tr><th class="col-name">Torhüter</th>';
-        zoneList.forEach(z => { html += `<th>${esc(zoneLabel(z))}</th>`; });
-        html += '</tr></thead><tbody>';
-        keepers.forEach(p => {
-            html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`;
-            zoneList.forEach(z => {
+        html += '<section class="karte stats-karte">' + spielerKopf(p, 'Paraden', p.paraden)
+            + '<dl class="stats-zahlen">'
+            + zahl('Einsatz', fmtTime(p.playtimeSeconds))
+            + zahl('Gegentore', p.gegentore)
+            + zahl('Würfe aufs Tor', p.wuerfeAufsTor)
+            + zahl('Fangquote', fmtQuote(p.fangquote), quoteClass(p.fangquote, 30))
+            + '</dl>';
+        // Aufschluesselung nach Wurfposition (nur Positionen mit Wuerfen)
+        const zonen = new Set([...Object.keys(p.paradenNachZone), ...Object.keys(p.gegentoreNachZone)]);
+        if (zonen.size > 0) {
+            html += '<h5 class="stats-unter">Gehalten nach Wurfposition</h5><dl class="stats-zahlen">';
+            [...zonen].sort().forEach(z => {
                 const hits = p.paradenNachZone[z] || 0;
-                const goals = p.gegentoreNachZone[z] || 0;
-                const total = hits + goals;
-                html += total
-                    ? `<td class="num" title="${hits} gehalten / ${total} Würfe">${hits}/${total}</td>`
-                    : '<td class="num muted">–</td>';
+                const total = hits + (p.gegentoreNachZone[z] || 0);
+                if (total) html += zahl(zoneLabel(z), hits + '/' + total);
             });
-            html += '</tr>';
-        });
-        html += '</tbody></table></div>';
-    }
-
+            html += '</dl>';
+        }
+        html += '</section>';
+    });
     return html;
 }
 
@@ -331,25 +325,20 @@ function zoneLabel(typ) {
     return typ;
 }
 
-function renderMatrix(data) {
-    let html = '<h3>Alle Aktionen im Detail</h3>';
-    html += '<div class="stats-scroll"><table class="stats-table stats-matrix"><thead><tr>'
-        + '<th class="col-name">Spieler</th><th>Einsatz</th>';
-    data.allActionTypes.forEach(t => {
-        html += `<th title="${esc(t)}">${esc(t.replace(/_/g, ' '))}</th>`;
-    });
-    html += '</tr></thead><tbody>';
-
+/** Alle Aktionen im Detail: je Spieler nur das, was vorkam (statt breiter Matrix). */
+function renderDetailKarten(data) {
+    let html = '<h3 class="stats-abschnitt">Alle Aktionen im Detail</h3>';
+    let gezeigt = 0;
     Object.values(data.spieler).forEach(p => {
-        html += `<tr><td class="col-name"><strong>#${esc(p.nummer)}</strong> ${esc(p.name)}</td>`
-            + `<td>${fmtTime(p.playtimeSeconds)}</td>`;
-        data.allActionTypes.forEach(t => {
-            const c = p.aktionen[t] || 0;
-            html += c > 0 ? `<td class="num strong">${c}</td>` : '<td class="num muted">0</td>';
-        });
-        html += '</tr>';
+        const vorhanden = data.allActionTypes.filter(t => (p.aktionen[t] || 0) > 0);
+        if (vorhanden.length === 0) return;
+        gezeigt++;
+        html += '<section class="karte stats-karte"><div class="stats-kopf"><h4 class="stats-name"><span class="stats-nr">#'
+            + esc(p.nummer) + '</span> ' + esc(p.name) + '</h4></div><dl class="stats-zahlen">';
+        vorhanden.forEach(t => { html += zahl(t.replace(/_/g, ' '), p.aktionen[t]); });
+        html += '</dl></section>';
     });
-    html += '</tbody></table></div>';
+    if (!gezeigt) html += '<p class="stats-empty">Noch keine Aktionen erfasst.</p>';
     return html;
 }
 

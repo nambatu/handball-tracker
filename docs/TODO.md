@@ -45,8 +45,11 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       "Bericht ansehen" aus dem Archiv fuehrt Schliessen des Berichts zurueck
       in die Archivliste (auch wenn das Laden fehlschlaegt). Layouttest
       Zustand h prueft das. (S)
-- [ ] 1.4 Statistik: auf dem Handy lesbar (keine breite Tabelle; Karten je
-      Spieler oder Tabelle mit fester erster Spalte). (M)
+- [x] 22.11.2026 (Branch claude/dazzling-heisenberg-vkfxkm) 1.4 Statistik als
+      Vollbild mit Karten: Team gesamt, je Feldspieler und Torwart eine Karte
+      (Tore/Paraden gross, Zahlen im Raster), "Alle Aktionen im Detail" je
+      Spieler nur mit dem, was vorkam. Keine Tabelle mehr, "CSV" als einzige
+      Aktion. Layouttest Zustand f2 (alle zehn Groessen). (M)
 - [ ] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
       unveraendert lassen. (M)
 - [ ] 1.6 Ticker-Einstellungen: nur "an/aus, Gruppe, welche Ereignisse";
@@ -127,6 +130,10 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
 - Saison-Statistik ueber alle archivierten Spiele je Spieler.
 - App-Symbol und Startbildschirm an die neuen Farben anpassen.
 - handball.net-Scraper ueber das Gateway (HANDOVER.md offene Entscheidung 4).
+
+- (aus 1.4) "Alle Aktionen im Detail" zeigt noch technische Namen ("WurfTor
+  Aussen", "Ballverlust Fehlpass"); mit lesbaren Namen aus `Store` ersetzen
+  (zusammen mit 1.5/Emoji-Bereinigung der `label`).
 
 ## Erledigt
 

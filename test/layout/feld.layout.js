@@ -783,6 +783,72 @@ async function laufViewport(browser, base, vp) {
             melde(e, 9, 'f', 'Verlauf: ' + String(err.message).split('\n')[0]);
         }
 
+        // (f2) Statistik (Vollbild): Karten je Spieler, keine breite Tabelle, Zahlen stimmen
+        let vorherAktionen = null;
+        try {
+            vorherAktionen = await page.evaluate(function () {
+                const alt = window.Store.loadActions().slice();
+                const sp = window.Store.getSPIELER().filter(function (p) { return !window.Store.istGast(p); });
+                const feld = sp.filter(function (p) { return p.position !== 'TW'; });
+                const tw = sp.find(function (p) { return p.position === 'TW'; });
+                const mk = function (p, typ, zeit) {
+                    return { id: 9000000 + Math.floor(Math.random() * 1e6), spielId: 'current_match', spielerId: p.id,
+                        torwartId: tw ? tw.id : undefined, typ: typ, label: typ, category: 'X',
+                        halbzeit: 1, spielzeit: zeit, timestamp: Date.now() };
+                };
+                const neu = alt.slice();
+                neu.push(mk(feld[0], 'WurfTor', 60), mk(feld[0], 'WurfTor', 120), mk(feld[0], 'WurfOhneTor', 180),
+                    mk(feld[1], 'Ballverlust_Fehlpass', 240));
+                if (tw) neu.push(mk(tw, 'Parade', 300));
+                window.Store.saveActions(neu);
+                return alt;
+            });
+            const toreVorher = await page.evaluate(function (a) { return window.Stats.buildStats(window.Store.getSPIELER(), a).team.tore; }, vorherAktionen);
+            await overlayOeffnen(page, 'statistik');
+            await page.waitForSelector('#stats-view', { state: 'visible', timeout: 5000 });
+            await sleep(400);
+            await messe(page, e, vp, 'f2-statistik', { schrift: false });
+            await foto(page, vp, 'statistik');
+            const sk = await page.evaluate(function () {
+                const v = document.getElementById('stats-view');
+                const r = v.getBoundingClientRect();
+                return {
+                    titel: (v.querySelector('.vollbild-titel') || {}).textContent,
+                    aktion: Array.from(v.querySelectorAll('.vollbild-aktion button')).map(function (b) { return b.textContent.trim(); }),
+                    karten: v.querySelectorAll('.stats-karte').length,
+                    tabellen: v.querySelectorAll('table').length,
+                    emoji: /\p{Extended_Pictographic}/u.test(v.textContent),
+                    inlineStil: Array.from(v.querySelectorAll('[style]')).filter(function (x) { return x.getAttribute('style') && x !== v; }).length,
+                    scrollt: getComputedStyle(v.querySelector('.vollbild-inhalt')).overflowY === 'auto',
+                    breiter: v.querySelector('.vollbild-inhalt').scrollWidth - v.querySelector('.vollbild-inhalt').clientWidth,
+                    team: (v.querySelector('.stats-karte .stats-zahl dd') || {}).textContent,
+                    text: v.textContent
+                };
+            });
+            if (sk.titel !== 'Statistik') melde(e, 9, 'f2-statistik', 'Titel "' + sk.titel + '"');
+            if (sk.aktion.length !== 1 || sk.aktion[0] !== 'CSV') melde(e, 9, 'f2-statistik', 'Aktion "' + sk.aktion.join(',') + '" statt genau "CSV"');
+            if (sk.karten < 3) melde(e, 9, 'f2-statistik', 'Nur ' + sk.karten + ' Karten');
+            if (sk.tabellen) melde(e, 9, 'f2-statistik', sk.tabellen + ' Tabelle(n) in der Statistik');
+            if (sk.emoji) melde(e, 9, 'f2-statistik', 'Emoji im Text');
+            if (sk.inlineStil) melde(e, 9, 'f2-statistik', sk.inlineStil + ' Inline-Stile');
+            if (!sk.scrollt) melde(e, 9, 'f2-statistik', 'Inhalt scrollt nicht');
+            if (sk.breiter > 1) melde(e, 1, 'f2-statistik', 'Inhalt seitlich ' + sk.breiter + ' px zu breit');
+            if (sk.team !== String(toreVorher + 2)) melde(e, 9, 'f2-statistik', 'Team-Tore "' + sk.team + '" statt ' + (toreVorher + 2));
+            ['Feldspieler', 'Torhüter', 'Alle Aktionen im Detail'].forEach(function (t) {
+                if (sk.text.indexOf(t) < 0) melde(e, 9, 'f2-statistik', 'Abschnitt "' + t + '" fehlt');
+            });
+            // Scrollen bis ganz unten: letzter Abschnitt erreichbar
+            await page.evaluate(function () { const i = document.querySelector('#stats-view .vollbild-inhalt'); i.scrollTop = i.scrollHeight; });
+            await sleep(150);
+            await foto(page, vp, 'statistik-unten');
+            await schliesseOverlay(page, e, 'statistik', 'f2-statistik');
+        } catch (err) {
+            melde(e, 9, 'f2-statistik', 'Statistik: ' + String(err.message).split('\n')[0]);
+            await page.evaluate(function () { if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('stats-view'); });
+        } finally {
+            if (vorherAktionen) await page.evaluate(function (a) { window.Store.saveActions(a); }, vorherAktionen);
+        }
+
         // 10: alle weiteren Overlays aus dem Menue
         for (const n of ['statistik', 'bericht', 'kader', 'ticker', 'archiv']) {
             try {

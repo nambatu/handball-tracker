@@ -429,108 +429,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .gk-hint { color: var(--text-muted); font-style: normal; font-size: 0.85em; }
 .gk-empty { color: var(--text-muted); font-size: 0.9rem; padding: 12px 0; }
 
-/* --- Statistik-Overlay --- */
-.stats-panel { max-width: 1200px; width: 96vw; }
-
-.stats-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-bottom: 4px;
-}
-
-.stats-header h2 { margin: 0; }
-
-#stats-content { max-height: 68vh; overflow-y: auto; margin: 16px 0; }
-
-#stats-content h3 {
-    margin: 22px 0 10px;
-    font-size: 1.05rem;
-    color: var(--accent-color);
-}
-
-#stats-content h3:first-child { margin-top: 0; }
-
-#stats-content h4 {
-    margin: 18px 0 8px;
-    font-size: 0.92rem;
-    color: var(--text-muted);
-    font-weight: 600;
-}
-
-.stats-scroll {
-    overflow-x: auto;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.22);
-}
-
-.stats-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.86rem;
-    font-variant-numeric: tabular-nums;
-}
-
-.stats-table th,
-.stats-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    text-align: center;
-    white-space: nowrap;
-}
-
-.stats-table thead th {
-    position: sticky;
-    top: 0;
-    background: rgba(15, 18, 22, 0.97);
-    color: var(--text-muted);
-    font-size: 0.76rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    z-index: 2;
-}
-
-.stats-table .col-name {
-    text-align: left;
-    position: sticky;
-    left: 0;
-    background: rgba(15, 18, 22, 0.97);
-    z-index: 1;
-    min-width: 140px;
-}
-
-.stats-table thead .col-name { z-index: 3; }
-.stats-table tbody tr:hover td { background: rgba(255, 255, 255, 0.04); }
-.stats-table tbody tr:hover .col-name { background: rgba(31, 36, 44, 0.99); }
-
-.stats-table .num { font-weight: 500; }
-.stats-table .strong { font-weight: 800; }
-.stats-table .muted { color: rgba(152, 162, 176, 0.45); }
-
-.stats-table .q-good { color: #5cc79a; font-weight: 700; }
-.stats-table .q-mid  { color: #e8b04f; font-weight: 700; }
-.stats-table .q-low  { color: #ee7a7e; font-weight: 700; }
-
-.stats-total td {
-    border-top: 2px solid var(--border-color);
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.stats-matrix { font-size: 0.8rem; }
-.stats-empty { color: var(--text-muted); font-size: 0.9rem; }
-
-@media (max-width: 600px) {
-    .stats-table { font-size: 0.78rem; }
-    .stats-table th, .stats-table td { padding: 6px 7px; }
-    .stats-table .col-name { min-width: 110px; }
-    #stats-content { max-height: 62vh; }
-}
-
 /* =========================================
    14. SPIELER-BADGE (runder Kreis mit Nummer)
    ========================================= */
@@ -2124,3 +2022,27 @@ body.is-dragging-player .court-player-node { pointer-events: none; }
 .sheet-panel .roster-ticker { margin-top: 8px; }
 .sheet-panel .roster-ticker:empty { display: none; }
 .sheet-panel .btn-primary.kader-ok { margin-top: 16px; }
+
+/* ---------- Statistik (Vollbild): Karten statt breiter Tabelle ---------- */
+.stats-liste { display: grid; gap: 8px; }
+.stats-abschnitt { margin: 12px 0 0; font-size: 1.125rem; font-weight: 700; }
+.stats-liste > .stats-abschnitt:first-child { margin-top: 0; }
+.stats-empty { margin: 0; color: var(--text-muted); font-size: 15px; }
+.stats-karte { display: grid; gap: 10px; }
+.stats-karte .karte-titel { margin: 0; }
+.stats-kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.stats-name { margin: 0; min-width: 0; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
+.stats-nr { color: var(--text-muted); font-weight: 600; }
+.stats-gross { display: flex; flex-direction: column; align-items: flex-end; flex: 0 0 auto; line-height: 1.1; }
+.stats-gross strong { font-size: 28px; font-weight: 800; }
+.stats-gross span { color: var(--text-muted); font-size: 13px; }
+.stats-unter { margin: 0; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+.stats-zahlen { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px 12px; margin: 0; }
+.stats-zahl { min-width: 0; }
+.stats-zahl dt { color: var(--text-muted); font-size: 13px; overflow-wrap: anywhere; }
+.stats-zahl dd { margin: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.stats-zahl dd.strong { font-weight: 800; }
+.stats-zahl dd.muted { color: var(--text-muted); }
+.stats-zahl dd.q-good { color: #5cc79a; font-weight: 700; }
+.stats-zahl dd.q-mid  { color: #e8b04f; font-weight: 700; }
+.stats-zahl dd.q-low  { color: #ee7a7e; font-weight: 700; }
