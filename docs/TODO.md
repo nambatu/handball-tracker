@@ -50,7 +50,7 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       (Tore/Paraden gross, Zahlen im Raster), "Alle Aktionen im Detail" je
       Spieler nur mit dem, was vorkam. Keine Tabelle mehr, "CSV" als einzige
       Aktion. Layouttest Zustand f2 (alle zehn Groessen). (M)
-- [ ] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
+- [~] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
       unveraendert lassen. (M)
 - [ ] 1.6 Ticker-Einstellungen: nur "an/aus, Gruppe, welche Ereignisse";
       Vorlagen und Regeln je Spieler hinter "Erweitert". (M)

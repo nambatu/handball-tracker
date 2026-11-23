@@ -842,6 +842,32 @@ async function laufViewport(browser, base, vp) {
             await sleep(150);
             await foto(page, vp, 'statistik-unten');
             await schliesseOverlay(page, e, 'statistik', 'f2-statistik');
+
+            // (f3) Spielbericht (Vollbild): Kopfzeile Zurueck/Titel/Drucken, heller Bogen, scrollt
+            await overlayOeffnen(page, 'bericht');
+            await page.waitForSelector('#report-view .rep-sheet', { state: 'visible', timeout: 5000 });
+            await sleep(400);
+            await messe(page, e, vp, 'f3-bericht', { schrift: false });
+            await foto(page, vp, 'bericht');
+            const rb = await page.evaluate(function () {
+                const v = document.getElementById('report-view');
+                const i = v.querySelector('.vollbild-inhalt');
+                return {
+                    titel: (v.querySelector('.vollbild-titel') || {}).textContent,
+                    aktion: Array.from(v.querySelectorAll('.vollbild-aktion button')).map(function (b) { return b.textContent.trim(); }),
+                    scrollt: getComputedStyle(i).overflowY === 'auto',
+                    breiter: i.scrollWidth - i.clientWidth,
+                    emojiKopf: /\p{Extended_Pictographic}/u.test(v.querySelector('.vollbild-kopf').textContent),
+                    alt: !!document.querySelector('.report-toolbar, .report-panel')
+                };
+            });
+            if (rb.titel !== 'Spielbericht') melde(e, 9, 'f3-bericht', 'Titel "' + rb.titel + '"');
+            if (rb.aktion.length !== 1 || rb.aktion[0] !== 'Drucken') melde(e, 9, 'f3-bericht', 'Aktion "' + rb.aktion.join(',') + '" statt genau "Drucken"');
+            if (!rb.scrollt) melde(e, 9, 'f3-bericht', 'Inhalt scrollt nicht');
+            if (rb.breiter > 1) melde(e, 1, 'f3-bericht', 'Bericht seitlich ' + rb.breiter + ' px zu breit');
+            if (rb.emojiKopf) melde(e, 9, 'f3-bericht', 'Emoji in der Kopfzeile');
+            if (rb.alt) melde(e, 9, 'f3-bericht', 'Alte Berichts-Werkzeugleiste noch da');
+            await schliesseOverlay(page, e, 'bericht', 'f3-bericht');
         } catch (err) {
             melde(e, 9, 'f2-statistik', 'Statistik: ' + String(err.message).split('\n')[0]);
             await page.evaluate(function () { if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('stats-view'); });
@@ -1046,7 +1072,7 @@ async function laufViewport(browser, base, vp) {
             await page.locator('#archive-view .archiv-karte', { hasText: archivName }).tap({ timeout: 3000 });
             await page.locator('.sheet:not([hidden]) .sheet-panel button', { hasText: 'Bericht ansehen' }).tap({ timeout: 3000 });
             await page.waitForSelector('#report-view', { state: 'visible', timeout: 8000 });
-            await page.locator('#report-view button', { hasText: 'Schließen' }).first().tap({ timeout: 3000 });
+            await page.locator('#report-view .vollbild-zurueck').first().tap({ timeout: 3000 });
             await page.waitForSelector('#archive-view .archiv-karte', { state: 'visible', timeout: 5000 })
                 .catch(function () { melde(e, 9, 'h-archiv', 'Nach dem Bericht kam nicht die Archivliste'); });
             if (await page.locator('#report-view').isVisible()) melde(e, 9, 'h-archiv', 'Bericht blieb offen');
