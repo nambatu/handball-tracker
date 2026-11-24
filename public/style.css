@@ -596,7 +596,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 
 .rep-kpis {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
     gap: 8px;
     margin-bottom: 22px;
 }
@@ -609,7 +609,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     border: 1px solid #e1e0d9;
     border-radius: 6px;
 }
-.rep-tile-label { font-size: 10.5px; color: #52514e; text-transform: uppercase; letter-spacing: 0.04em; }
+.rep-tile-label { font-size: 10.5px; color: #52514e; text-transform: uppercase; letter-spacing: 0.02em; }
 .rep-tile-value { font-size: 21px; font-weight: 700; }
 .rep-tile-sub { font-size: 10.5px; color: #898781; }
 
