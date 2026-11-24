@@ -561,41 +561,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     letter-spacing: normal;
 }
 
-.report-panel {
-    background: #f3f3f1;
-    max-width: 900px;
-    width: 96vw;
-    max-height: 92vh;
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-    border-radius: 12px;
-    overflow: hidden;
+/* Spielbericht als Vollbild: der helle Bogen liegt im scrollenden Inhalt */
+#report-view .vollbild-inhalt { max-width: 900px; }
+#report-content { min-width: 0; }
+@media (max-width: 520px) {
+    .rep-sheet { padding: 16px 14px 14px; }
 }
-
-.report-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    padding: 14px 18px;
-    /* Deckend dunkel. var(--panel-bg) ist halbtransparent und wurde vom
-       hellen Berichtsbogen darunter aufgehellt - die weissen Knopfbeschriftungen
-       standen dann praktisch weiss auf weiss. */
-    background: #1f242c;
-    border-bottom: 1px solid var(--border-color);
-}
-.report-toolbar .control-btn {
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    color: #fff;
-}
-.report-toolbar .control-btn:hover { background: rgba(255, 255, 255, 0.2); }
-.report-toolbar h2 { margin: 0; font-size: 1.05rem; color: var(--text-color); }
-.report-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-#report-content { overflow-y: auto; padding: 18px; }
 
 .rep-sheet {
     background: #fff;
@@ -734,22 +705,16 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
         position: static !important;
         inset: auto !important;
         background: none !important;
-        backdrop-filter: none !important;
+        color: #0b0b0b !important;
     }
 
-    .report-panel {
-        position: static !important;
-        max-width: none;
-        width: auto;
-        max-height: none;
-        background: none;
-        border-radius: 0;
-        box-shadow: none;
-        overflow: visible;
+    #report-view .vollbild-kopf { display: none !important; }
+
+    #report-view .vollbild-inhalt {
+        overflow: visible !important; padding: 0 !important;
+        max-width: none !important; max-height: none !important;
     }
-
-    .report-toolbar { display: none !important; }
-
+    #report-view .vollbild-hinweis { display: none !important; }
     #report-content { overflow: visible !important; padding: 0 !important; max-height: none !important; }
 
     .rep-sheet { box-shadow: none; border-radius: 0; padding: 0; font-size: 10.5pt; }
