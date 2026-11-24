@@ -564,6 +564,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 /* Spielbericht als Vollbild: der helle Bogen liegt im scrollenden Inhalt */
 #report-view .vollbild-inhalt { max-width: 900px; }
 #report-content { min-width: 0; }
+/* Breite Tabellen scrollen im Abschnitt, nicht die ganze Seite (Druck: siehe unten) */
+#report-content .rep-block { overflow-x: auto; }
 @media (max-width: 520px) {
     .rep-sheet { padding: 16px 14px 14px; }
 }
@@ -717,6 +719,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     #report-view .vollbild-hinweis { display: none !important; }
     #report-content { overflow: visible !important; padding: 0 !important; max-height: none !important; }
 
+    #report-content .rep-block { overflow: visible; }
     .rep-sheet { box-shadow: none; border-radius: 0; padding: 0; font-size: 10.5pt; }
 
     /* Abschnitte nicht mitten durchschneiden */
