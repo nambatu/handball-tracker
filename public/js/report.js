@@ -598,7 +598,9 @@
         inhalt.querySelectorAll('#report-content').forEach(function (n) { n.remove(); });
         const body = document.createElement('div');
         body.id = 'report-content';
-        body.innerHTML = buildReport(spieler, aktionen, meta);
+        // Breite Tabellen scrollen im eigenen Rahmen, nicht die ganze Seite
+        body.innerHTML = buildReport(spieler, aktionen, meta)
+            .replace(/<table /g, '<div class="rep-scroll"><table ').replace(/<\/table>/g, '</table></div>');
         inhalt.appendChild(body);
         inhalt.scrollTop = 0;
     }

@@ -593,7 +593,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 
 .rep-kpis {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(96px, 100%), 1fr));
     gap: 8px;
     margin-bottom: 22px;
 }
@@ -606,6 +606,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     border: 1px solid #e1e0d9;
     border-radius: 6px;
 }
+.rep-tile { min-width: 0; }
+.rep-tile-label, .rep-tile-value { overflow-wrap: anywhere; }
+.rep-scroll { overflow-x: auto; max-width: 100%; }
 .rep-tile-label { font-size: 10.5px; color: #52514e; text-transform: uppercase; letter-spacing: 0.04em; }
 .rep-tile-value { font-size: 21px; font-weight: 700; }
 .rep-tile-sub { font-size: 10.5px; color: #898781; }
@@ -712,6 +715,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     .rep-sheet { box-shadow: none; border-radius: 0; padding: 0; font-size: 10.5pt; }
 
     /* Abschnitte nicht mitten durchschneiden */
+    .rep-scroll { overflow: visible; }
     .rep-figure, .rep-block, .rep-table, .rep-kpis { break-inside: avoid; page-break-inside: avoid; }
     .rep-break { break-before: page; page-break-before: always; }
     .rep-table thead { display: table-header-group; }
