@@ -50,8 +50,11 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       (Tore/Paraden gross, Zahlen im Raster), "Alle Aktionen im Detail" je
       Spieler nur mit dem, was vorkam. Keine Tabelle mehr, "CSV" als einzige
       Aktion. Layouttest Zustand f2 (alle zehn Groessen). (M)
-- [~] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
-      unveraendert lassen. (M)
+- [x] 25.11.2026 (Branch claude/dazzling-heisenberg-2y6mag) 1.5 Spielbericht
+      als Vollbild (Kopfzeile Zurueck, Titel, einzige Aktion "Drucken"; CSV
+      liegt in der Statistik). Breite Tabellen scrollen im eigenen Rahmen,
+      Kacheln brechen um. Druckansicht unveraendert (Druck selbst nicht
+      automatisch getestet). Layouttest Zustand f3 (alle zehn Groessen). (M)
 - [ ] 1.6 Ticker-Einstellungen: nur "an/aus, Gruppe, welche Ereignisse";
       Vorlagen und Regeln je Spieler hinter "Erweitert". (M)
 - [ ] 1.7 Letzte `confirm/prompt/alert` entfernen (`app.js` Abmelden mit
