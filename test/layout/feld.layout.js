@@ -849,6 +849,52 @@ async function laufViewport(browser, base, vp) {
             if (vorherAktionen) await page.evaluate(function (a) { window.Store.saveActions(a); }, vorherAktionen);
         }
 
+        // (f3) Spielbericht (Vollbild): Kopfzeile mit Zurueck, Titel, nur "Drucken"; kein Emoji im Kopf
+        let vorherF3 = null;
+        try {
+            vorherF3 = await page.evaluate(function () {
+                const alt = window.Store.loadActions().slice();
+                const p = window.Store.getSPIELER().find(function (x) { return !window.Store.istGast(x) && x.position !== 'TW'; });
+                const neu = alt.slice();
+                neu.push({ id: 9100000 + Math.floor(Math.random() * 1e6), spielId: 'current_match', spielerId: p.id,
+                    typ: 'WurfTor', label: 'WurfTor', category: 'X', halbzeit: 1, spielzeit: 90, timestamp: Date.now() });
+                window.Store.saveActions(neu);
+                return alt;
+            });
+            await overlayOeffnen(page, 'bericht');
+            await page.waitForSelector('#report-view', { state: 'visible', timeout: 5000 });
+            await sleep(400);
+            await messe(page, e, vp, 'f3-bericht', { schrift: false });
+            await foto(page, vp, 'bericht');
+            const bk = await page.evaluate(function () {
+                const v = document.getElementById('report-view');
+                const i = v.querySelector('.vollbild-inhalt');
+                return {
+                    titel: (v.querySelector('.vollbild-titel') || {}).textContent,
+                    aktion: Array.from(v.querySelectorAll('.vollbild-aktion button')).map(function (b) { return b.textContent.trim(); }),
+                    kopfEmoji: /\p{Extended_Pictographic}/u.test(v.querySelector('.vollbild-kopf').textContent),
+                    bogen: !!v.querySelector('.rep-sheet'),
+                    scrollt: getComputedStyle(i).overflowY === 'auto',
+                    breiter: i.scrollWidth - i.clientWidth
+                };
+            });
+            if (bk.titel !== 'Spielbericht') melde(e, 9, 'f3-bericht', 'Titel "' + bk.titel + '"');
+            if (bk.aktion.length !== 1 || bk.aktion[0] !== 'Drucken') melde(e, 9, 'f3-bericht', 'Aktion "' + bk.aktion.join(',') + '" statt genau "Drucken"');
+            if (bk.kopfEmoji) melde(e, 9, 'f3-bericht', 'Emoji in der Kopfzeile');
+            if (!bk.bogen) melde(e, 9, 'f3-bericht', 'Berichtsbogen fehlt');
+            if (!bk.scrollt) melde(e, 9, 'f3-bericht', 'Inhalt scrollt nicht');
+            if (bk.breiter > 1) melde(e, 1, 'f3-bericht', 'Bericht seitlich ' + bk.breiter + ' px zu breit');
+            await page.evaluate(function () { const i = document.querySelector('#report-view .vollbild-inhalt'); i.scrollTop = i.scrollHeight; });
+            await sleep(150);
+            await foto(page, vp, 'bericht-unten');
+            await schliesseOverlay(page, e, 'bericht', 'f3-bericht');
+        } catch (err) {
+            melde(e, 9, 'f3-bericht', 'Bericht: ' + String(err.message).split('\n')[0]);
+            await page.evaluate(function () { if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('report-view'); });
+        } finally {
+            if (vorherF3) await page.evaluate(function (a) { window.Store.saveActions(a); }, vorherF3);
+        }
+
         // 10: alle weiteren Overlays aus dem Menue
         for (const n of ['statistik', 'bericht', 'kader', 'ticker', 'archiv']) {
             try {
@@ -1046,7 +1092,7 @@ async function laufViewport(browser, base, vp) {
             await page.locator('#archive-view .archiv-karte', { hasText: archivName }).tap({ timeout: 3000 });
             await page.locator('.sheet:not([hidden]) .sheet-panel button', { hasText: 'Bericht ansehen' }).tap({ timeout: 3000 });
             await page.waitForSelector('#report-view', { state: 'visible', timeout: 8000 });
-            await page.locator('#report-view button', { hasText: 'Schließen' }).first().tap({ timeout: 3000 });
+            await page.locator('#report-view .vollbild-zurueck').tap({ timeout: 3000 });
             await page.waitForSelector('#archive-view .archiv-karte', { state: 'visible', timeout: 5000 })
                 .catch(function () { melde(e, 9, 'h-archiv', 'Nach dem Bericht kam nicht die Archivliste'); });
             if (await page.locator('#report-view').isVisible()) melde(e, 9, 'h-archiv', 'Bericht blieb offen');
