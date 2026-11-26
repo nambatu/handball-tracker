@@ -407,7 +407,7 @@
         return `
 <section class="rep-block">
   <h2>Feldspieler</h2>
-  <table class="rep-table">
+  <div class="rep-scroll"><table class="rep-table">
     <thead><tr>
       <th>Nr</th><th class="rep-name">Name</th><th>Pos</th><th>Einsatz</th>
       <th>Tore</th><th>Würfe</th><th>Quote</th><th>7m</th>
@@ -419,7 +419,7 @@
       <td class="rep-strong">${t.tore}</td><td>${t.wuerfe}</td><td>${pct(t.wurfquote)}</td>
       <td></td><td></td><td>${t.ballverluste}</td><td>${t.ballgewinne}</td><td></td><td></td>
     </tr></tfoot>
-  </table>
+  </table></div>
 </section>`;
     }
 
@@ -449,7 +449,7 @@
         if (zoneList.length) {
             zoneTable = `
   <h3>Fangquote nach Wurfposition</h3>
-  <table class="rep-table rep-table-compact">
+  <div class="rep-scroll"><table class="rep-table rep-table-compact">
     <thead><tr><th class="rep-name">Torhüter</th>${zoneList.map(z => `<th>${esc(zoneLabel(z))}</th>`).join('')}</tr></thead>
     <tbody>${keepers.map(k => `
       <tr><td class="rep-name">#${esc(k.nummer)} ${esc(k.name)}</td>${zoneList.map(z => {
@@ -459,17 +459,17 @@
                 return tot ? `<td>${hHit}/${tot}</td>` : '<td class="rep-dim">–</td>';
             }).join('')}</tr>`).join('')}
     </tbody>
-  </table>
+  </table></div>
   <p class="rep-note">Gelesen als „gehalten / Würfe aufs Tor“ aus dieser Position.</p>`;
         }
 
         return `
 <section class="rep-block">
   <h2>Torhüter</h2>
-  <table class="rep-table">
+  <div class="rep-scroll"><table class="rep-table">
     <thead><tr><th>Nr</th><th class="rep-name">Name</th><th>Einsatz</th><th>Paraden</th><th>Gegentore</th><th>Würfe aufs Tor</th><th>Fangquote</th></tr></thead>
     <tbody>${main}</tbody>
-  </table>
+  </table></div>
   ${zoneTable}
 </section>`;
     }
@@ -496,13 +496,13 @@
         return `
 <section class="rep-block">
   <h2>Halbzeitvergleich</h2>
-  <table class="rep-table">
+  <div class="rep-scroll"><table class="rep-table">
     <thead><tr><th class="rep-name">Hälfte</th><th>Tore</th><th>Gegentore</th><th>Würfe</th><th>Wurfquote</th><th>Ballverluste</th><th>Ballgewinne</th></tr></thead>
     <tbody>
       <tr><td class="rep-name">1. Hälfte</td><td class="rep-strong">${a.tore}</td><td>${hz[1].gast}</td><td>${a.w}</td><td class="${quoteCls(a.quote)}">${pct(a.quote)}</td><td>${a.verl}</td><td>${a.gew}</td></tr>
       <tr><td class="rep-name">2. Hälfte</td><td class="rep-strong">${b.tore}</td><td>${hz[2].gast}</td><td>${b.w}</td><td class="${quoteCls(b.quote)}">${pct(b.quote)}</td><td>${b.verl}</td><td>${b.gew}</td></tr>
     </tbody>
-  </table>
+  </table></div>
 </section>`;
     }
 
@@ -518,13 +518,13 @@
         return `
 <section class="rep-block">
   <h2>Disziplin</h2>
-  <table class="rep-table">
+  <div class="rep-scroll"><table class="rep-table">
     <thead><tr><th>Nr</th><th class="rep-name">Name</th><th>2 Minuten</th><th>Gelb</th><th>Rot</th><th>Blau</th></tr></thead>
     <tbody>${rows.map(p => `
       <tr><td class="rep-num">${esc(p.nummer)}</td><td class="rep-name">${esc(p.name)}</td>
       <td>${p.zeitstrafen || '–'}</td><td>${p.gelb || '–'}</td><td>${p.rot || '–'}</td><td>${p.blau || '–'}</td></tr>`).join('')}
     </tbody>
-  </table>
+  </table></div>
 </section>`;
     }
 
@@ -581,15 +581,26 @@
     // ANZEIGE & DRUCK
     // ===============================================================
 
+    const REPORT_ID = 'report-view';
+
     function showReport(spieler, aktionen, meta) {
-        const view = document.getElementById('report-view');
-        const body = document.getElementById('report-content');
-        if (!view || !body) return;
+        if (!window.UI || !window.UI.Vollbild) return;
         // Archivspiele koennen aus der Zeit vor dem team-Feld stammen.
         if (window.Store && window.Store.migriereTeamFeld) window.Store.migriereTeamFeld(spieler);
+        const inhalt = window.UI.Vollbild.oeffne({
+            id: REPORT_ID,
+            titel: 'Spielbericht',
+            aktion: { text: 'Drucken / PDF', onClick: printReport },
+            onZu: beimSchliessen
+        });
+        let body = inhalt.querySelector('#report-content');
+        if (!body) {
+            body = document.createElement('div');
+            body.id = 'report-content';
+            inhalt.appendChild(body);
+        }
         body.innerHTML = buildReport(spieler, aktionen, meta);
-        view.style.display = 'flex';
-        body.scrollTop = 0;
+        inhalt.scrollTop = 0;
     }
 
     function showCurrentReport() {
@@ -632,13 +643,16 @@
         }
     }
 
-    function closeReport() {
-        const view = document.getElementById('report-view');
-        if (view) view.style.display = 'none';
+    /** Wird nach jedem Schliessen gerufen (Zurueck-Knopf oder closeReport). */
+    function beimSchliessen() {
         if (zurueckZumArchiv) {
             zurueckZumArchiv = false;
             if (typeof window.openArchiveModal === 'function') window.openArchiveModal();
         }
+    }
+
+    function closeReport() {
+        if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse(REPORT_ID);
     }
 
     function printReport() {
