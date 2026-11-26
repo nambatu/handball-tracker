@@ -50,8 +50,12 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
       (Tore/Paraden gross, Zahlen im Raster), "Alle Aktionen im Detail" je
       Spieler nur mit dem, was vorkam. Keine Tabelle mehr, "CSV" als einzige
       Aktion. Layouttest Zustand f2 (alle zehn Groessen). (M)
-- [~] 1.5 Spielbericht: Bildschirm-Ansicht vereinheitlichen, Druckansicht
-      unveraendert lassen. (M)
+- [x] 26.11.2026 (Branch claude/dazzling-heisenberg-6tvuns) 1.5 Spielbericht
+      als Vollbild (Zurueck, Titel, eine Aktion "Drucken"); heller Bogen
+      bleibt, Druckansicht unveraendert; Tabellen scrollen seitlich statt die
+      Seite zu weiten; Kennzahl-Kacheln breiter. CSV nur noch in der
+      Statistik. Layouttest Zustand f3 (alle zehn Groessen). Nicht getestet:
+      echter Druck/PDF-Export. (M)
 - [ ] 1.6 Ticker-Einstellungen: nur "an/aus, Gruppe, welche Ereignisse";
       Vorlagen und Regeln je Spieler hinter "Erweitert". (M)
 - [ ] 1.7 Letzte `confirm/prompt/alert` entfernen (`app.js` Abmelden mit
@@ -134,6 +138,9 @@ Jede Ansicht bekommt Pruefungen im Layouttest (alle zehn Groessen).
 - (aus 1.4) "Alle Aktionen im Detail" zeigt noch technische Namen ("WurfTor
   Aussen", "Ballverlust Fehlpass"); mit lesbaren Namen aus `Store` ersetzen
   (zusammen mit 1.5/Emoji-Bereinigung der `label`).
+
+- (aus 1.5) Druckansicht nach dem Umbau (Vollbild statt Overlay) nur per CSS
+  angepasst, nicht am Drucker/PDF geprueft; bei Gelegenheit ansehen.
 
 ## Erledigt
 
