@@ -590,7 +590,7 @@
         const inhalt = window.UI.Vollbild.oeffne({
             id: REPORT_ID,
             titel: 'Spielbericht',
-            aktion: { text: 'Drucken / PDF', onClick: printReport },
+            aktion: { text: 'Drucken', onClick: printReport },
             onZu: beimSchliessen
         });
         let body = inhalt.querySelector('#report-content');
