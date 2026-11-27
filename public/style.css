@@ -561,41 +561,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     letter-spacing: normal;
 }
 
-.report-panel {
-    background: #f3f3f1;
-    max-width: 900px;
-    width: 96vw;
-    max-height: 92vh;
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-    border-radius: 12px;
-    overflow: hidden;
-}
-
-.report-toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    padding: 14px 18px;
-    /* Deckend dunkel. var(--panel-bg) ist halbtransparent und wurde vom
-       hellen Berichtsbogen darunter aufgehellt - die weissen Knopfbeschriftungen
-       standen dann praktisch weiss auf weiss. */
-    background: #1f242c;
-    border-bottom: 1px solid var(--border-color);
-}
-.report-toolbar .control-btn {
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    color: #fff;
-}
-.report-toolbar .control-btn:hover { background: rgba(255, 255, 255, 0.2); }
-.report-toolbar h2 { margin: 0; font-size: 1.05rem; color: var(--text-color); }
-.report-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-#report-content { overflow-y: auto; padding: 18px; }
+/* Rahmen (Kopfzeile, Scrollen) kommt vom Baukasten .vollbild. Der Bericht
+   darf auf dem Bildschirm etwas breiter sein als die anderen Ansichten. */
+#report-view .vollbild-inhalt { max-width: 900px; }
 
 .rep-sheet {
     background: #fff;
@@ -653,6 +621,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 .rep-block h3 { font-size: 12px; font-weight: 600; color: #52514e; margin: 16px 0 7px; }
 .rep-note { font-size: 11px; color: #898781; margin: 6px 0 0; }
 
+.rep-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+.rep-scroll .rep-table { min-width: 100%; }
 .rep-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .rep-table th, .rep-table td { padding: 5px 7px; text-align: center; border-bottom: 1px solid #f0efec; }
 .rep-table thead th {
@@ -705,6 +675,16 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
 
 .rep-foot { text-align: center; color: #898781; font-size: 10.5px; margin: 26px 0 0; }
 
+@media screen {
+    /* Kennzahlen: Kacheln breit genug fuer "Ballverluste" (am Bildschirm; Druck bleibt) */
+    .rep-kpis { grid-template-columns: repeat(auto-fit, minmax(124px, 1fr)); }
+}
+
+@media screen and (max-width: 700px) {
+    /* Kennzahlen: zwei je Zeile, damit auch "Ballverluste" in die Kachel passt */
+    .rep-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 700px) {
     .rep-sheet { padding: 16px 14px; font-size: 12px; }
     .rep-score-num { font-size: 34px; }
@@ -712,7 +692,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     .rep-goals { columns: 1; }
     .rep-glossary dl { grid-template-columns: 1fr; }
     .rep-glossary dd { margin-bottom: 6px; }
-    #report-content { padding: 10px; }
+    #report-view .vollbild-inhalt { padding-left: calc(8px + env(safe-area-inset-left, 0px)); padding-right: calc(8px + env(safe-area-inset-right, 0px)); }
 }
 
 /* =========================================
@@ -737,20 +717,12 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
         backdrop-filter: none !important;
     }
 
-    .report-panel {
-        position: static !important;
-        max-width: none;
-        width: auto;
-        max-height: none;
-        background: none;
-        border-radius: 0;
-        box-shadow: none;
-        overflow: visible;
+    /* Kopfzeile (Zurueck, Titel, Drucken) gehoert nicht aufs Papier */
+    #report-view .vollbild-kopf { display: none !important; }
+    #report-view .vollbild-inhalt {
+        position: static !important; overflow: visible !important;
+        max-width: none !important; width: auto !important; padding: 0 !important;
     }
-
-    .report-toolbar { display: none !important; }
-
-    #report-content { overflow: visible !important; padding: 0 !important; max-height: none !important; }
 
     .rep-sheet { box-shadow: none; border-radius: 0; padding: 0; font-size: 10.5pt; }
 
@@ -758,6 +730,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent-color); }
     .rep-figure, .rep-block, .rep-table, .rep-kpis { break-inside: avoid; page-break-inside: avoid; }
     .rep-break { break-before: page; page-break-before: always; }
     .rep-table thead { display: table-header-group; }
+    .rep-scroll { overflow: visible; }
 
     a[href]:after { content: none !important; }
 }

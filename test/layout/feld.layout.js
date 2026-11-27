@@ -24,7 +24,8 @@
 //   5 kein abgeschnittener Text       10 Overlays: Schliessen erreichbar
 // Die Zustaende, in denen 1-8 gemessen werden: a Feld ruhig, b Spieler
 // gewaehlt, c Unterauswahl offen, d nach 3:2, e Menue offen, f Verlauf offen
-// (dazu das "Assist"-Sheet, wenn es kommt), g Kader, h Archiv (Karten, Blaetter).
+// (dazu das "Assist"-Sheet, wenn es kommt), f2 Statistik, f3 Spielbericht (Kopfzeile,
+// Druckansicht), g Kader, h Archiv (Karten, Blaetter).
 // Dazu kommen die Spielphasen und die Auszeit (vor, Planzeit erreicht, Auszeit-
 // Wahl, Auszeit laeuft, Verlauf mit Auszeit, Pause, Abpfiff,
 // Archiv-Frage) - jeweils mit denselben Pruefungen 1-8 - und auf 390x844 ein
@@ -842,9 +843,66 @@ async function laufViewport(browser, base, vp) {
             await sleep(150);
             await foto(page, vp, 'statistik-unten');
             await schliesseOverlay(page, e, 'statistik', 'f2-statistik');
+
+            // (f3) Spielbericht (Vollbild): Kopfzeile aus dem Baukasten, heller Bogen, nichts ragt raus
+            await overlayOeffnen(page, 'bericht');
+            await page.waitForSelector('#report-view', { state: 'visible', timeout: 5000 });
+            await sleep(400);
+            await messe(page, e, vp, 'f3-bericht', { schrift: false });
+            await foto(page, vp, 'bericht');
+            const bk = await page.evaluate(function () {
+                const v = document.getElementById('report-view');
+                const inh = v.querySelector('.vollbild-inhalt');
+                const bogen = v.querySelector('.rep-sheet');
+                // Breiter als der Bildschirm: Bogen, Tabellenrahmen (die wischen innen) und Diagramme
+                const zuBreit = Array.from(v.querySelectorAll('.rep-sheet, .rep-scroll, .rep-sheet svg, .rep-sheet figure'))
+                    .filter(function (x) { return x.getBoundingClientRect().right > window.innerWidth + 1 || x.getBoundingClientRect().left < -1; }).length;
+                return {
+                    titel: (v.querySelector('.vollbild-titel') || {}).textContent,
+                    aktion: Array.from(v.querySelectorAll('.vollbild-aktion button')).map(function (b) { return b.textContent.trim(); }),
+                    alteLeiste: v.querySelectorAll('.report-toolbar').length,
+                    bogen: !!bogen, tore: (v.querySelector('.rep-score-num') || {}).textContent,
+                    emojiKopf: /\p{Extended_Pictographic}/u.test(v.querySelector('.vollbild-kopf').textContent),
+                    scrollt: getComputedStyle(inh).overflowY === 'auto',
+                    breiter: inh.scrollWidth - inh.clientWidth,
+                    zuBreit: zuBreit,
+                    tabellen: v.querySelectorAll('.rep-sheet table').length,
+                    ungerahmt: Array.from(v.querySelectorAll('.rep-sheet table')).filter(function (t) { return !t.closest('.rep-scroll'); }).length,
+                    text: v.textContent
+                };
+            });
+            if (bk.titel !== 'Spielbericht') melde(e, 9, 'f3-bericht', 'Titel "' + bk.titel + '"');
+            if (bk.aktion.length !== 1 || bk.aktion[0] !== 'Drucken') melde(e, 9, 'f3-bericht', 'Aktion "' + bk.aktion.join(',') + '" statt genau "Drucken"');
+            if (bk.alteLeiste) melde(e, 9, 'f3-bericht', 'Alte Werkzeugleiste noch da');
+            if (bk.ungerahmt) melde(e, 1, 'f3-bericht', bk.ungerahmt + ' Tabelle(n) ohne Wisch-Rahmen');
+            if (bk.tabellen < 3) melde(e, 9, 'f3-bericht', 'Nur ' + bk.tabellen + ' Tabellen im Bericht');
+            if (!bk.bogen) melde(e, 9, 'f3-bericht', 'Kein Berichtsbogen');
+            if (bk.emojiKopf) melde(e, 9, 'f3-bericht', 'Emoji in der Kopfzeile');
+            if (!bk.scrollt) melde(e, 9, 'f3-bericht', 'Inhalt scrollt nicht');
+            if (bk.breiter > 1) melde(e, 1, 'f3-bericht', 'Bericht seitlich ' + bk.breiter + ' px zu breit');
+            if (bk.zuBreit) melde(e, 2, 'f3-bericht', bk.zuBreit + ' Element(e) ragen ueber den Bildschirm');
+            ['Feldspieler', 'Torhüter', 'Torfolge'].forEach(function (t) {
+                if (bk.text.indexOf(t) < 0) melde(e, 9, 'f3-bericht', 'Abschnitt "' + t + '" fehlt');
+            });
+            await page.evaluate(function () { const i = document.querySelector('#report-view .vollbild-inhalt'); i.scrollTop = i.scrollHeight; });
+            await sleep(150);
+            await foto(page, vp, 'bericht-unten');
+            // Druckansicht: Kopfzeile weg, Bogen sichtbar
+            await page.emulateMedia({ media: 'print' });
+            const dr = await page.evaluate(function () {
+                const v = document.getElementById('report-view');
+                const k = v.querySelector('.vollbild-kopf');
+                return { kopf: getComputedStyle(k).display, bogen: v.querySelector('.rep-sheet').getBoundingClientRect().height,
+                         andere: Array.from(document.body.children).filter(function (c) { return c.id !== 'report-view' && getComputedStyle(c).display !== 'none'; }).length };
+            });
+            await page.emulateMedia({ media: 'screen' });
+            if (dr.kopf !== 'none') melde(e, 9, 'f3-druck', 'Kopfzeile im Druck sichtbar');
+            if (dr.bogen < 200) melde(e, 9, 'f3-druck', 'Bogen im Druck zu klein: ' + dr.bogen);
+            if (dr.andere) melde(e, 9, 'f3-druck', dr.andere + ' fremde Ansicht(en) im Druck sichtbar');
+            await schliesseOverlay(page, e, 'bericht', 'f3-bericht');
         } catch (err) {
-            melde(e, 9, 'f2-statistik', 'Statistik: ' + String(err.message).split('\n')[0]);
-            await page.evaluate(function () { if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse('stats-view'); });
+            melde(e, 9, 'f2-statistik', 'Statistik/Bericht: ' + String(err.message).split('\n')[0]);
+            await page.evaluate(function () { if (window.UI && window.UI.Vollbild) { window.UI.Vollbild.schliesse('stats-view'); window.UI.Vollbild.schliesse('report-view'); } });
         } finally {
             if (vorherAktionen) await page.evaluate(function (a) { window.Store.saveActions(a); }, vorherAktionen);
         }
@@ -1046,7 +1104,7 @@ async function laufViewport(browser, base, vp) {
             await page.locator('#archive-view .archiv-karte', { hasText: archivName }).tap({ timeout: 3000 });
             await page.locator('.sheet:not([hidden]) .sheet-panel button', { hasText: 'Bericht ansehen' }).tap({ timeout: 3000 });
             await page.waitForSelector('#report-view', { state: 'visible', timeout: 8000 });
-            await page.locator('#report-view button', { hasText: 'Schließen' }).first().tap({ timeout: 3000 });
+            await page.locator('#report-view .vollbild-zurueck').tap({ timeout: 3000 });
             await page.waitForSelector('#archive-view .archiv-karte', { state: 'visible', timeout: 5000 })
                 .catch(function () { melde(e, 9, 'h-archiv', 'Nach dem Bericht kam nicht die Archivliste'); });
             if (await page.locator('#report-view').isVisible()) melde(e, 9, 'h-archiv', 'Bericht blieb offen');

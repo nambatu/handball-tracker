@@ -314,7 +314,7 @@
             ? Math.max(...aktionen.map(a => a.spielzeit || 0))
             : (meta.spielzeit || 0);
 
-        return `
+        const bogen = `
 <div class="rep-sheet">
   ${reportHead(names, heimTore, gastTore, hz, dauer, meta)}
   ${reportKpis(stats, heimTore, gastTore)}
@@ -329,6 +329,9 @@
   ${reportGlossary()}
   <p class="rep-foot">Erstellt am ${new Date().toLocaleDateString('de-AT')} um ${new Date().toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' })} · Handball Tracker</p>
 </div>`;
+        // Breite Tabellen (13 Spalten) wischen auf dem Handy seitlich in ihrem
+        // eigenen Rahmen, statt die ganze Seite zu verbreitern. Im Druck ohne Wirkung.
+        return bogen.replace(/<table/g, '<div class="rep-scroll"><table').replace(/<\/table>/g, '</table></div>');
     }
 
     function reportHead(names, h, g, hz, dauer, meta) {
@@ -581,15 +584,28 @@
     // ANZEIGE & DRUCK
     // ===============================================================
 
+    const REPORT_ID = 'report-view';
+
     function showReport(spieler, aktionen, meta) {
-        const view = document.getElementById('report-view');
-        const body = document.getElementById('report-content');
-        if (!view || !body) return;
+        const UI = window.UI;
+        if (!UI || !UI.Vollbild) return;
         // Archivspiele koennen aus der Zeit vor dem team-Feld stammen.
         if (window.Store && window.Store.migriereTeamFeld) window.Store.migriereTeamFeld(spieler);
+        // Kopfzeile aus dem Baukasten: Zurueck, Titel, eine Aktion (Drucken).
+        // Der Bogen selbst bleibt hell - er ist ein Dokument und wird so gedruckt.
+        const inhalt = UI.Vollbild.oeffne({
+            id: REPORT_ID,
+            titel: 'Spielbericht',
+            aktion: { text: 'Drucken', onClick: printReport },
+            onZu: beimSchliessen
+        });
+        let body = inhalt.querySelector('#report-content');
+        if (!body) {
+            body = document.createElement('div');
+            body.id = 'report-content';
+            inhalt.appendChild(body);
+        }
         body.innerHTML = buildReport(spieler, aktionen, meta);
-        view.style.display = 'flex';
-        body.scrollTop = 0;
     }
 
     function showCurrentReport() {
@@ -632,13 +648,16 @@
         }
     }
 
-    function closeReport() {
-        const view = document.getElementById('report-view');
-        if (view) view.style.display = 'none';
+    /** Wird vom Baukasten nach jedem Schliessen gerufen (Zurueck-Knopf oder closeReport). */
+    function beimSchliessen() {
         if (zurueckZumArchiv) {
             zurueckZumArchiv = false;
             if (typeof window.openArchiveModal === 'function') window.openArchiveModal();
         }
+    }
+
+    function closeReport() {
+        if (window.UI && window.UI.Vollbild) window.UI.Vollbild.schliesse(REPORT_ID);
     }
 
     function printReport() {

@@ -16,7 +16,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Tracker">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="stylesheet" href="style.css?v=20261125">
+    <link rel="stylesheet" href="style.css?v=20261127">
 </head>
 
 <body class="ansicht-login">
@@ -345,20 +345,7 @@
         </div>
     </div>
 
-    <!-- Spielbericht -->
-    <div id="report-view" class="overlay-view" style="display:none;">
-        <div class="overlay-content report-panel">
-            <div class="report-toolbar">
-                <h2>📄 Spielbericht</h2>
-                <div class="report-actions">
-                    <button onclick="window.Report.printReport()" class="add-btn">🖨️ Drucken / Als PDF</button>
-                    <button onclick="window.Stats.exportAsCSV()" class="control-btn">⬇️ CSV</button>
-                    <button onclick="window.Report.closeReport()" class="control-btn">Schließen</button>
-                </div>
-            </div>
-            <div id="report-content"></div>
-        </div>
-    </div>
+    <!-- Spielbericht: wird als Vollbild-Ansicht (UI.Vollbild) von report.js gebaut -->
 
     <!-- Torwart-Auswahl -->
     <div id="gk-picker" class="overlay-view" style="display:none;">
@@ -403,21 +390,21 @@
 
     <!-- Modulare Scripts laden. Reihenfolge beachten! -->
     <!-- Polyfill for HTML5 Drag and Drop on Touch Devices -->
-    <script src="vendor/touch-drag.js?v=20261125"></script>
-    <script src="js/config.js?v=20261125"></script>
-    <script src="vendor/supabase.js?v=20261125"></script>
-    <script src="js/api.js?v=20261125"></script>
-    <script src="js/sync.js?v=20261125"></script>
-    <script src="js/wakelock.js?v=20261125"></script>
-    <script src="js/store.js?v=20261125"></script>
-    <script src="js/timer.js?v=20261125"></script>
-    <script src="js/stats.js?v=20261125"></script>
-    <script src="js/report.js?v=20261125"></script>
-    <script src="js/whatsapp.js?v=20261125"></script>
-    <script src="js/tickerui.js?v=20261125"></script>
-    <script src="js/ui.js?v=20261125"></script>
-    <script src="js/start.js?v=20261125"></script>
-    <script src="js/app.js?v=20261125"></script>
+    <script src="vendor/touch-drag.js?v=20261127"></script>
+    <script src="js/config.js?v=20261127"></script>
+    <script src="vendor/supabase.js?v=20261127"></script>
+    <script src="js/api.js?v=20261127"></script>
+    <script src="js/sync.js?v=20261127"></script>
+    <script src="js/wakelock.js?v=20261127"></script>
+    <script src="js/store.js?v=20261127"></script>
+    <script src="js/timer.js?v=20261127"></script>
+    <script src="js/stats.js?v=20261127"></script>
+    <script src="js/report.js?v=20261127"></script>
+    <script src="js/whatsapp.js?v=20261127"></script>
+    <script src="js/tickerui.js?v=20261127"></script>
+    <script src="js/ui.js?v=20261127"></script>
+    <script src="js/start.js?v=20261127"></script>
+    <script src="js/app.js?v=20261127"></script>
 
 </body>
 
